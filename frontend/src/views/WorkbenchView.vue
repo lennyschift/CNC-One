@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle } from '@lucide/vue';
 import AnfrageDialog from '../components/AnfrageDialog.vue';
+import BauteilWahlDialog from '../components/BauteilWahlDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
 import { useAnfragen } from '../stores/anfragen.js';
 import { fremdPositionen } from '../lib/anfrage.js';
@@ -108,6 +109,7 @@ const mwst = computed(() => a.netto * 0.19);
       </Transition>
     </div>
 
+    <BauteilWahlDialog v-if="ui.bauteilWahlOffen" @schliessen="ui.bauteilWahlOffen = false" />
     <AnfrageDialog v-if="anfrageOffen" :teile="a.teile" :vorgewaehlt="anfrageAg" :bezug="bezug" @schliessen="anfrageOffen = false" />
   </div>
 </template>

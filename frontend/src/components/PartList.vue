@@ -1,14 +1,16 @@
 <script setup>
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, Copy, Trash2, ArrowUp, ArrowDown, FileBox, Send } from '@lucide/vue';
+import { Plus, Copy, Trash2, ArrowUp, ArrowDown, FileBox, Send, Database, Hash } from '@lucide/vue';
 import AnimatedNumber from './AnimatedNumber.vue';
 import PartImage from './PartImage.vue';
 import { eur } from '../lib/format.js';
 import { useAngebot } from '../stores/angebot.js';
 import { useAnfragen } from '../stores/anfragen.js';
+import { useUi } from '../stores/ui.js';
 
 const a = useAngebot();
 const anfragen = useAnfragen();
+const ui = useUi();
 // Anfragen, in denen dieses Bauteil vorkommt, und ob schon überall ein Angebot da ist
 const anfrageStand = (t) => {
   const l = anfragen.liste.filter((x) => x.positionen.some((p) => p.teilId === t.id));
@@ -21,7 +23,10 @@ const anteil = (id) => (a.netto > 0 ? Math.max(0.03, (a.ergebnisse[id]?.gesamt ?
   <section class="card flex min-h-0 flex-col">
     <header class="flex items-center justify-between px-4 pb-2 pt-4">
       <h2 class="text-sm font-semibold">Bauteile <span class="ml-1 rounded-full bg-surface2 px-2 py-0.5 text-xs font-medium text-mute tnum">{{ a.teile.length }}</span></h2>
-      <button class="btn btn-primary !py-1.5" @click="a.hinzufuegen('Neues Bauteil')"><Plus :size="15" /> Neu <span class="kbd !border-white/30 !bg-white/15 !text-white">N</span></button>
+      <div class="flex gap-1.5">
+        <button class="btn !py-1.5" title="Bauteil des Kunden aus den Stammdaten übernehmen" @click="ui.bauteilWahlOffen = true"><Database :size="14" /> Aus Stammdaten</button>
+        <button class="btn btn-primary !py-1.5" title="Neues Bauteil anlegen, es steht danach in den Stammdaten" @click="a.hinzufuegen('Neues Bauteil')"><Plus :size="15" /> Neu <span class="kbd !border-white/30 !bg-white/15 !text-white">N</span></button>
+      </div>
     </header>
 
     <div v-auto-animate class="min-h-0 flex-1 space-y-1.5 overflow-auto p-2">
@@ -38,7 +43,10 @@ const anteil = (id) => (a.netto > 0 ? Math.max(0.03, (a.ergebnisse[id]?.gesamt ?
         <div class="flex items-start gap-3">
           <PartImage :teil="t" :groesse="44" />
           <div class="min-w-0 flex-1">
-            <div class="truncate text-sm font-medium"><span class="mr-1.5 text-xs text-mute tnum">{{ i + 1 }}</span>{{ t.name || 'Ohne Namen' }}</div>
+            <div class="truncate text-sm font-medium"><span class="mr-1.5 text-xs text-mute tnum">{{ i + 1 }}</span>{{ t.name || 'Ohne Namen' }}
+              <span v-if="a.zuordnung[t.id]" class="ml-1.5 rounded-full px-1.5 py-0.5 align-middle text-[10px] font-semibold" :class="a.zuordnung[t.id].herkunft === 'neu' ? 'bg-accent-soft text-accent' : 'bg-surface2 text-mute'" :title="a.zuordnung[t.id].herkunft === 'neu' ? 'Mit diesem Angebot neu angelegt, steht in den Stammdaten' : 'Bestandsbauteil aus den Stammdaten'">{{ a.zuordnung[t.id].herkunft === 'neu' ? 'Neu' : 'Bestand' }}</span>
+              <Hash v-if="t.seriennummern" :size="11" class="ml-1 inline text-mute" title="Seriennummern" />
+            </div>
             <div class="mt-0.5 truncate text-xs text-mute">
               {{ t.teilenummer || 'ohne Teilenummer' }} · {{ t.menge }} Stk<template v-if="t.material"> · {{ t.material }}</template>
             </div>

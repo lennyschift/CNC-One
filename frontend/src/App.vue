@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventListener } from '@vueuse/core';
-import { Search, Moon, Sun, Plus, Copy, Trash2, RotateCcw, Layers, Calculator, FileText, ClipboardList, Factory, Send, Settings, LogOut } from '@lucide/vue';
+import { Search, Moon, Sun, Database, Plus, Copy, Trash2, RotateCcw, Layers, Calculator, FileText, ClipboardList, Factory, Send, Settings, LogOut } from '@lucide/vue';
 import AppRail from './components/AppRail.vue';
 import CommandPalette from './components/CommandPalette.vue';
 import DropOverlay from './components/DropOverlay.vue';
@@ -40,6 +40,7 @@ const befehle = computed(() => [
   { id: 'go-anf', label: 'Zu den Lieferantenanfragen', gruppe: 'Gehe zu', icon: Send, run: () => router.push('/anfragen') },
   { id: 'go-stamm', label: 'Zu den Stammdaten', stichworte: 'einstellungen übersicht', gruppe: 'Gehe zu', icon: Settings, run: () => router.push('/stammdaten') },
   ...STAMM_PUNKTE.map((p) => ({ id: 'stamm-' + p.id, label: `Stammdaten: ${p.label}`, stichworte: `${p.text} stammdaten`, gruppe: 'Gehe zu', icon: p.icon, run: () => router.push(p.to) })),
+  { id: 'bestand', label: 'Bestandsbauteil aus den Stammdaten wählen', stichworte: 'bauteil stammdaten vorhanden', gruppe: 'Aktion', icon: Database, run: () => { router.push('/workbench'); ui.bauteilWahlOffen = true; } },
   { id: 'neu', label: 'Neues Bauteil anlegen', gruppe: 'Aktion', icon: Plus, run: () => { router.push('/workbench'); a.hinzufuegen('Neues Bauteil'); } },
   { id: 'dup', label: 'Aktuelles Bauteil duplizieren', gruppe: 'Aktion', icon: Copy, run: () => a.auswahlId && a.duplizieren(a.auswahlId) },
   { id: 'del', label: 'Aktuelles Bauteil löschen', gruppe: 'Aktion', icon: Trash2, run: () => a.auswahlId && a.loeschen(a.auswahlId) },

@@ -29,6 +29,7 @@ export function neuesTeil(name = 'Neues Bauteil') {
     expresskosten: 0,
     inStueckpreis: { ruest: false, mess: false, sonder: false, express: false },
     staffel: { aktiv: false, stufen: [{ menge: 5, extra: 0 }, { menge: 25, extra: 0 }, { menge: 100, extra: 0 }] },
+    seriennummern: false,
     arbeitsgaenge: [],
     dateien: [],
   };
@@ -76,6 +77,8 @@ export const useAngebot = defineStore('angebot', () => {
   const teile = ref([]);
   const auswahlId = ref(null);
   const angebotId = ref(null);
+  // Zuordnung zu den Stammdaten je Workbench-Bauteil: { [teilId]: { bauteilId, herkunft: 'neu' | 'bestand', seriennummern } }
+  const zuordnung = ref({});
   // 'gespeichert' | 'offen' | 'speichert' | 'fehler'
   const speicherStand = ref('gespeichert');
 
@@ -95,6 +98,12 @@ export const useAngebot = defineStore('angebot', () => {
     unterdrueckt = false;
   }
 
+  function zuordnungAus(positionen) {
+    const m = {};
+    for (const p of positionen) if (p.bauteilId) m[p.key] = { bauteilId: p.bauteilId, herkunft: p.herkunft, seriennummern: !!p.seriennummern };
+    zuordnung.value = m;
+  }
+
   // Gespeichertes Angebot (Entwurf) zum Weiterbearbeiten laden.
   function ausAngebot(record) {
     unterdrueckt = true;
@@ -103,6 +112,7 @@ export const useAngebot = defineStore('angebot', () => {
     teile.value = record.positionen.map((p) => JSON.parse(JSON.stringify(p.teil)));
     auswahlId.value = teile.value.find((t) => t.id === sitzung.auswahlId)?.id ?? teile.value[0]?.id ?? null;
     angebotId.value = record.id;
+    zuordnungAus(record.positionen);
     speicherStand.value = 'gespeichert';
     nextTick().then(() => { unterdrueckt = false; });
   }
@@ -117,6 +127,12 @@ export const useAngebot = defineStore('angebot', () => {
     try {
       const rec = await belege.angebotSpeichern({ angebotId: angebotId.value, kopf: kopf.value, teile: teile.value });
       angebotId.value = rec.id;
+      zuordnungAus(rec.positionen);
+      // Ein Bestandsbauteil bringt sein Seriennummern-Kennzeichen aus den Stammdaten mit
+      for (const p of rec.positionen) {
+        const t = teile.value.find((x) => x.id === p.key);
+        if (t && p.herkunft === 'bestand' && !!t.seriennummern !== !!p.seriennummern) t.seriennummern = !!p.seriennummern;
+      }
       if (!nochmal && Math.abs(rec.netto - nettoClient) > 0.01) {
         ui.toast(`Server rechnet anders: ${eur(rec.netto)} statt ${eur(nettoClient)}`, 'warn');
       }
@@ -153,6 +169,7 @@ export const useAngebot = defineStore('angebot', () => {
     if (speicherStand.value === 'offen') await speichern();
     await ruhig(() => {
       teile.value = [];
+      zuordnung.value = {};
       auswahlId.value = null;
       angebotId.value = null;
       kopf.value = leererKopf();
@@ -171,6 +188,22 @@ export const useAngebot = defineStore('angebot', () => {
     }
     teile.value.push(t);
     auswahlId.value = t.id;
+    return t;
+  }
+
+  // Bestandsbauteil aus den Stammdaten ins Angebot übernehmen (Angaben und Arbeitsplan, ohne Kalkulationswerte)
+  function ausBauteilHinzufuegen(b, materialien = []) {
+    const t = neuesTeil(b.name || b.teilenummer);
+    const m = materialien.find((x) => x.name === b.material);
+    Object.assign(t, {
+      teilenummer: b.teilenummer, zeichnungsnr: b.zeichnungsnr, material: b.material,
+      materialPreisKg: m?.preisKg ?? 0, seriennummern: !!b.seriennummern,
+      arbeitsgaenge: (b.arbeitsgaenge ?? []).map((ag) => ({ ...JSON.parse(JSON.stringify(ag)), id: uid(), anfrageId: '' })),
+    });
+    zuordnung.value = { ...zuordnung.value, [t.id]: { bauteilId: b.id, herkunft: 'bestand', seriennummern: !!b.seriennummern } };
+    teile.value.push(t);
+    auswahlId.value = t.id;
+    ui.toast(`Bestandsbauteil ${b.teilenummer} übernommen`, 'ok');
     return t;
   }
 
@@ -234,5 +267,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, auswahlId, angebotId, speicherStand, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, beispieleEinfuegen };
+  return { kopf, teile, zuordnung, auswahlId, angebotId, speicherStand, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, beispieleEinfuegen };
 });

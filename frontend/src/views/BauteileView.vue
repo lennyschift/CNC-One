@@ -1,7 +1,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, Search, Workflow } from '@lucide/vue';
+import { Plus, Search, Workflow, Hash } from '@lucide/vue';
+import Toggle from '../components/Toggle.vue';
+import NumField from '../components/NumField.vue';
 import StammNav from '../components/StammNav.vue';
 import StammDialog from '../components/StammDialog.vue';
 import PartImage from '../components/PartImage.vue';
@@ -29,7 +31,7 @@ const zeilen = computed(() => {
 });
 const kundenMitBauteil = computed(() => kunden.value.filter((k) => liste.value.some((b) => b.kundeId === k.id)));
 
-const leer = () => ({ id: '', kundeId: kundeFilter.value, teilenummer: '', name: '', zeichnungsnr: '', revision: '', material: '', status: 'Aktiv', arbeitsgaenge: [] });
+const leer = () => ({ id: '', kundeId: kundeFilter.value, teilenummer: '', name: '', zeichnungsnr: '', revision: '', material: '', status: 'Aktiv', seriennummern: false, letzteSeriennummer: 0, arbeitsgaenge: [] });
 const b = ref(null);
 const speichert = ref(false);
 const neu = computed(() => !b.value?.id);
@@ -61,7 +63,7 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
       <button v-for="x in zeilen" :key="x.id" class="card flex w-full items-center gap-4 p-3.5 text-left transition hover:-translate-y-px hover:border-accent/40" @click="oeffnen(x)">
         <PartImage :teil="x" :groesse="48" />
         <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-2"><span class="font-medium">{{ x.name || 'Ohne Bezeichnung' }}</span><span v-if="x.status === 'Gesperrt'" class="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] text-accent">gesperrt</span></div>
+          <div class="flex flex-wrap items-center gap-2"><span class="font-medium">{{ x.name || 'Ohne Bezeichnung' }}</span><span v-if="x.status === 'Gesperrt'" class="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] text-accent">gesperrt</span><span v-if="x.seriennummern" class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[10px] text-mute"><Hash :size="10" /> Serie{{ x.letzteSeriennummer ? ` bis ${x.letzteSeriennummer}` : '' }}</span></div>
           <div class="truncate text-xs text-mute">{{ x.teilenummer }}<template v-if="x.zeichnungsnr"> · Zeichnung {{ x.zeichnungsnr }}</template><template v-if="x.revision"> · Rev. {{ x.revision }}</template><template v-if="x.material"> · {{ x.material }}</template></div>
           <div class="truncate text-xs text-mute">{{ kundenName(x.kundeId) }}</div>
         </div>
@@ -83,6 +85,10 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
             <select v-model="b.material" class="field"><option value="">– keiner –</option><option v-for="m in materialien" :key="m.name" :value="m.name">{{ m.name }}</option></select>
           </label>
           <label class="block"><span class="label mb-1 block">Status</span><select v-model="b.status" class="field"><option>Aktiv</option><option>Gesperrt</option></select></label>
+          <div class="flex flex-wrap items-end gap-4 sm:col-span-2">
+            <Toggle v-model="b.seriennummern" klein label="Seriennummern führen" />
+            <NumField v-if="b.seriennummern" v-model="b.letzteSeriennummer" label="Letzte vergebene Seriennummer" :decimals="0" class="w-56" hint="Setzt der nächste Auftrag fort" />
+          </div>
         </div>
       </div>
       <section>

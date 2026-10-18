@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { Cog, Clock, Layers, Receipt, TrendingDown, FileBox, ListChecks, Workflow } from '@lucide/vue';
+import { Cog, Clock, Layers, Receipt, TrendingDown, FileBox, ListChecks, Workflow, Database, Hash, Info } from '@lucide/vue';
 import NumField from './NumField.vue';
 import Toggle from './Toggle.vue';
 import TierTable from './TierTable.vue';
@@ -19,6 +19,8 @@ const emit = defineEmits(['anfrage']);
 if (!props.teil.arbeitsgaenge) props.teil.arbeitsgaenge = [];
 const angebot = useAngebot();
 const ausPlan = computed(() => hatPlan(props.teil));
+const zuordnung = computed(() => angebot.zuordnung[props.teil.id] ?? null);
+const bestand = computed(() => zuordnung.value?.herkunft === 'bestand');
 
 const maschinen = ref([]);
 const materialien = ref([]);
@@ -56,8 +58,20 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
         <div class="min-w-[260px] flex-1">
           <input v-model="teil.name" class="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-mute" placeholder="Bezeichnung des Bauteils" />
           <div class="mt-3 grid max-w-xl grid-cols-2 gap-3">
-            <label class="block"><span class="label mb-1 block">Teilenummer</span><input v-model="teil.teilenummer" class="field" placeholder="z. B. F31.683.122" /></label>
+            <label class="block"><span class="label mb-1 block">Teilenummer</span><input v-model="teil.teilenummer" class="field" :disabled="bestand" placeholder="z. B. F31.683.122" /></label>
             <label class="block"><span class="label mb-1 block">Zeichnungsnummer</span><input v-model="teil.zeichnungsnr" class="field" placeholder="optional" /></label>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+            <Toggle v-if="!bestand" v-model="teil.seriennummern" klein label="Seriennummern führen" />
+            <span v-else class="inline-flex items-center gap-1.5 text-xs text-mute"><Hash :size="13" /> Seriennummern: {{ teil.seriennummern ? 'ja' : 'nein' }} <span class="opacity-70">(in den Stammdaten ändern)</span></span>
+          </div>
+          <!-- Stammdaten: Bestand oder neu angelegt -->
+          <div class="mt-3 flex flex-wrap items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs" :class="zuordnung?.herkunft === 'neu' ? 'bg-accent-soft text-accent' : 'bg-surface2 text-mute'">
+            <Database v-if="zuordnung" :size="14" class="shrink-0" /><Info v-else :size="14" class="shrink-0" />
+            <span v-if="zuordnung?.herkunft === 'neu'"><strong>Neu angelegt</strong> mit diesem Angebot, steht schon in den Stammdaten (<span class="tnum">{{ zuordnung.bauteilId }}</span>). Änderungen hier gelten dort mit.</span>
+            <span v-else-if="bestand"><strong>Bestandsbauteil</strong> <span class="tnum">{{ zuordnung.bauteilId }}</span> aus den Stammdaten. Teilenummer und Stammdaten bleiben unverändert; „Am Bauteil speichern“ aktualisiert den Arbeitsplan.</span>
+            <span v-else>Noch nicht in den Stammdaten: Sobald Kunde und Teilenummer eingetragen sind, wird das Bauteil dort angelegt. Eine vorhandene Teilenummer wird als Bestandsbauteil erkannt, es entsteht keine Dublette.</span>
+            <RouterLink v-if="zuordnung" to="/stammdaten/bauteile" class="ml-auto underline-offset-2 hover:underline">In den Stammdaten ansehen</RouterLink>
           </div>
         </div>
         <div class="flex gap-3">

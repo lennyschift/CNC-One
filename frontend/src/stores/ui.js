@@ -6,6 +6,7 @@ import { einstellungSpeichern } from '../data/einstellungen.js';
 export const useUi = defineStore('ui', () => {
   const dark = ref(document.documentElement.classList.contains('dark'));
   const paletteOffen = ref(false);
+  const bauteilWahlOffen = ref(false);
   const toasts = ref([]);
 
   function setDark(v) {
@@ -21,5 +22,5 @@ export const useUi = defineStore('ui', () => {
     setTimeout(() => { toasts.value = toasts.value.filter((t) => t.id !== id); }, 3200);
   }
 
-  return { dark, paletteOffen, toasts, setDark, toggleDark, toast };
+  return { dark, paletteOffen, bauteilWahlOffen, toasts, setDark, toggleDark, toast };
 });
