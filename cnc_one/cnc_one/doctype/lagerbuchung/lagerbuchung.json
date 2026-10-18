@@ -1,0 +1,141 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "zeit",
+  "lager",
+  "bauteil",
+  "menge",
+  "art",
+  "lieferschein",
+  "fertigungsbauteil",
+  "auftrag",
+  "bemerkung",
+  "benutzer"
+ ],
+ "fields": [
+  {
+   "fieldname": "zeit",
+   "fieldtype": "Datetime",
+   "label": "Zeitpunkt",
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "lager",
+   "fieldtype": "Select",
+   "label": "Lager",
+   "options": "Fertigbauteil Lager\nRohmaterial Lager",
+   "default": "Fertigbauteil Lager",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "bauteil",
+   "fieldtype": "Link",
+   "label": "Bauteil",
+   "options": "Bauteil",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "menge",
+   "fieldtype": "Int",
+   "label": "Menge (plus Zugang, minus Abgang)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "art",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Fertigung\nLieferschein\nStorno Lieferschein\nKorrektur",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "lieferschein",
+   "fieldtype": "Link",
+   "label": "Lieferschein",
+   "options": "Lieferschein"
+  },
+  {
+   "fieldname": "fertigungsbauteil",
+   "fieldtype": "Link",
+   "label": "Fertigungsbauteil",
+   "options": "Fertigungsbauteil"
+  },
+  {
+   "fieldname": "auftrag",
+   "fieldtype": "Link",
+   "label": "Auftrag",
+   "options": "Auftrag"
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Data",
+   "label": "Bemerkung"
+  },
+  {
+   "fieldname": "benutzer",
+   "fieldtype": "Data",
+   "label": "Benutzer",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Lagerbuchung",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "read": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "read": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "LB-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "warehouse",
+ "search_fields": "bauteil,lager"
+}

@@ -4,6 +4,7 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime, today
 
 from cnc_one.logic import fertigung as regel
+from cnc_one.logic import lager
 
 
 class Fertigungsbauteil(Document):
@@ -28,7 +29,8 @@ class Fertigungsbauteil(Document):
 		self.ueberproduktion = regel.ueberproduktion(self.menge, self.produziert)
 
 	def on_update(self):
-		"""Der Auftrag ist fertig, wenn alle seine Fertigungsbauteile fertig sind."""
+		"""Die gefertigte Menge geht ins Fertigbauteil Lager. Der Auftrag ist fertig, wenn alle seine Fertigungsbauteile fertig sind."""
+		lager.fertigung_abgleichen(self)
 		if not self.auftrag:
 			return
 		stati = frappe.get_all("Fertigungsbauteil", filters={"auftrag": self.auftrag}, pluck="status")

@@ -1,0 +1,94 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "bauteil",
+  "teilenummer",
+  "bezeichnung",
+  "zeichnungsnr",
+  "menge",
+  "auftrag",
+  "auftragsposition_key",
+  "serien_von",
+  "serien_bis",
+  "serien_stellen"
+ ],
+ "fields": [
+  {
+   "fieldname": "bauteil",
+   "fieldtype": "Link",
+   "label": "Bauteil",
+   "options": "Bauteil",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "teilenummer",
+   "fieldtype": "Data",
+   "label": "Teilenummer",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "bezeichnung",
+   "fieldtype": "Data",
+   "label": "Bezeichnung",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "zeichnungsnr",
+   "fieldtype": "Data",
+   "label": "Zeichnungsnummer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "menge",
+   "fieldtype": "Int",
+   "label": "Liefermenge",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "auftrag",
+   "fieldtype": "Link",
+   "label": "Auftrag",
+   "options": "Auftrag",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "auftragsposition_key",
+   "fieldtype": "Data",
+   "label": "Auftragsposition",
+   "read_only": 1
+  },
+  {
+   "fieldname": "serien_von",
+   "fieldtype": "Int",
+   "label": "Seriennummer von"
+  },
+  {
+   "fieldname": "serien_bis",
+   "fieldtype": "Int",
+   "label": "Seriennummer bis"
+  },
+  {
+   "fieldname": "serien_stellen",
+   "fieldtype": "Int",
+   "label": "Stellen der Seriennummer"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Lieferscheinposition",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "autoname": "hash"
+}
