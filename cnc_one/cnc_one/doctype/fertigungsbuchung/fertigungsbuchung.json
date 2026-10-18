@@ -1,0 +1,64 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "zeit",
+  "ag_id",
+  "ag_name",
+  "menge",
+  "benutzer",
+  "auto"
+ ],
+ "fields": [
+  {
+   "fieldname": "zeit",
+   "fieldtype": "Datetime",
+   "label": "Zeitpunkt",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "ag_id",
+   "fieldtype": "Data",
+   "label": "Arbeitsgang",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ag_name",
+   "fieldtype": "Data",
+   "label": "Arbeitsgang",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "menge",
+   "fieldtype": "Int",
+   "label": "Menge",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "benutzer",
+   "fieldtype": "Data",
+   "label": "Benutzer",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "auto",
+   "fieldtype": "Check",
+   "label": "Automatisch abgehakt"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Fertigungsbuchung",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "autoname": "hash"
+}

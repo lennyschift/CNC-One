@@ -1,0 +1,122 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "ag_id",
+  "bezeichnung",
+  "typ",
+  "maschine",
+  "satz",
+  "ruest_min",
+  "stueck_min",
+  "status",
+  "gebucht",
+  "lieferant",
+  "fremd_pro_stk",
+  "fremd_einmal",
+  "anfrage",
+  "bestellung"
+ ],
+ "fields": [
+  {
+   "fieldname": "ag_id",
+   "fieldtype": "Data",
+   "label": "Id",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bezeichnung",
+   "fieldtype": "Data",
+   "label": "Bezeichnung",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "typ",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Intern\nFremd",
+   "default": "Intern",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "maschine",
+   "fieldtype": "Link",
+   "label": "Maschine",
+   "options": "Maschine",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "satz",
+   "fieldtype": "Currency",
+   "label": "Satz (€/h)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "ruest_min",
+   "fieldtype": "Float",
+   "label": "Rüstzeit (min)"
+  },
+  {
+   "fieldname": "stueck_min",
+   "fieldtype": "Float",
+   "label": "Stückzeit (min)"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Offen\nLäuft\nFertig",
+   "default": "Offen",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "gebucht",
+   "fieldtype": "Int",
+   "label": "Gebucht",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "lieferant",
+   "fieldtype": "Link",
+   "label": "Lieferant",
+   "options": "Lieferant"
+  },
+  {
+   "fieldname": "fremd_pro_stk",
+   "fieldtype": "Currency",
+   "label": "Fremdvergabe je Stück",
+   "precision": "2"
+  },
+  {
+   "fieldname": "fremd_einmal",
+   "fieldtype": "Currency",
+   "label": "Fremdvergabe einmalig",
+   "precision": "2"
+  },
+  {
+   "fieldname": "anfrage",
+   "fieldtype": "Data",
+   "label": "Anfrage"
+  },
+  {
+   "fieldname": "bestellung",
+   "fieldtype": "Data",
+   "label": "Bestellung"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Fertigungsarbeitsgang",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "autoname": "hash"
+}
