@@ -9,5 +9,5 @@ const felder = [
 </script>
 
 <template>
-  <StammListe art="material" einzahl="Material" :icon="Layers" beschreibung="Werkstoffe mit Preis je Kilogramm, aus denen die Materialkosten im Angebot entstehen." :felder="felder" :spalten="['preisKg', 'dichte']" />
+  <StammListe art="material" einzahl="Rohmaterial" :icon="Layers" beschreibung="Rohmaterial mit Preis je Kilogramm, aus dem die Materialkosten im Angebot entstehen." :felder="felder" :spalten="['preisKg', 'dichte']" />
 </template>

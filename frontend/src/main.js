@@ -11,6 +11,9 @@ import FertigungView from './views/FertigungView.vue';
 import FertigungDetailView from './views/FertigungDetailView.vue';
 import AnfragenListView from './views/AnfragenListView.vue';
 import AnfrageDetailView from './views/AnfrageDetailView.vue';
+import LieferscheinListView from './views/LieferscheinListView.vue';
+import LieferscheinDetailView from './views/LieferscheinDetailView.vue';
+import LagerView from './views/LagerView.vue';
 import StammHubView from './views/StammHubView.vue';
 import KundenView from './views/KundenView.vue';
 import BauteileView from './views/BauteileView.vue';
@@ -32,6 +35,9 @@ const router = createRouter({
     { path: '/auftraege/:id', component: AuftragDetailView, meta: { titel: 'Auftrag', bereich: 'auftraege' } },
     { path: '/fertigung', component: FertigungView, meta: { titel: 'Fertigung', bereich: 'fertigung' } },
     { path: '/fertigung/:id', component: FertigungDetailView, meta: { titel: 'Fertigungsbauteil', bereich: 'fertigung' } },
+    { path: '/lieferscheine', component: LieferscheinListView, meta: { titel: 'Lieferscheine', bereich: 'lieferscheine' } },
+    { path: '/lieferscheine/:id', component: LieferscheinDetailView, meta: { titel: 'Lieferschein', bereich: 'lieferscheine' } },
+    { path: '/lager', component: LagerView, meta: { titel: 'Lager', bereich: 'lager' } },
     { path: '/anfragen', component: AnfragenListView, meta: { titel: 'Lieferantenanfragen', bereich: 'anfragen' } },
     { path: '/anfragen/:id', component: AnfrageDetailView, meta: { titel: 'Lieferantenanfrage', bereich: 'anfragen' } },
     { path: '/stammdaten', component: StammHubView, meta: { titel: 'Stammdaten', bereich: 'stammdaten' } },

@@ -1,4 +1,5 @@
 <script setup>
+import { onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { ClipboardList } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
@@ -7,6 +8,7 @@ import { useBelege } from '../stores/belege.js';
 import { eur } from '../lib/format.js';
 
 const b = useBelege();
+onMounted(() => b.auftraegeNeuLaden());
 const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
 </script>
 
@@ -19,7 +21,7 @@ const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
           <div v-if="x.positionen.length > 3" class="grid h-[46px] w-[46px] place-items-center rounded-xl border border-line bg-surface2 text-xs font-medium text-mute ring-2 ring-surface">+{{ x.positionen.length - 3 }}</div>
         </div>
         <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-3"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.status" /></div>
+          <div class="flex items-center gap-3"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.status" /><StatusBadge v-if="x.lieferung.geliefert" :status="x.lieferung.status" /></div>
           <div class="mt-0.5 truncate text-sm text-mute">{{ x.kundeName }}<template v-if="x.kundenbestellnr"> · Bestellung {{ x.kundenbestellnr }}</template> · aus {{ x.angebotId }}</div>
         </div>
         <div class="text-right">

@@ -14,6 +14,11 @@ const farbe = computed(() => ({
   Läuft: 'var(--warn)',
   'Angebot erhalten': 'var(--ok)',
   Abgesagt: 'var(--mute)',
+  Bereit: 'var(--warn)',
+  Geliefert: 'var(--ok)',
+  Storniert: 'var(--mute)',
+  'Nicht geliefert': 'var(--mute)',
+  'Teilweise geliefert': 'var(--warn)',
 }[props.status] ?? 'var(--mute)'));
 </script>
 

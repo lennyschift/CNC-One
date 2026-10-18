@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory } from '@lucide/vue';
+import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory, Truck } from '@lucide/vue';
+import LieferscheinDialog from '../components/LieferscheinDialog.vue';
 import { bereichText } from '../lib/serien.js';
 import WorkflowSteps from '../components/WorkflowSteps.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -15,10 +16,14 @@ const route = useRoute();
 const b = useBelege();
 const f = useFertigung();
 const auftrag = computed(() => b.auftrag(route.params.id));
+onMounted(() => b.auftraegeNeuLaden());
+const lieferDialog = ref(false);
 const fbs = computed(() => (auftrag.value ? f.fuerAuftrag(auftrag.value.id) : []));
+// Ein Haken gibt es erst, wenn der Schritt wirklich fertig ist. Ein Lieferschein vor der Fertigung hakt die Fertigung nicht ab.
 const stand = computed(() => {
   if (!fbs.value.length) return 1;
-  return fbs.value.every((x) => x.status === 'Fertig') ? 3 : 2;
+  if (!fbs.value.every((x) => x.status === 'Fertig')) return 2;
+  return auftrag.value?.lieferung?.status === 'Geliefert' ? 4 : 3;
 });
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
 const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
@@ -35,6 +40,8 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
           <p class="mt-1 text-sm text-mute">aus <RouterLink :to="`/angebote/${auftrag.angebotId}`" class="text-accent hover:underline tnum">{{ auftrag.angebotId }}</RouterLink> · angelegt am {{ de(auftrag.datum) }}</p>
           <button v-if="!fbs.length" class="btn btn-primary mt-4" @click="f.ausAuftrag(auftrag.id)"><Factory :size="16" /> Fertigung starten</button>
           <RouterLink v-else to="/fertigung" class="btn mt-4"><Factory :size="16" /> Zur Fertigung</RouterLink>
+          <button v-if="auftrag.lieferung.status !== 'Geliefert'" class="btn mt-4 ml-2" @click="lieferDialog = true"><Truck :size="16" /> Lieferschein erstellen</button>
+          <span class="ml-2 mt-4 inline-block align-middle"><StatusBadge :status="auftrag.lieferung.status" /></span>
         </div>
         <div class="w-full max-w-xl"><WorkflowSteps :stand="stand" /></div>
       </div>
@@ -60,6 +67,9 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
           <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-mute">
             <span v-if="p.teil.material">{{ p.teil.material }}</span>
             <span v-if="p.staffelMenge">Staffel {{ p.staffelMenge }} Stk</span>
+            <span class="inline-flex items-center gap-1" :class="p.geliefert >= p.menge ? 'text-ok' : p.geliefert ? 'text-warn' : ''"><Truck :size="12" /> geliefert {{ p.geliefert }} / {{ p.menge }}</span>
+            <span v-if="p.gefertigt || fbZu(p.key)">gefertigt {{ p.gefertigt }}</span>
+            <RouterLink v-for="ls in p.lieferscheine" :key="ls.id" :to="`/lieferscheine/${ls.id}`" class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-accent hover:underline"><span class="tnum">{{ ls.id }}</span><span class="text-mute">{{ ls.menge }} Stk</span></RouterLink>
             <span v-if="p.serienVon" class="inline-flex items-center gap-1 text-ink"><Hash :size="12" /> Seriennummern {{ bereichText(p.serienVon, p.serienBis, p.serienStellen) }}</span>
             <span class="inline-flex items-center gap-1"><CalendarDays :size="12" /> Liefertermin {{ p.termin ? new Date(p.termin).toLocaleDateString('de-DE') : 'offen' }}</span>
           </div>
@@ -74,6 +84,7 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
         </div>
       </div>
     </section>
+    <LieferscheinDialog v-if="lieferDialog" :auftrag-id="auftrag.id" @schliessen="lieferDialog = false" @angelegt="lieferDialog = false" />
   </div>
   <div v-else class="card mx-auto grid max-w-lg place-items-center p-14 text-center">
     <p class="font-medium">Auftrag nicht gefunden</p>

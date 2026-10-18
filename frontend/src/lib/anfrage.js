@@ -73,7 +73,7 @@ export function mailText(a, firma = 'Hohenstein GmbH') {
     if (!einzel) zeilen.push(`${i + 1}. ${p.agName || 'Fremdvergabe'}`);
     zeilen.push(`${einzel ? '' : '   '}Bauteil: ${teilZeile(p.teil)}`);
     if (p.teil.zeichnungsnr) zeilen.push(`${einzel ? '' : '   '}Zeichnung: ${p.teil.zeichnungsnr}`);
-    if (p.teil.material) zeilen.push(`${einzel ? '' : '   '}Werkstoff: ${p.teil.material}`);
+    if (p.teil.material) zeilen.push(`${einzel ? '' : '   '}Rohmaterial: ${p.teil.material}`);
     zeilen.push(`${einzel ? '' : '   '}Angefragte Stückzahlen: ${p.mengen.join(', ')}`);
     if (!einzel) zeilen.push('');
   });

@@ -83,7 +83,7 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
           <label class="block"><span class="label mb-1 block">Bezeichnung</span><input v-model="b.name" class="field" /></label>
           <label class="block"><span class="label mb-1 block">Zeichnungsnummer</span><input v-model="b.zeichnungsnr" class="field" /></label>
           <label class="block"><span class="label mb-1 block">Revision</span><input v-model="b.revision" class="field" placeholder="z. B. B" /></label>
-          <label class="block"><span class="label mb-1 block">Werkstoff</span>
+          <label class="block"><span class="label mb-1 block">Rohmaterial</span>
             <select v-model="b.material" class="field"><option value="">– keiner –</option><option v-for="m in materialien" :key="m.name" :value="m.name">{{ m.name }}</option></select>
           </label>
           <label class="block"><span class="label mb-1 block">Status</span><select v-model="b.status" class="field"><option>Aktiv</option><option>Gesperrt</option></select></label>

@@ -214,7 +214,7 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
           <div class="flex gap-3">
             <PartImage art="material" :groesse="64" />
             <div class="min-w-0 flex-1">
-              <div class="font-medium">{{ fb.rohmaterial.werkstoff || 'Kein Werkstoff' }}</div>
+              <div class="font-medium">{{ fb.rohmaterial.werkstoff || 'Kein Rohmaterial' }}</div>
               <div class="text-xs text-mute">Bedarf für {{ fb.menge }} Stk</div>
             </div>
           </div>

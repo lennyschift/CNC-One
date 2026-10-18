@@ -11,6 +11,7 @@ defineProps({
   schreibgeschuetzt: { type: Boolean, default: false },
   speichert: { type: Boolean, default: false },
   gueltig: { type: Boolean, default: true },
+  speichernText: { type: String, default: 'Speichern' },
 });
 const emit = defineEmits(['schliessen', 'speichern', 'loeschen']);
 const wurzel = ref(null);
@@ -38,7 +39,7 @@ function loeschen() {
             <span class="ml-auto" />
             <button type="button" class="btn" @click="emit('schliessen')">{{ schreibgeschuetzt ? 'Schließen' : 'Abbrechen' }}</button>
             <button v-if="!schreibgeschuetzt" type="submit" class="btn btn-primary" :disabled="!gueltig || speichert" :class="!gueltig || speichert ? 'pointer-events-none opacity-40' : ''">
-              <Loader v-if="speichert" :size="15" class="animate-spin" /><Save v-else :size="15" /> Speichern
+              <Loader v-if="speichert" :size="15" class="animate-spin" /><Save v-else :size="15" /> {{ speichernText }}
             </button>
           </footer>
         </form>

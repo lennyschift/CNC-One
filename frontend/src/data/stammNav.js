@@ -6,6 +6,6 @@ export const STAMM_PUNKTE = [
   { id: 'bauteile', label: 'Bauteile', icon: Package, to: '/stammdaten/bauteile', text: 'Bauteile der Kunden mit gespeichertem Arbeitsplan', zaehler: 'bauteile' },
   { id: 'lieferanten', label: 'Lieferanten', icon: Truck, to: '/stammdaten/lieferanten', text: 'Für Fremdvergabe und Lieferantenanfragen', zaehler: 'lieferanten' },
   { id: 'maschinen', label: 'Maschinen', icon: Cog, to: '/stammdaten/maschinen', text: 'Maschinen mit Stundensatz für die Kalkulation', zaehler: 'maschinen' },
-  { id: 'materialien', label: 'Materialien', icon: Layers, to: '/stammdaten/materialien', text: 'Werkstoffe mit Preis je Kilogramm', zaehler: 'materialien' },
+  { id: 'materialien', label: 'Rohmaterial', icon: Layers, to: '/stammdaten/materialien', text: 'Rohmaterial mit Preis je Kilogramm', zaehler: 'materialien' },
   { id: 'arbeitsgaenge', label: 'Arbeitsgänge und Vorlagen', icon: ListTree, to: '/stammdaten/arbeitsgaenge', text: 'Arbeitsgangarten und Vorlagen für Arbeitspläne', zaehler: 'vorlagen' },
 ];

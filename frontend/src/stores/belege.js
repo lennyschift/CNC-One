@@ -38,6 +38,11 @@ export const useBelege = defineStore('belege', () => {
     return rec;
   }
 
+  // Lieferstand und Fertigung ändern Aufträge, deshalb nach Lieferscheinen neu holen
+  async function auftraegeNeuLaden() {
+    try { auftraege.value = await call('cnc_one.api.auftrag.liste'); } catch { /* der alte Stand bleibt sichtbar */ }
+  }
+
   async function sicher(fn) {
     try { return await fn(); } catch (e) { ui.toast(e.message, 'warn'); return null; }
   }
@@ -89,5 +94,5 @@ export const useBelege = defineStore('belege', () => {
     if (a && status) a.status = status;
   }
 
-  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, angebotSpeichern, angebotSenden, angebotAblehnen, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen };
+  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, angebotSpeichern, angebotSenden, angebotAblehnen, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen, auftraegeNeuLaden };
 });

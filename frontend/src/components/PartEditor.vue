@@ -125,12 +125,12 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
 
       <!-- Material -->
       <section class="card p-5">
-        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Layers :size="16" class="text-accent" /> Material</h3>
+        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Layers :size="16" class="text-accent" /> Rohmaterial</h3>
         <div class="grid grid-cols-2 gap-3">
           <div class="col-span-2 flex items-end gap-3">
             <PartImage art="material" :groesse="42" />
             <label class="block flex-1">
-              <span class="label mb-1 block">Werkstoff</span>
+              <span class="label mb-1 block">Rohmaterial</span>
               <select class="field" :value="teil.material" @change="materialWechsel($event.target.value)">
                 <option value="">– wählen –</option>
                 <option v-for="m in materialien" :key="m.name" :value="m.name">{{ m.name }}</option>

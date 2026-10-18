@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue';
-import { Calculator, FileText, ClipboardList, Factory, Truck, Receipt, Database, Send } from '@lucide/vue';
+import { Calculator, FileText, ClipboardList, Factory, Truck, Receipt, Database, Send, Warehouse } from '@lucide/vue';
 import { onClickOutside } from '@vueuse/core';
 import { useRoute } from 'vue-router';
 import { STAMM_PUNKTE } from '../data/stammNav.js';
@@ -17,7 +17,8 @@ const punkte = [
   { id: 'auftraege', label: 'Aufträge', icon: ClipboardList, to: '/auftraege' },
   { id: 'fertigung', label: 'Fertigung', icon: Factory, to: '/fertigung' },
   { id: 'anfragen', label: 'Lieferantenanfragen', icon: Send, to: '/anfragen' },
-  { id: 'lieferscheine', label: 'Lieferscheine', icon: Truck },
+  { id: 'lieferscheine', label: 'Lieferscheine', icon: Truck, to: '/lieferscheine' },
+  { id: 'lager', label: 'Lager', icon: Warehouse, to: '/lager' },
   { id: 'rechnungen', label: 'Rechnungen', icon: Receipt },
 ];
 </script>
