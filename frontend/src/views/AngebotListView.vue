@@ -17,10 +17,10 @@ const anfragen = useAnfragen();
 const anfragenZu = (x) => anfragen.fuerAngebot({ angebotId: x.id });
 
 const filter = ref('Alle');
-const filterListe = ['Alle', 'Entwurf', 'Gesendet', 'Beauftragt'];
+const filterListe = ['Alle', 'Entwurf', 'Gesendet', 'Bestellt'];
 const zeilen = computed(() => b.angebote
   .map((x) => ({ ...x, anzeige: b.statusVon(x) }))
-  .filter((x) => filter.value === 'Alle' || x.anzeige.includes(filter.value) || (filter.value === 'Beauftragt' && x.anzeige === 'Teilweise beauftragt')));
+  .filter((x) => filter.value === 'Alle' || x.anzeige.includes(filter.value) || (filter.value === 'Bestellt' && x.anzeige === 'Teilweise bestellt')));
 
 async function neu() {
   await a.neu();

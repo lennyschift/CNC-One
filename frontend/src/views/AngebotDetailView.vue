@@ -20,7 +20,8 @@ const angebot = computed(() => b.angebot(route.params.id));
 const status = computed(() => (angebot.value ? b.statusVon(angebot.value) : ''));
 const bestellt = computed(() => (angebot.value ? b.bestelltFuer(angebot.value.id) : {}));
 const dialog = ref(false);
-const stand = computed(() => (status.value === 'Entwurf' ? 0 : status.value === 'Gesendet' ? 0.5 : status.value.includes('beauftragt') ? 1 : 0));
+// Nur zwei Schritte: Angebot und Auftrag. Ein Haken beim Angebot, sobald etwas bestellt ist, beim Auftrag erst wenn alles bestellt ist.
+const stand = computed(() => (status.value === 'Bestellt' ? 2 : status.value === 'Teilweise bestellt' ? 1 : 0));
 
 const drucken = () => window.print();
 
@@ -46,7 +47,7 @@ function angelegt(auftrag) {
 
       <section class="card p-5">
         <div class="flex items-center justify-between"><h2 class="font-semibold tnum">{{ angebot.id }}</h2><StatusBadge :status="status" /></div>
-        <div class="mt-5"><WorkflowSteps :stand="Math.floor(stand)" /></div>
+        <div class="mt-5"><WorkflowSteps :stand="stand" :schritte="['Angebot', 'Auftrag']" /></div>
 
         <div class="mt-5 space-y-2">
           <template v-if="angebot.status === 'Entwurf'">

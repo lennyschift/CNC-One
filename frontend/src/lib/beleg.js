@@ -41,7 +41,7 @@ export function angebotStatus(angebot, bestelltJeKey) {
   const keys = angebot.positionen.map((p) => p.key);
   const bestellt = keys.filter((k) => (bestelltJeKey[k] ?? 0) > 0).length;
   if (!bestellt) return 'Gesendet';
-  return bestellt === keys.length ? 'Beauftragt' : 'Teilweise beauftragt';
+  return bestellt === keys.length ? 'Bestellt' : 'Teilweise bestellt';
 }
 
 // Position für den Auftrag mit allem, was der Dialog auswählt: Staffel (optionId), Menge und abgewählte Kostenzeilen.

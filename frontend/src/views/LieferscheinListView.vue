@@ -25,6 +25,7 @@ const zeilen = computed(() => {
     && (!q || `${x.id} ${x.kundeName} ${x.kundenbestellnr} ${x.positionen.map((p) => `${p.teil.name} ${p.teil.teilenummer} ${p.auftragId}`).join(' ')}`.toLowerCase().includes(q)));
 });
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
+const auftraegeVon = (x) => [...new Set(x.positionen.map((p) => p.auftragId).filter(Boolean))];
 const stueck = (x) => x.positionen.reduce((n, p) => n + p.menge, 0);
 function angelegt(rec) { dialog.value = false; router.push(`/lieferscheine/${rec.id}`); }
 </script>
@@ -52,6 +53,7 @@ function angelegt(rec) { dialog.value = false; router.push(`/lieferscheine/${rec
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.status" /></div>
           <div class="mt-0.5 truncate text-sm text-mute">{{ x.kundeName }} · {{ x.positionen.map((p) => p.teil.name).join(', ') }}</div>
+          <div class="mt-0.5 truncate text-xs text-mute">{{ auftraegeVon(x).length ? `aus ${auftraegeVon(x).join(', ')}` : 'ohne Auftrag' }}</div>
         </div>
         <div class="text-right text-sm">
           <div class="tnum">{{ stueck(x) }} Stk · {{ x.positionen.length }} Pos.</div>

@@ -53,7 +53,7 @@ describe('auftragsPosition', () => {
 describe('angebotStatus', () => {
   const a = { status: 'Gesendet', positionen: [{ key: 'a' }, { key: 'b' }] };
   it('unbestellt bleibt Gesendet', () => expect(angebotStatus(a, {})).toBe('Gesendet'));
-  it('eine von zwei Positionen ist teilweise beauftragt', () => expect(angebotStatus(a, { a: 5 })).toBe('Teilweise beauftragt'));
-  it('alle Positionen sind beauftragt', () => expect(angebotStatus(a, { a: 5, b: 1 })).toBe('Beauftragt'));
+  it('eine von zwei Positionen ist teilweise bestellt', () => expect(angebotStatus(a, { a: 5 })).toBe('Teilweise bestellt'));
+  it('alle Positionen sind bestellt', () => expect(angebotStatus(a, { a: 5, b: 1 })).toBe('Bestellt'));
   it('Entwurf bleibt Entwurf', () => expect(angebotStatus({ ...a, status: 'Entwurf' }, { a: 5 })).toBe('Entwurf'));
 });

@@ -2,8 +2,11 @@
 import { Check } from '@lucide/vue';
 
 // Ablaufleiste Angebot → … → Zahlung. `stand`: Index des aktuellen Schritts, alles davor ist erledigt.
-defineProps({ stand: { type: Number, default: 0 } });
-const schritte = ['Angebot', 'Auftrag', 'Fertigung', 'Lieferung', 'Rechnung', 'Zahlung'];
+defineProps({
+  stand: { type: Number, default: 0 },
+  // im Angebot nur Angebot und Auftrag, der Rest passiert im Auftrag
+  schritte: { type: Array, default: () => ['Angebot', 'Auftrag', 'Fertigung', 'Lieferung', 'Rechnung', 'Zahlung'] },
+});
 </script>
 
 <template>

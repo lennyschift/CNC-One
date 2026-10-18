@@ -5,8 +5,8 @@ const props = defineProps({ status: { type: String, required: true } });
 const farbe = computed(() => ({
   Entwurf: 'var(--mute)',
   Gesendet: 'var(--warn)',
-  'Teilweise beauftragt': 'var(--ok)',
-  Beauftragt: 'var(--ok)',
+  'Teilweise bestellt': 'var(--ok)',
+  Bestellt: 'var(--ok)',
   Abgelehnt: 'var(--accent)',
   Offen: 'var(--warn)',
   'In Fertigung': 'var(--warn)',
