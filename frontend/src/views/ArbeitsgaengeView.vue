@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, Trash2, Truck, Cog, ListTree } from '@lucide/vue';
+import { Plus, Trash2, Truck, Cog, ListTree, Hash } from '@lucide/vue';
 import VorlageKarte from '../components/VorlageKarte.vue';
 import StammNav from '../components/StammNav.vue';
 import { repo } from '../data/repo.js';
@@ -35,9 +35,10 @@ async function vorlageKopieren(v) {
       <div v-auto-animate class="space-y-1.5">
         <div v-for="a in stamm.arten" :key="a.id" class="group flex items-center gap-2.5 rounded-xl bg-surface2 px-3 py-2 text-sm">
           <component :is="a.typ === 'fremd' ? Truck : Cog" :size="14" class="text-mute" />
-          <input v-model="a.name" class="min-w-0 flex-1 bg-transparent outline-none" @change="stamm.artSpeichern(a)" />
-          <select v-model="a.typ" class="rounded-md bg-surface px-1.5 py-0.5 text-xs text-mute outline-none" @change="stamm.artSpeichern(a)"><option value="intern">Intern</option><option value="fremd">Fremd</option></select>
-          <button class="grid h-6 w-6 place-items-center rounded-md text-mute opacity-0 transition hover:text-accent group-hover:opacity-100" title="Entfernen" @click="stamm.artLoeschen(a.id)"><Trash2 :size="13" /></button>
+          <input v-model="a.name" class="min-w-0 flex-1 bg-transparent outline-none" :disabled="a.serie" @change="stamm.artSpeichern(a)" />
+          <span v-if="a.serie" class="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] text-accent" title="Systemart: ein Arbeitsgang dieser Art bringt die Seriennummern an. Sie lässt sich nicht löschen oder umbenennen."><Hash :size="10" /> Seriennummern</span>
+          <select v-if="!a.serie" v-model="a.typ" class="rounded-md bg-surface px-1.5 py-0.5 text-xs text-mute outline-none" @change="stamm.artSpeichern(a)"><option value="intern">Intern</option><option value="fremd">Fremd</option></select>
+          <button v-if="!a.serie" class="grid h-6 w-6 place-items-center rounded-md text-mute opacity-0 transition hover:text-accent group-hover:opacity-100" title="Entfernen" @click="stamm.artLoeschen(a.id)"><Trash2 :size="13" /></button>
         </div>
       </div>
       <form class="mt-4 flex gap-2" @submit.prevent="artAnlegen">

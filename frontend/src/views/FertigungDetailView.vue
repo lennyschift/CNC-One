@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { ArrowLeft, Cog, Truck, ChevronUp, ChevronDown, Trash2, Plus, Layers, NotebookPen, History, Send, PackageCheck, Save, Workflow, X } from '@lucide/vue';
+import { ArrowLeft, Hash, Cog, Truck, ChevronUp, ChevronDown, Trash2, Plus, Layers, NotebookPen, History, Send, PackageCheck, Save, Workflow, X } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import NumField from '../components/NumField.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -11,6 +11,7 @@ import { useFertigung } from '../stores/fertigung.js';
 import { useStamm } from '../stores/stamm.js';
 import { STATUS, produziert, fortschritt, ueberproduktion, nochNichtGesendet, felderVon } from '../lib/fertigung.js';
 import { zahl } from '../lib/format.js';
+import { bereichText, erledigt, offen as serieOffen } from '../lib/serien.js';
 
 const route = useRoute();
 const f = useFertigung();
@@ -77,6 +78,7 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
           <p class="mt-0.5 text-sm text-mute">
             {{ fb.teil.teilenummer || 'ohne Teilenummer' }}<template v-if="fb.teil.zeichnungsnr"> · Zeichnung {{ fb.teil.zeichnungsnr }}</template><template v-if="fb.teil.material"> · {{ fb.teil.material }}</template>
           </p>
+          <p v-if="fb.serienVon" class="mt-1 inline-flex items-center gap-1.5 rounded-full bg-surface2 px-3 py-1 text-sm"><Hash :size="14" class="text-accent" /> Seriennummern <span class="font-semibold tnum">{{ bereichText(fb.serienVon, fb.serienBis, fb.serienStellen) }}</span></p>
           <p class="mt-1 text-sm">Auftrag <RouterLink :to="`/auftraege/${fb.auftragId}`" class="text-accent hover:underline tnum">{{ fb.auftragId }}</RouterLink> · {{ fb.kundeName }}</p>
 
           <div class="mt-4 flex flex-wrap items-end gap-3">
@@ -131,6 +133,7 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
               <input v-model="ag.name" :list="'arten-' + ag.typ" class="min-w-0 flex-1 bg-transparent text-base font-semibold outline-none placeholder:font-normal placeholder:text-mute" :placeholder="ag.typ === 'fremd' ? 'Name der Fremdvergabe' : 'Name des Arbeitsgangs'" />
               <datalist :id="'arten-' + ag.typ"><option v-for="a in arten(ag.typ)" :key="a.id" :value="a.name" /></datalist>
               <span class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2.5 py-0.5 text-xs text-mute"><component :is="ag.typ === 'fremd' ? Truck : Cog" :size="12" /> {{ ag.typ === 'fremd' ? 'Fremdvergabe' : 'Intern' }}</span>
+              <span v-if="ag.serie" class="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-0.5 text-xs text-accent"><Hash :size="12" /> Seriennummern</span>
               <StatusBadge :status="ag.status" />
               <div class="flex">
                 <button class="grid h-7 w-7 place-items-center rounded-lg text-mute hover:bg-surface2 hover:text-ink" title="Nach oben" @click="f.arbeitsgangVerschieben(fb.id, ag.id, -1)"><ChevronUp :size="15" /></button>
@@ -192,6 +195,11 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
                 <button class="btn" @click="buchen(ag, 10)">+10</button>
                 <button v-if="rest(ag) > 0" class="btn" @click="buchen(ag, rest(ag))">Rest ({{ rest(ag) }})</button>
               </div>
+              <p v-if="ag.serie && fb.serienVon" class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-surface px-3 py-2 text-xs">
+                <span class="inline-flex items-center gap-1 text-mute"><Hash :size="12" /> Seriennummern</span>
+                <span v-if="erledigt(fb.serienVon, fb.serienBis, ag.gebucht)" class="text-ok">angebracht: <span class="font-semibold tnum">{{ bereichText(erledigt(fb.serienVon, fb.serienBis, ag.gebucht).von, erledigt(fb.serienVon, fb.serienBis, ag.gebucht).bis, fb.serienStellen) }}</span></span>
+                <span v-if="serieOffen(fb.serienVon, fb.serienBis, ag.gebucht)" class="text-warn">noch offen: <span class="font-semibold tnum">{{ bereichText(serieOffen(fb.serienVon, fb.serienBis, ag.gebucht).von, serieOffen(fb.serienVon, fb.serienBis, ag.gebucht).bis, fb.serienStellen) }}</span></span>
+              </p>
               <p v-if="i > 0 && ag.typ === 'intern' && ag.gebucht < fb.menge" class="mt-2 text-xs text-mute">Wird hier gebucht, gelten die Arbeitsgänge davor automatisch als abgehakt.</p>
               <p v-else-if="ag.typ === 'fremd'" class="mt-2 text-xs text-mute">Gebucht wird, was vom Lieferanten zurück ist.</p>
             </div>

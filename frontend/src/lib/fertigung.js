@@ -17,13 +17,14 @@ export function planAus(arbeitsgaenge, uid) {
     fremdProStk: num(a.fremdProStk),
     fremdEinmal: num(a.fremdEinmal),
     anfrageId: a.anfrageId ?? '',
+    serie: !!a.serie,
   }));
 }
 
 export function leererArbeitsgang(typ, uid) {
   return {
     id: uid(), name: '', typ, maschine: '', satz: 0, ruestMin: 0, stueckMin: 0,
-    lieferant: '', fremdProStk: 0, fremdEinmal: 0, anfrageId: '',
+    lieferant: '', fremdProStk: 0, fremdEinmal: 0, anfrageId: '', serie: false,
   };
 }
 

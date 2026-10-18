@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Truck, Cog, CalendarClock, Flame } from '@lucide/vue';
 import PartImage from './PartImage.vue';
+import { bereichText } from '../lib/serien.js';
 import { produziert, fortschritt, ueberproduktion, tageBis } from '../lib/fertigung.js';
 
 const props = defineProps({ fb: { type: Object, required: true } });
@@ -38,6 +39,7 @@ const weg = computed(() => props.fb.arbeitsgaenge.some((a) => a.typ === 'fremd' 
         </div>
         <div class="truncate text-xs text-mute">{{ fb.teil.teilenummer || 'ohne Teilenummer' }}</div>
         <div class="mt-0.5 truncate text-[11px] text-mute tnum">{{ fb.auftragId }} · {{ fb.kundeName }}</div>
+        <div v-if="fb.serienVon" class="mt-0.5 truncate text-[11px] text-mute tnum"># {{ bereichText(fb.serienVon, fb.serienBis, fb.serienStellen) }}</div>
       </div>
     </div>
 

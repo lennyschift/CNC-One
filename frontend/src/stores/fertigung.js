@@ -82,7 +82,7 @@ export const useFertigung = defineStore('fertigung', () => {
     fb.status = res.fb.status;
     for (const ag of fb.arbeitsgaenge) {
       const neu = res.fb.arbeitsgaenge.find((x) => x.id === ag.id);
-      if (neu) ag.status = neu.status;
+      if (neu) { ag.status = neu.status; ag.serie = neu.serie; }
     }
     belege.auftragStatusSetzen(fb.auftragId, res.auftragStatus);
   }

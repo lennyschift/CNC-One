@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory } from '@lucide/vue';
+import { bereichText } from '../lib/serien.js';
 import WorkflowSteps from '../components/WorkflowSteps.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import PartImage from '../components/PartImage.vue';
@@ -59,6 +60,7 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
           <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-mute">
             <span v-if="p.teil.material">{{ p.teil.material }}</span>
             <span v-if="p.staffelMenge">Staffel {{ p.staffelMenge }} Stk</span>
+            <span v-if="p.serienVon" class="inline-flex items-center gap-1 text-ink"><Hash :size="12" /> Seriennummern {{ bereichText(p.serienVon, p.serienBis, p.serienStellen) }}</span>
             <span class="inline-flex items-center gap-1"><CalendarDays :size="12" /> Liefertermin {{ p.termin ? new Date(p.termin).toLocaleDateString('de-DE') : 'offen' }}</span>
           </div>
           <div v-for="k in p.kosten" :key="k.label" class="mt-1 flex justify-between pl-4 text-xs text-mute"><span>↳ {{ k.label }}</span><span class="tnum">{{ eur(k.betrag) }}</span></div>

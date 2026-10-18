@@ -1,6 +1,6 @@
 <script setup>
-import { ref, reactive, computed } from 'vue';
-import { X, AlertTriangle, ShoppingCart, ChevronDown, Workflow, Truck } from '@lucide/vue';
+import { ref, reactive, computed, onMounted } from 'vue';
+import { X, AlertTriangle, ShoppingCart, ChevronDown, Workflow, Truck, Hash } from '@lucide/vue';
 import PartImage from './PartImage.vue';
 import NumField from './NumField.vue';
 import Toggle from './Toggle.vue';
@@ -10,6 +10,9 @@ import { useBelege } from '../stores/belege.js';
 import { planAus } from '../lib/fertigung.js';
 import { useStamm } from '../stores/stamm.js';
 import { eur, uid } from '../lib/format.js';
+import { bereich, bereichText, formatNr, hoechste } from '../lib/serien.js';
+import SerienFeld from './SerienFeld.vue';
+import { call } from '../data/api.js';
 
 const props = defineProps({ angebot: { type: Object, required: true } });
 const emit = defineEmits(['schliessen', 'angelegt']);
@@ -25,8 +28,25 @@ const zustand = reactive(props.angebot.positionen.map((p) => {
   const opt = optionen(p.teil, p.ergebnis);
   // Arbeitsplan: am Bauteil gespeichert hat Vorrang, sonst der aus dem Angebot, sonst leer
   const plan = stamm.planFuer(kundeId, p.teil.teilenummer) ?? JSON.parse(JSON.stringify(p.teil.arbeitsgaenge ?? []));
-  return { key: p.key, aktiv: (bestellt.value[p.key] ?? 0) === 0, optId: opt[0].id, menge: opt[0].menge, termin: '', kostenAus: {}, plan, planSpeichern: true, planOffen: false };
+  return { key: p.key, aktiv: (bestellt.value[p.key] ?? 0) === 0, optId: opt[0].id, menge: opt[0].menge, termin: '', serienStart: '', kostenAus: {}, plan, planSpeichern: true, planOffen: false };
 }));
+
+// Seriennummern: Stammdaten des Bauteils (Kennzeichen und letzte vergebene Nummer) frisch holen
+const bauteile = ref({});
+onMounted(async () => {
+  try {
+    const l = await call('cnc_one.api.stammdaten.liste', { art: 'bauteil' });
+    bauteile.value = Object.fromEntries(l.map((b) => [b.id, b]));
+    // Startnummer vorbelegen: die letzte vergebene Nummer des Bauteils plus eins
+    props.angebot.positionen.forEach((p, i) => {
+      const b = bauteile.value[p.bauteilId];
+      if (b?.seriennummern && b.letzteSeriennummer > 0 && !zustand[i].serienStart) zustand[i].serienStart = formatNr(b.letzteSeriennummer + 1, b.serienStellen);
+    });
+  } catch { /* ohne Stammdaten geht der Dialog trotzdem, die Nummer wird dann von Hand eingegeben */ }
+});
+const serieVon = (p) => (p.bauteilId && bauteile.value[p.bauteilId] ? !!bauteile.value[p.bauteilId].seriennummern : !!(p.seriennummern || p.teil.seriennummern));
+const letzte = (p) => bauteile.value[p.bauteilId]?.letzteSeriennummer ?? 0;
+const stellenVon = (p) => bauteile.value[p.bauteilId]?.serienStellen ?? 4;
 
 const sicht = computed(() => props.angebot.positionen.map((p, i) => {
   const z = zustand[i];
@@ -35,11 +55,15 @@ const sicht = computed(() => props.angebot.positionen.map((p, i) => {
   const pos = auftragsPosition(p.teil, p.ergebnis, opt, z.menge);
   const kosten = pos.kosten.map((k) => ({ ...k, an: !z.kostenAus[k.label] }));
   const summe = pos.einzelpreis * pos.menge + kosten.filter((k) => k.an).reduce((s, k) => s + k.betrag, 0);
-  return { p, z, opts, opt, pos, kosten, summe };
+  const stellen = stellenVon(p);
+  const br = bereich(z.serienStart, pos.menge);
+  const serie = serieVon(p) ? { letzte: letzte(p), stellen, bereich: br, passt: !br || br.bis <= hoechste(stellen) } : null;
+  return { p, z, opts, opt, pos, kosten, summe, serie };
 }));
 
 const gesamt = computed(() => sicht.value.filter((s) => s.z.aktiv).reduce((x, s) => x + s.summe, 0));
 const anzahl = computed(() => sicht.value.filter((s) => s.z.aktiv).length);
+const serieFehlt = computed(() => sicht.value.some((s) => s.z.aktiv && s.serie && (!s.serie.bereich || !s.serie.passt)));
 
 function waehle(s, o) { s.z.optId = o.id; s.z.menge = o.menge; }
 
@@ -56,6 +80,7 @@ async function anlegen() {
     kostenAus: Object.keys(s.z.kostenAus).filter((label) => s.z.kostenAus[label]),
     arbeitsgaenge: planAus(s.z.plan, uid),
     planSpeichern: s.z.planSpeichern,
+    serienStart: s.serie ? String(s.z.serienStart ?? '') : '',
   }));
   speichert.value = true;
   const neu = await b.auftragAnlegen({ angebotId: props.angebot.id, kundenbestellnr: bestellnr.wert, positionen });
@@ -110,6 +135,15 @@ async function anlegen() {
                       <label class="block"><span class="label mb-1 block">Liefertermin</span><input v-model="s.z.termin" type="date" class="field" /></label>
                     </div>
 
+                    <div v-if="s.serie" class="rounded-xl border border-line p-3">
+                      <div class="flex flex-wrap items-end gap-3">
+                        <SerienFeld v-model="s.z.serienStart" :stellen="s.serie.stellen" label="Seriennummern ab" class="w-44" />
+                        <div class="pb-2 text-sm"><Hash :size="14" class="mr-1 inline text-accent" /><template v-if="s.serie.bereich && s.serie.passt">Nummern <span class="font-semibold tnum">{{ bereichText(s.serie.bereich.von, s.serie.bereich.bis, s.serie.stellen) }}</span> ({{ s.pos.menge }} Stk)</template><span v-else-if="s.serie.bereich" class="text-warn">Die Nummern bis {{ s.serie.bereich.bis }} passen nicht in {{ s.serie.stellen }} Stellen.</span><span v-else class="text-warn">Bitte die erste Nummer eingeben, die der Kunde genannt hat.</span></div>
+                      </div>
+                      <p class="mt-1.5 text-xs text-mute"><template v-if="s.serie.letzte">Letzte vergebene Nummer dieses Bauteils: <span class="tnum">{{ formatNr(s.serie.letzte, s.serie.stellen) }}</span>. </template><template v-else>Für dieses Bauteil ist noch keine Nummer gespeichert, die Startnummer bitte aus der Bestellung eintragen. </template>Seriennummern bestehen nur aus Ziffern ({{ s.serie.stellen }} Stellen, z. B. {{ formatNr(1, s.serie.stellen) }}), laufen fortlaufend und die letzte wird am Bauteil gemerkt.</p>
+                      <p v-if="s.serie.bereich && s.serie.letzte && s.serie.bereich.von !== s.serie.letzte + 1" class="mt-1 flex items-center gap-1.5 text-xs text-warn"><AlertTriangle :size="13" /> Das ist nicht die nächste Nummer nach {{ formatNr(s.serie.letzte, s.serie.stellen) }}. Bitte prüfen.</p>
+                    </div>
+
                     <p v-if="s.pos.unterStaffel" class="flex items-center gap-2 text-xs text-warn"><AlertTriangle :size="14" /> Der Staffelpreis gilt ab {{ s.pos.staffelMenge }} Stk, die Menge liegt darunter.</p>
 
                     <div class="rounded-xl bg-surface2 px-4 py-3 text-sm">
@@ -144,7 +178,7 @@ async function anlegen() {
             <div><div class="text-xs text-mute">{{ anzahl }} Position{{ anzahl === 1 ? '' : 'en' }}</div><div class="text-xl font-semibold tnum">{{ eur(gesamt) }} <span class="text-xs font-normal text-mute">netto</span></div></div>
             <div class="flex gap-2">
               <button class="btn" @click="emit('schliessen')">Abbrechen</button>
-              <button class="btn btn-primary" :disabled="!anzahl || speichert" :class="!anzahl || speichert ? 'pointer-events-none opacity-40' : ''" @click="anlegen"><ShoppingCart :size="16" /> Auftrag anlegen</button>
+              <button class="btn btn-primary" :disabled="!anzahl || speichert || serieFehlt" :class="!anzahl || speichert || serieFehlt ? 'pointer-events-none opacity-40' : ''" @click="anlegen"><ShoppingCart :size="16" /> Auftrag anlegen</button>
             </div>
           </footer>
         </div>

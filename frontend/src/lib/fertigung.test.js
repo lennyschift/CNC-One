@@ -12,7 +12,7 @@ describe('Arbeitsplan und Arbeitsgänge', () => {
   it('Plan wird ohne Buchungsstand zurückgespeichert', () => {
     const ags = plan.map((p) => ({ ...p, id: 'neu', planId: p.id, gebucht: 7 }));
     const p = planAus(ags, () => 'q');
-    expect(p[0]).toEqual({ id: 'p1', name: 'Drehen', typ: 'intern', maschine: 'CTX400', satz: 88, ruestMin: 45, stueckMin: 2.5, lieferant: '', fremdProStk: 0, fremdEinmal: 0, anfrageId: '' });
+    expect(p[0]).toEqual({ id: 'p1', name: 'Drehen', typ: 'intern', maschine: 'CTX400', satz: 88, ruestMin: 45, stueckMin: 2.5, lieferant: '', fremdProStk: 0, fremdEinmal: 0, anfrageId: '', serie: false });
     expect(p[0]).not.toHaveProperty('gebucht');
   });
   it('neuer Arbeitsgang ist leer und hat einen Typ', () => {

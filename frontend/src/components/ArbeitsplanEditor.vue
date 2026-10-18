@@ -3,7 +3,7 @@
 // Der Plan lässt sich am Bauteil speichern (Kunde + Teilenummer), damit spätere Angebote und Aufträge ihn schon haben.
 import { ref, computed, onMounted, watch } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, Truck, Cog, ChevronUp, ChevronDown, Trash2, Save, DownloadCloud, FileText, Send, Euro } from '@lucide/vue';
+import { Hash, Plus, Truck, Cog, ChevronUp, ChevronDown, Trash2, Save, DownloadCloud, FileText, Send, Euro } from '@lucide/vue';
 import NumField from './NumField.vue';
 import { repo } from '../data/repo.js';
 import { leererArbeitsgang } from '../lib/fertigung.js';
@@ -59,6 +59,7 @@ async function bauteilSpeichern() {
   if (await stamm.planSpeichern(props.kundeId, props.teilenummer, props.arbeitsgaenge, info)) ui.toast('Arbeitsplan am Bauteil gespeichert', 'ok');
 }
 
+function serienArbeitsgang() { props.arbeitsgaenge.push({ ...leererArbeitsgang('intern', uid), name: stamm.serienart }); }
 function hinzu(typ) { props.arbeitsgaenge.push(leererArbeitsgang(typ, uid)); }
 function weg(i) { props.arbeitsgaenge.splice(i, 1); }
 function schieben(i, d) {
@@ -113,6 +114,11 @@ const farbe = { Gesendet: 'text-warn', 'Angebot erhalten': 'text-ok', Abgesagt: 
     <p v-if="!ohneBauteil && !ohneSpeichern && !schluesselOk" class="mb-3 text-xs text-mute">Zum Speichern am Bauteil braucht es einen gewählten Kunden und eine Teilenummer.</p>
     <p v-else-if="!ohneBauteil && !ohneSpeichern && gespeichert" class="mb-3 text-xs text-ok">Dieses Bauteil hat einen gespeicherten Arbeitsplan. Änderungen hier gelten erst nach „Am Bauteil speichern“.</p>
 
+    <div v-if="teil?.seriennummern && !arbeitsgaenge.some((a) => stamm.istSerienart(a.name))" class="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-accent-soft px-3.5 py-2.5 text-xs text-accent">
+      <Hash :size="14" /> Seriennummern sind aktiv, im Arbeitsplan fehlt der Arbeitsgang „{{ stamm.serienart }}“.
+      <button class="btn !py-1 !text-xs" @click="serienArbeitsgang"><Plus :size="13" /> Arbeitsgang „{{ stamm.serienart }}“ ergänzen</button>
+    </div>
+
     <div v-auto-animate class="space-y-2.5">
       <div v-for="(ag, i) in arbeitsgaenge" :key="ag.id" class="rounded-xl border border-line bg-surface2 p-3">
         <div class="flex items-center gap-2">
@@ -134,6 +140,7 @@ const farbe = { Gesendet: 'text-warn', 'Angebot erhalten': 'text-ok', Abgesagt: 
           <NumField v-model="ag.satz" label="Satz" unit="€/h" />
           <NumField v-model="ag.ruestMin" label="Rüstzeit" unit="min" :step="5" />
           <NumField v-model="ag.stueckMin" label="Stückzeit" unit="min" :step="0.5" />
+          <p v-if="stamm.istSerienart(ag.name)" class="flex items-center gap-2 text-xs text-accent sm:col-span-4"><Hash :size="12" /> Dieser Arbeitsgang bringt die Seriennummern an. In der Fertigung ist dann zu sehen, welche Nummern schon fertig sind.</p>
         </div>
 
         <div v-else class="mt-2.5 space-y-2.5">

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { uid } from '../lib/format.js';
 import { planAus } from '../lib/fertigung.js';
 import { call } from '../data/api.js';
@@ -58,6 +58,10 @@ export const useStamm = defineStore('stamm', () => {
     if (k) plaene.value[k] = kopie(arbeitsgaenge);
   }
 
+  // Die Arbeitsgangart Seriennummern ist eine Systemart: wer sie wählt, bringt die Seriennummer an.
+  const serienart = computed(() => arten.value.find((a) => a.serie)?.name ?? 'Seriennummern');
+  const istSerienart = (name) => String(name ?? '').trim().toLowerCase() === serienart.value.toLowerCase();
+
   const vorlagenFuer = (kundeId) => vorlagen.value.filter((v) => !v.kundeId || v.kundeId === kundeId);
 
   // Arbeitsgänge einer Vorlage mit neuen Ids, damit mehrfaches Anwenden nichts vermischt.
@@ -92,5 +96,5 @@ export const useStamm = defineStore('stamm', () => {
     if (await sicher(() => call('cnc_one.api.stamm.art_loeschen', { id }))) arten.value = arten.value.filter((a) => a.id !== id);
   }
 
-  return { arten, vorlagen, plaene, teilKey, hatPlan, planFuer, planSpeichern, planEintragen, vorlagenFuer, vorlageKopie, vorlageNeu, vorlageSpeichern, vorlageLoeschen, artHinzu, artSpeichern, artLoeschen };
+  return { arten, vorlagen, plaene, serienart, istSerienart, teilKey, hatPlan, planFuer, planSpeichern, planEintragen, vorlagenFuer, vorlageKopie, vorlageNeu, vorlageSpeichern, vorlageLoeschen, artHinzu, artSpeichern, artLoeschen };
 });
