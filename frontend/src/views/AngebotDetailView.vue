@@ -79,7 +79,7 @@ function angelegt(auftrag) {
           <li v-for="x in b.auftraege.filter((a) => a.angebotId === angebot.id)" :key="x.id"><RouterLink :to="`/auftraege/${x.id}`" class="text-accent hover:underline tnum">{{ x.id }}</RouterLink></li>
         </ul>
       </section>
-      <AngebotAnfragen :ziel="{ entwurfId: angebot.entwurfId, angebotId: angebot.id }" variante="karte" />
+      <AngebotAnfragen :ziel="{ angebotId: angebot.id }" variante="karte" />
     </aside>
 
     <AuftragDialog v-if="dialog" :angebot="angebot" @schliessen="dialog = false" @angelegt="angelegt" />

@@ -55,8 +55,7 @@ const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
           <p class="mt-1 text-sm">an {{ a.lieferantName }} · {{ a.positionen.length }} Position{{ a.positionen.length === 1 ? '' : 'en' }}</p>
           <p class="text-sm text-mute">angelegt am {{ de(a.erstellt) }}</p>
           <p class="mt-2 text-sm">
-            <RouterLink v-if="a.angebotId" :to="`/angebote/${a.angebotId}`" class="inline-flex items-center gap-1.5 rounded-full bg-surface2 px-3 py-1 text-accent hover:underline"><FileText :size="13" /> Zum Angebot <span class="tnum">{{ a.angebotId }}</span><span v-if="a.kundeName || belege.angebot(a.angebotId)" class="text-mute"> · {{ a.kundeName || belege.angebot(a.angebotId)?.kopf.kundeName }}</span></RouterLink>
-            <RouterLink v-else to="/workbench" class="inline-flex items-center gap-1.5 rounded-full bg-surface2 px-3 py-1 text-warn hover:underline"><FileText :size="13" /> Gehört zu einem noch nicht gespeicherten Angebot (Workbench)</RouterLink>
+            <RouterLink :to="`/angebote/${a.angebotId}`" class="inline-flex items-center gap-1.5 rounded-full bg-surface2 px-3 py-1 text-accent hover:underline"><FileText :size="13" /> Zum Angebot <span class="tnum">{{ a.angebotId }}</span><span v-if="a.kundeName || belege.angebot(a.angebotId)" class="text-mute"> · {{ a.kundeName || belege.angebot(a.angebotId)?.kopf.kundeName }}</span></RouterLink>
           </p>
           <p v-if="a.notiz" class="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm">Hinweis: {{ a.notiz }}</p>
         </div>

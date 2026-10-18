@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { nummer, mengenFuer, fremdPositionen, preisFuerMenge, normalisiereAnfrage, gehoertZu, zusammenfassung, zusammenfassungText, mailText } from './anfrage.js';
-
-describe('Nummernkreis', () => {
-  it('LA-Jahr-laufende Nummer', () => expect(nummer(7, 2026)).toBe('LA-2026-0007'));
-});
+import { mengenFuer, fremdPositionen, preisFuerMenge, gehoertZu, zusammenfassung, zusammenfassungText, mailText } from './anfrage.js';
 
 describe('mengenFuer', () => {
   it('Staffelangebot fragt alle Staffeln an', () => {
@@ -45,38 +41,12 @@ describe('preisFuerMenge', () => {
   it('ohne Antwort null', () => expect(preisFuerMenge(null, 10)).toBeNull());
 });
 
-describe('alte Anfragen', () => {
-  it('Anfrage mit einem Bauteil wird zur Anfrage mit einer Position', () => {
-    const alt = { id: 'LA-2026-0001', teil: { name: 'X' }, agId: 'ag1', agName: 'Härten', mengen: [5, 10], antwort: { preise: [{ menge: 5, proStk: 2 }] } };
-    const n = normalisiereAnfrage(alt);
-    expect(n.positionen).toHaveLength(1);
-    expect(n.positionen[0]).toMatchObject({ agId: 'ag1', agName: 'Härten', mengen: [5, 10], teil: { name: 'X' } });
-    expect(n.antwort.preise[0].posKey).toBe(n.positionen[0].key);
-    expect(n).not.toHaveProperty('teil');
-  });
-  it('neue Anfragen behalten ihre Positionen', () => {
-    const neu = { id: 'x', positionen: [{ key: 'k' }] };
-    expect(normalisiereAnfrage(neu).positionen).toEqual([{ key: 'k' }]);
-  });
-  it('fehlende Bezüge zum Angebot werden leer ergänzt, vorhandene bleiben', () => {
-    expect(normalisiereAnfrage({ positionen: [] })).toMatchObject({ entwurfId: '', angebotId: '', kundeName: '' });
-    expect(normalisiereAnfrage({ positionen: [], angebotId: 'ANG-1' }).angebotId).toBe('ANG-1');
-  });
-});
 
 describe('Zuordnung zum Angebot', () => {
-  const a = { entwurfId: 'e1', angebotId: '' };
-  const b = { entwurfId: 'e1', angebotId: 'ANG-2026-0001' };
-  const c = { entwurfId: 'e2', angebotId: 'ANG-2026-0002' };
-  it('Entwurf wird über die entwurfId erkannt', () => expect(gehoertZu(a, { entwurfId: 'e1', angebotId: null })).toBe(true));
-  it('gespeichertes Angebot wird über die Angebotsnummer erkannt', () => expect(gehoertZu(c, { entwurfId: '', angebotId: 'ANG-2026-0002' })).toBe(true));
-  it('Anfrage vor und nach dem Speichern gehört zum selben Angebot', () => {
-    const ziel = { entwurfId: 'e1', angebotId: 'ANG-2026-0001' };
-    expect(gehoertZu(a, ziel)).toBe(true);
-    expect(gehoertZu(b, ziel)).toBe(true);
-    expect(gehoertZu(c, ziel)).toBe(false);
-  });
-  it('leere Ids passen auf nichts', () => expect(gehoertZu({ entwurfId: '', angebotId: '' }, { entwurfId: '', angebotId: '' })).toBe(false));
+  it('gehört zum Angebot mit gleicher Nummer', () => expect(gehoertZu({ angebotId: 'ANG-2026-0002' }, { angebotId: 'ANG-2026-0002' })).toBe(true));
+  it('andere Angebote passen nicht', () => expect(gehoertZu({ angebotId: 'ANG-2026-0001' }, { angebotId: 'ANG-2026-0002' })).toBe(false));
+  it('ohne Angebotsnummer passt nichts', () => expect(gehoertZu({ angebotId: '' }, { angebotId: '' })).toBe(false));
+  it('noch nicht gespeichertes Angebot (null) passt auf nichts', () => expect(gehoertZu({ angebotId: 'ANG-2026-0001' }, { angebotId: null })).toBe(false));
 });
 
 describe('Zusammenfassung', () => {

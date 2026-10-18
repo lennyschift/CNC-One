@@ -2,7 +2,7 @@
 // Änderungen laufen über die Stores, die die API aufrufen.
 import { call } from './api.js';
 
-let daten = { benutzer: null, kunden: [], lieferanten: [], maschinen: [], materialien: [], arten: [], vorlagen: [], bauteile: [], angebote: [], auftraege: [], fertigung: [] };
+let daten = { benutzer: null, kunden: [], lieferanten: [], maschinen: [], materialien: [], arten: [], vorlagen: [], bauteile: [], angebote: [], auftraege: [], fertigung: [], anfragen: [] };
 
 export async function ladeStammdaten() {
   daten = await call('cnc_one.api.stamm.bootstrap');

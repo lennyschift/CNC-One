@@ -29,13 +29,16 @@ async function ansehen() {
   await a.speichern();
   if (a.speicherStand === 'gespeichert' && a.angebotId) router.push(`/angebote/${a.angebotId}`);
 }
-const ziel = computed(() => ({ entwurfId: a.entwurfId, angebotId: a.angebotId }));
-const bezug = computed(() => ({ entwurfId: a.entwurfId, angebotId: a.angebotId ?? '', kundeName: kunde.value?.name ?? '' }));
+const ziel = computed(() => ({ angebotId: a.angebotId }));
+const bezug = computed(() => ({ angebotId: a.angebotId ?? '' }));
 const anzahlAnfragen = computed(() => anfragenStore.fuerAngebot(ziel.value).length);
 const anfrageOffen = ref(false);
 const anfrageAg = ref('');
 const anzahlFremd = computed(() => fremdPositionen(a.teile).length);
-function anfrageOeffnen(ag) {
+// Eine Anfrage gehört zu einem gespeicherten Angebot: der Entwurf wird vorher gespeichert.
+async function anfrageOeffnen(ag) {
+  await a.speichern();
+  if (!a.angebotId) { ui.toast('Das Angebot konnte nicht gespeichert werden', 'warn'); return; }
   anfrageAg.value = ag?.id ?? '';
   anfrageOffen.value = true;
 }

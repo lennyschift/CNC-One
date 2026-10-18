@@ -14,7 +14,7 @@ const router = useRouter();
 const b = useBelege();
 const a = useAngebot();
 const anfragen = useAnfragen();
-const anfragenZu = (x) => anfragen.fuerAngebot({ entwurfId: x.entwurfId, angebotId: x.id });
+const anfragenZu = (x) => anfragen.fuerAngebot({ angebotId: x.id });
 
 const filter = ref('Alle');
 const filterListe = ['Alle', 'Entwurf', 'Gesendet', 'Beauftragt'];

@@ -1,5 +1,5 @@
 <script setup>
-// Lieferantenanfragen zu einem Angebot oder Entwurf. Als Leiste in der Workbench und als Karte im Angebot.
+// Lieferantenanfragen zu einem Angebot (auch ein Entwurf ist ein Angebot). Als Leiste in der Workbench und als Karte im Angebot.
 import { computed } from 'vue';
 import { Send, ArrowRight } from '@lucide/vue';
 import StatusBadge from './StatusBadge.vue';
@@ -15,7 +15,7 @@ const props = defineProps({
 const store = useAnfragen();
 const liste = computed(() => store.fuerAngebot(props.ziel));
 const text = computed(() => zusammenfassungText(zusammenfassung(liste.value)));
-const alleLink = computed(() => (props.ziel.angebotId ? `/anfragen?angebot=${props.ziel.angebotId}` : `/anfragen?entwurf=${props.ziel.entwurfId}`));
+const alleLink = computed(() => `/anfragen?angebot=${props.ziel.angebotId}`);
 const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
 const farbe = { Gesendet: 'text-warn', 'Angebot erhalten': 'text-ok', Abgesagt: 'text-mute' };
 </script>

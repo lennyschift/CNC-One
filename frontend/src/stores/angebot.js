@@ -5,7 +5,6 @@ import { uid } from '../lib/format.js';
 import { eur } from '../lib/format.js';
 import { useUi } from './ui.js';
 import { useBelege } from './belege.js';
-import { useAnfragen } from './anfragen.js';
 
 const SITZUNG = 'cnc-one:workbench:v2';
 
@@ -80,15 +79,12 @@ function ladenSitzung() {
 export const useAngebot = defineStore('angebot', () => {
   const ui = useUi();
   const belege = useBelege();
-  const anfragen = useAnfragen();
   const sitzung = ladenSitzung();
 
   const kopf = ref(leererKopf());
   const teile = ref([]);
   const auswahlId = ref(null);
   const angebotId = ref(null);
-  // Kennung des Entwurfs im Browser, damit Anfragen schon vor dem ersten Speichern zuzuordnen sind
-  const entwurfId = ref(sitzung.entwurfId ?? uid());
   // 'gespeichert' | 'offen' | 'speichert' | 'fehler'
   const speicherStand = ref('gespeichert');
 
@@ -116,7 +112,6 @@ export const useAngebot = defineStore('angebot', () => {
     teile.value = record.positionen.map((p) => JSON.parse(JSON.stringify(p.teil)));
     auswahlId.value = teile.value.find((t) => t.id === sitzung.auswahlId)?.id ?? teile.value[0]?.id ?? null;
     angebotId.value = record.id;
-    entwurfId.value = sitzung.entwurfId ?? uid();
     speicherStand.value = 'gespeichert';
     nextTick().then(() => { unterdrueckt = false; });
   }
@@ -131,7 +126,6 @@ export const useAngebot = defineStore('angebot', () => {
     try {
       const rec = await belege.angebotSpeichern({ angebotId: angebotId.value, kopf: kopf.value, teile: teile.value });
       angebotId.value = rec.id;
-      anfragen.verknuepfen(entwurfId.value, rec.id);
       if (!nochmal && Math.abs(rec.netto - nettoClient) > 0.01) {
         ui.toast(`Server rechnet anders: ${eur(rec.netto)} statt ${eur(nettoClient)}`, 'warn');
       }
@@ -154,8 +148,8 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   watch([kopf, teile], planeSpeichern, { deep: true });
-  watch([angebotId, entwurfId, auswahlId], () => {
-    try { localStorage.setItem(SITZUNG, JSON.stringify({ angebotId: angebotId.value, entwurfId: entwurfId.value, auswahlId: auswahlId.value })); } catch { /* egal */ }
+  watch([angebotId, auswahlId], () => {
+    try { localStorage.setItem(SITZUNG, JSON.stringify({ angebotId: angebotId.value, auswahlId: auswahlId.value })); } catch { /* egal */ }
   });
 
   // Beim Start das zuletzt offene Entwurf-Angebot wieder aufnehmen
@@ -169,7 +163,6 @@ export const useAngebot = defineStore('angebot', () => {
       teile.value = [];
       auswahlId.value = null;
       angebotId.value = null;
-      entwurfId.value = uid();
       kopf.value = leererKopf();
       speicherStand.value = 'gespeichert';
     });
@@ -249,5 +242,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, auswahlId, angebotId, entwurfId, speicherStand, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, beispieleEinfuegen };
+  return { kopf, teile, auswahlId, angebotId, speicherStand, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, beispieleEinfuegen };
 });

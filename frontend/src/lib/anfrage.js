@@ -2,8 +2,6 @@
 // Eine Anfrage geht an einen Lieferanten und kann mehrere Positionen (Bauteil + Arbeitsgang + Mengen) enthalten.
 import { num } from './calc.js';
 
-export const nummer = (n, jahr = new Date().getFullYear()) => `LA-${jahr}-${String(n).padStart(4, '0')}`;
-
 // Welche angefragten Mengen werden für ein Bauteil gebraucht: alle Staffeln oder die eine Menge.
 export function mengenFuer(teil) {
   if (teil.staffel?.aktiv) {
@@ -39,22 +37,8 @@ export function preisFuerMenge(antwort, menge, posKey) {
   return kleiner.length ? kleiner[kleiner.length - 1] : preise[0];
 }
 
-// Anfragen aus der ersten Version (ein Bauteil je Anfrage) auf die Form mit Positionen bringen.
-export function normalisiereAnfrage(a) {
-  if (!a.positionen) {
-    const key = a.agId || 'pos';
-    a.positionen = [{ key, teilId: '', teil: a.teil, agId: a.agId, agName: a.agName, mengen: a.mengen ?? [] }];
-    if (a.antwort) a.antwort.preise = (a.antwort.preise ?? []).map((p) => ({ ...p, posKey: p.posKey ?? key }));
-    delete a.teil; delete a.agId; delete a.agName; delete a.mengen;
-  }
-  a.entwurfId ??= '';
-  a.angebotId ??= '';
-  a.kundeName ??= '';
-  return a;
-}
-
-// Gehört die Anfrage zu diesem Angebot? Ein noch nicht gespeicherter Entwurf wird über seine entwurfId erkannt.
-export const gehoertZu = (a, { entwurfId, angebotId }) => !!((angebotId && a.angebotId === angebotId) || (entwurfId && a.entwurfId === entwurfId));
+// Gehört die Anfrage zu diesem Angebot (auch der Entwurf ist ein gespeichertes Angebot)?
+export const gehoertZu = (a, { angebotId }) => !!angebotId && a.angebotId === angebotId;
 
 // Anzahl je Status, z. B. für die Anzeige "2 gesendet, 1 Angebot erhalten".
 export function zusammenfassung(liste) {

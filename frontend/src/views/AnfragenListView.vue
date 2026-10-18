@@ -17,13 +17,10 @@ const filter = ref('Alle');
 const suche = ref('');
 const filterListe = ['Alle', 'Gesendet', 'Angebot erhalten', 'Abgesagt'];
 
-// Angebotsfilter: 'alle', 'ohne' (kein gespeichertes Angebot), eine Angebotsnummer oder 'entwurf:<id>'
-const angebotFilter = ref(route.query.angebot ? String(route.query.angebot) : route.query.entwurf ? `entwurf:${route.query.entwurf}` : 'alle');
+// Angebotsfilter: 'alle' oder eine Angebotsnummer
+const angebotFilter = ref(route.query.angebot ? String(route.query.angebot) : 'alle');
 watch(angebotFilter, (v) => {
-  const q = {};
-  if (v.startsWith('entwurf:')) q.entwurf = v.slice(8);
-  else if (v !== 'alle') q.angebot = v;
-  router.replace({ query: q });
+  router.replace({ query: v === 'alle' ? {} : { angebot: v } });
 });
 
 // Angebote, zu denen es Anfragen gibt
@@ -31,15 +28,8 @@ const angebotOptionen = computed(() => {
   const ids = [...new Set(a.liste.map((x) => x.angebotId).filter(Boolean))];
   return ids.map((id) => ({ id, label: `${id} · ${belege.angebot(id)?.kopf.kundeName ?? ''}` }));
 });
-const hatOhne = computed(() => a.liste.some((x) => !x.angebotId));
 
-const passtZuAngebot = (x) => {
-  const f = angebotFilter.value;
-  if (f === 'alle') return true;
-  if (f === 'ohne') return !x.angebotId;
-  if (f.startsWith('entwurf:')) return x.entwurfId === f.slice(8);
-  return x.angebotId === f;
-};
+const passtZuAngebot = (x) => angebotFilter.value === 'alle' || x.angebotId === angebotFilter.value;
 
 const zeilen = computed(() => {
   const q = suche.value.trim().toLowerCase();
@@ -55,7 +45,6 @@ const zeilen = computed(() => {
 const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
 const kunde = (x) => x.kundeName || belege.angebot(x.angebotId)?.kopf.kundeName || '';
 const titel = (x) => (x.positionen.length === 1 ? `${x.positionen[0].agName || 'Fremdvergabe'} · ${x.positionen[0].teil.name}` : `${x.positionen.length} Positionen: ${x.positionen.map((p) => p.teil.name).join(', ')}`);
-const entwurfAktiv = computed(() => angebotFilter.value.startsWith('entwurf:'));
 </script>
 
 <template>
@@ -67,8 +56,6 @@ const entwurfAktiv = computed(() => angebotFilter.value.startsWith('entwurf:'));
       <select v-model="angebotFilter" class="field !w-auto">
         <option value="alle">Alle Angebote</option>
         <option v-for="o in angebotOptionen" :key="o.id" :value="o.id">{{ o.label }}</option>
-        <option v-if="hatOhne" value="ohne">Ohne gespeichertes Angebot</option>
-        <option v-if="entwurfAktiv" :value="angebotFilter">Dieser Entwurf</option>
       </select>
       <label class="relative">
         <Search :size="15" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
@@ -86,8 +73,7 @@ const entwurfAktiv = computed(() => angebotFilter.value.startsWith('entwurf:'));
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.status" />
-            <span v-if="x.angebotId" class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-mute"><FileText :size="11" /> {{ x.angebotId }}<template v-if="kunde(x)"> · {{ kunde(x) }}</template></span>
-            <span v-else class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-warn">Angebot noch nicht gespeichert</span>
+            <span class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-mute"><FileText :size="11" /> {{ x.angebotId }}<template v-if="kunde(x)"> · {{ kunde(x) }}</template></span>
           </div>
           <div class="mt-0.5 truncate text-sm text-mute">{{ x.lieferantName }} · {{ titel(x) }}</div>
         </div>

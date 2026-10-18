@@ -6,14 +6,14 @@ import { X, Send, Plus, Mail } from '@lucide/vue';
 import PartImage from './PartImage.vue';
 import NumField from './NumField.vue';
 import { repo } from '../data/repo.js';
-import { fremdPositionen, mailText, nummer } from '../lib/anfrage.js';
+import { fremdPositionen, mailText } from '../lib/anfrage.js';
 import { useAnfragen } from '../stores/anfragen.js';
 
 const props = defineProps({
   teile: { type: Array, required: true },
   // optional: Position (Arbeitsgang-Id), die vorab angehakt ist
   vorgewaehlt: { type: String, default: '' },
-  // Bezug zum Angebot bzw. Entwurf: { entwurfId, angebotId, kundeName }
+  // Bezug zum (gespeicherten) Angebot: { angebotId }
   bezug: { type: Object, default: () => ({}) },
 });
 const emit = defineEmits(['schliessen']);
@@ -44,7 +44,7 @@ onMounted(async () => {
 const aktiv = computed(() => positionen.filter((p) => p.an));
 const auswahl = computed(() => lieferanten.value.filter((l) => gewaehlt[l.id]));
 const vorschau = computed(() => mailText({
-  id: nummer(anfragen.liste.length + 1),
+  id: `LA-${new Date().getFullYear()}-NNNN`,
   notiz: notiz.value,
   positionen: aktiv.value.map((p) => ({ key: p.key, agName: p.ag.name, mengen: p.mengen, teil: p.teil })),
 }));
@@ -53,11 +53,14 @@ function mengeHinzu(p) { p.mengen.push((Math.max(0, ...p.mengen) || 5) * 2); }
 function mengeWeg(p, i) { if (p.mengen.length > 1) p.mengen.splice(i, 1); }
 const bereit = computed(() => auswahl.value.length && aktiv.value.length);
 
-function senden() {
-  anfragen.anlegen({
+const speichert = ref(false);
+async function senden() {
+  if (speichert.value) return;
+  speichert.value = true;
+  const neu = await anfragen.anlegen({
     lieferanten: auswahl.value,
     notiz: notiz.value,
-    bezug: props.bezug,
+    angebotId: props.bezug.angebotId,
     positionen: aktiv.value.map((p) => ({
       teil: p.teil,
       agId: p.ag.id,
@@ -65,7 +68,8 @@ function senden() {
       mengen: [...new Set(p.mengen.map((m) => Math.floor(Number(m)) || 0).filter((m) => m > 0))].sort((a, b) => a - b),
     })),
   });
-  emit('schliessen');
+  speichert.value = false;
+  if (neu) emit('schliessen');
 }
 </script>
 
@@ -134,7 +138,7 @@ function senden() {
             <span class="text-sm text-mute">{{ aktiv.length }} Position{{ aktiv.length === 1 ? '' : 'en' }} · {{ auswahl.length }} Lieferant{{ auswahl.length === 1 ? '' : 'en' }}</span>
             <div class="flex gap-2">
               <button class="btn" @click="emit('schliessen')">Abbrechen</button>
-              <button class="btn btn-primary" :disabled="!bereit" :class="!bereit ? 'pointer-events-none opacity-40' : ''" @click="senden"><Send :size="16" /> Anfrage{{ auswahl.length > 1 ? 'n' : '' }} anlegen</button>
+              <button class="btn btn-primary" :disabled="!bereit || speichert" :class="!bereit || speichert ? 'pointer-events-none opacity-40' : ''" @click="senden"><Send :size="16" /> Anfrage{{ auswahl.length > 1 ? 'n' : '' }} anlegen</button>
             </div>
           </footer>
         </div>
