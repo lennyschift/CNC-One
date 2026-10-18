@@ -9,6 +9,13 @@ export async function ladeStammdaten() {
   return daten;
 }
 
+// Nach Änderungen an Stammdaten: Auswahllisten (Kunden, Maschinen, Materialien, Lieferanten, Arten, Vorlagen) und Bauteile neu holen.
+export async function stammdatenAktualisieren() {
+  const neu = await call('cnc_one.api.stammdaten.aktuell');
+  daten = { ...daten, ...neu };
+  return daten;
+}
+
 export const stammdatenRoh = () => daten;
 export const benutzer = () => daten.benutzer;
 

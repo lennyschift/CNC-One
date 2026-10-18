@@ -11,7 +11,13 @@ import FertigungView from './views/FertigungView.vue';
 import FertigungDetailView from './views/FertigungDetailView.vue';
 import AnfragenListView from './views/AnfragenListView.vue';
 import AnfrageDetailView from './views/AnfrageDetailView.vue';
-import StammdatenView from './views/StammdatenView.vue';
+import StammHubView from './views/StammHubView.vue';
+import KundenView from './views/KundenView.vue';
+import BauteileView from './views/BauteileView.vue';
+import LieferantenView from './views/LieferantenView.vue';
+import MaschinenView from './views/MaschinenView.vue';
+import MaterialienView from './views/MaterialienView.vue';
+import ArbeitsgaengeView from './views/ArbeitsgaengeView.vue';
 import { ladeStammdaten } from './data/repo.js';
 import './style.css';
 
@@ -28,7 +34,13 @@ const router = createRouter({
     { path: '/fertigung/:id', component: FertigungDetailView, meta: { titel: 'Fertigungsbauteil', bereich: 'fertigung' } },
     { path: '/anfragen', component: AnfragenListView, meta: { titel: 'Lieferantenanfragen', bereich: 'anfragen' } },
     { path: '/anfragen/:id', component: AnfrageDetailView, meta: { titel: 'Lieferantenanfrage', bereich: 'anfragen' } },
-    { path: '/stammdaten', component: StammdatenView, meta: { titel: 'Stammdaten: Arbeitsgänge und Vorlagen', bereich: 'stammdaten' } },
+    { path: '/stammdaten', component: StammHubView, meta: { titel: 'Stammdaten', bereich: 'stammdaten' } },
+    { path: '/stammdaten/kunden', component: KundenView, meta: { titel: 'Stammdaten: Kunden', bereich: 'stammdaten' } },
+    { path: '/stammdaten/bauteile', component: BauteileView, meta: { titel: 'Stammdaten: Bauteile', bereich: 'stammdaten' } },
+    { path: '/stammdaten/lieferanten', component: LieferantenView, meta: { titel: 'Stammdaten: Lieferanten', bereich: 'stammdaten' } },
+    { path: '/stammdaten/maschinen', component: MaschinenView, meta: { titel: 'Stammdaten: Maschinen', bereich: 'stammdaten' } },
+    { path: '/stammdaten/materialien', component: MaterialienView, meta: { titel: 'Stammdaten: Materialien', bereich: 'stammdaten' } },
+    { path: '/stammdaten/arbeitsgaenge', component: ArbeitsgaengeView, meta: { titel: 'Stammdaten: Arbeitsgänge und Vorlagen', bereich: 'stammdaten' } },
   ],
 });
 

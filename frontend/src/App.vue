@@ -12,6 +12,7 @@ import { useUi } from './stores/ui.js';
 import { useAngebot } from './stores/angebot.js';
 import { benutzer } from './data/repo.js';
 import { abmelden } from './data/api.js';
+import { STAMM_PUNKTE } from './data/stammNav.js';
 
 const nutzer = benutzer();
 const initialen = computed(() => (nutzer?.name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase());
@@ -37,7 +38,8 @@ const befehle = computed(() => [
   { id: 'go-auf', label: 'Zu den Aufträgen', gruppe: 'Gehe zu', icon: ClipboardList, run: () => router.push('/auftraege') },
   { id: 'go-fer', label: 'Zur Fertigung', gruppe: 'Gehe zu', icon: Factory, run: () => router.push('/fertigung') },
   { id: 'go-anf', label: 'Zu den Lieferantenanfragen', gruppe: 'Gehe zu', icon: Send, run: () => router.push('/anfragen') },
-  { id: 'go-stamm', label: 'Zu den Stammdaten (Arbeitsgänge, Vorlagen)', stichworte: 'vorlagen arbeitsgangarten einstellungen', gruppe: 'Gehe zu', icon: Settings, run: () => router.push('/stammdaten') },
+  { id: 'go-stamm', label: 'Zu den Stammdaten', stichworte: 'einstellungen übersicht', gruppe: 'Gehe zu', icon: Settings, run: () => router.push('/stammdaten') },
+  ...STAMM_PUNKTE.map((p) => ({ id: 'stamm-' + p.id, label: `Stammdaten: ${p.label}`, stichworte: `${p.text} stammdaten`, gruppe: 'Gehe zu', icon: p.icon, run: () => router.push(p.to) })),
   { id: 'neu', label: 'Neues Bauteil anlegen', gruppe: 'Aktion', icon: Plus, run: () => { router.push('/workbench'); a.hinzufuegen('Neues Bauteil'); } },
   { id: 'dup', label: 'Aktuelles Bauteil duplizieren', gruppe: 'Aktion', icon: Copy, run: () => a.auswahlId && a.duplizieren(a.auswahlId) },
   { id: 'del', label: 'Aktuelles Bauteil löschen', gruppe: 'Aktion', icon: Trash2, run: () => a.auswahlId && a.loeschen(a.auswahlId) },

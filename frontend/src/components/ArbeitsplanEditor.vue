@@ -23,6 +23,8 @@ const props = defineProps({
   teilInfo: { type: Object, default: null },
   // Für Vorlagen: kein Bauteil, daher weder Vorlage anwenden noch am Bauteil speichern
   ohneBauteil: { type: Boolean, default: false },
+  // Vorlagen bleiben nutzbar, nur das Speichern am Bauteil entfällt (z. B. im Bauteil-Editor, der selbst speichert)
+  ohneSpeichern: { type: Boolean, default: false },
 });
 const emit = defineEmits(['anfrage']);
 
@@ -103,13 +105,13 @@ const farbe = { Gesendet: 'text-warn', 'Angebot erhalten': 'text-ok', Abgesagt: 
       </select>
       <button class="btn" @click="hinzu('intern')"><Plus :size="15" /> Arbeitsgang</button>
       <button class="btn" @click="hinzu('fremd')"><Truck :size="15" /> Fremdvergabe</button>
-      <div v-if="!ohneBauteil" class="ml-auto flex flex-wrap items-center gap-2">
+      <div v-if="!ohneBauteil && !ohneSpeichern" class="ml-auto flex flex-wrap items-center gap-2">
         <button v-if="gespeichert && !arbeitsgaenge.length" class="btn" @click="ausBauteilLaden()"><DownloadCloud :size="15" /> Vom Bauteil laden</button>
         <button class="btn" :disabled="!schluesselOk" :class="!schluesselOk ? 'pointer-events-none opacity-40' : ''" :title="schluesselOk ? '' : 'Dafür braucht das Bauteil einen Kunden und eine Teilenummer'" @click="bauteilSpeichern"><Save :size="15" /> Am Bauteil speichern</button>
       </div>
     </div>
-    <p v-if="!ohneBauteil && !schluesselOk" class="mb-3 text-xs text-mute">Zum Speichern am Bauteil braucht es einen gewählten Kunden und eine Teilenummer.</p>
-    <p v-else-if="!ohneBauteil && gespeichert" class="mb-3 text-xs text-ok">Dieses Bauteil hat einen gespeicherten Arbeitsplan. Änderungen hier gelten erst nach „Am Bauteil speichern“.</p>
+    <p v-if="!ohneBauteil && !ohneSpeichern && !schluesselOk" class="mb-3 text-xs text-mute">Zum Speichern am Bauteil braucht es einen gewählten Kunden und eine Teilenummer.</p>
+    <p v-else-if="!ohneBauteil && !ohneSpeichern && gespeichert" class="mb-3 text-xs text-ok">Dieses Bauteil hat einen gespeicherten Arbeitsplan. Änderungen hier gelten erst nach „Am Bauteil speichern“.</p>
 
     <div v-auto-animate class="space-y-2.5">
       <div v-for="(ag, i) in arbeitsgaenge" :key="ag.id" class="rounded-xl border border-line bg-surface2 p-3">
