@@ -55,3 +55,5 @@ class Angebot(Document):
 	def on_trash(self):
 		if self.status != "Entwurf":
 			frappe.throw(_("Nur Entwürfe lassen sich löschen."))
+		if frappe.db.exists("Lieferantenanfrage", {"angebot": self.name}):
+			frappe.throw(_("Zu diesem Angebot gibt es Lieferantenanfragen."))
