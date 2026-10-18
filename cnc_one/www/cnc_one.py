@@ -11,6 +11,8 @@ from urllib.parse import urlencode
 import frappe
 from frappe import _
 
+from cnc_one.api.stamm import einstellungen
+
 no_cache = 1
 
 
@@ -30,6 +32,8 @@ def get_context(context):
 
 	context.no_cache = 1
 	context.csrf_token = frappe.sessions.get_csrf_token()
+	# Farbschema des Benutzers, damit die Seite nicht erst hell aufblitzt
+	context.theme = einstellungen().get("theme", "")
 	context.style_tags = "\n".join(re.findall(r"<link[^>]+rel=\"(?:stylesheet|modulepreload)\"[^>]*>", html))
 	context.script_tags = "\n".join(re.findall(r"<script[^>]+src=[^>]*></script>", html))
 	return context

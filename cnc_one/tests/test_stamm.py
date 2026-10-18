@@ -96,3 +96,29 @@ class TestStamm(IntegrationTestCase):
 		ui = stamm.kunde_ui(k)
 		self.assertEqual(ui["adresse"], [])
 		self.assertIsNone(ui["kontakt"])
+
+	def test_einstellungen_je_benutzer(self):
+		self.assertEqual(stamm.einstellungen()["theme"], "")
+		stamm.einstellung_setzen("theme", "dark")
+		stamm.einstellung_setzen("workbenchAngebot", "ANG-2026-0007")
+		e = stamm.bootstrap()["benutzer"]["einstellungen"]
+		self.assertEqual((e["theme"], e["workbenchAngebot"], e["workbenchAuswahl"]), ("dark", "ANG-2026-0007", ""))
+		stamm.einstellung_setzen("workbenchAngebot", "")
+		self.assertEqual(stamm.einstellungen()["workbenchAngebot"], "")
+
+	def test_einstellungen_anderer_benutzer_bleiben_unberuehrt(self):
+		stamm.einstellung_setzen("theme", "dark")
+		self.assertEqual(stamm.einstellungen("test@example.com")["theme"], "")
+
+	def test_einstellung_wird_geprueft(self):
+		with self.assertRaises(frappe.ValidationError):
+			stamm.einstellung_setzen("gibtsnicht", "x")
+		with self.assertRaises(frappe.ValidationError):
+			stamm.einstellung_setzen("theme", "bunt")
+		with self.assertRaises(frappe.ValidationError):
+			stamm.einstellung_setzen("workbenchAngebot", "x" * 200)
+
+	def test_einstellung_braucht_anmeldung(self):
+		frappe.set_user("Guest")
+		with self.assertRaises(frappe.PermissionError):
+			stamm.einstellung_setzen("theme", "dark")

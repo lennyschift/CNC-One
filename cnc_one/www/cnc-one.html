@@ -7,7 +7,7 @@
 	<script>
 		window.frappe_csrf_token = "{{ csrf_token }}";
 		try {
-			var t = localStorage.getItem('cnc-one:theme');
+			var t = "{{ theme }}";
 			var dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
 			document.documentElement.classList.toggle('dark', dark);
 		} catch (e) {}

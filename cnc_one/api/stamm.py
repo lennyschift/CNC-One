@@ -13,6 +13,43 @@ def nur_cnc():
 	frappe.only_for(CNC_ROLLEN)
 
 
+# ----------------------------------------------------------------- Einstellungen je Benutzer
+# Was die Oberfläche sich merkt (früher im Browser): Farbschema und welches Angebot die Workbench zuletzt offen hatte.
+EINSTELLUNGEN = {
+	"theme": ("dark", "light"),
+	"workbenchAngebot": None,
+	"workbenchAuswahl": None,
+}
+
+
+def _default_key(key):
+	return f"cnc_one_{key.lower()}"
+
+
+def einstellungen(user=None):
+	user = user or frappe.session.user
+	return {k: frappe.defaults.get_user_default(_default_key(k), user) or "" for k in EINSTELLUNGEN}
+
+
+@frappe.whitelist(methods=["POST"])
+def einstellung_setzen(key, wert=""):
+	"""Merkt sich eine Einstellung des angemeldeten Benutzers."""
+	nur_cnc()
+	if key not in EINSTELLUNGEN:
+		frappe.throw(_("Unbekannte Einstellung {0}.").format(key))
+	wert = str(wert or "")
+	erlaubt = EINSTELLUNGEN[key]
+	if erlaubt and wert not in erlaubt:
+		frappe.throw(_("Ungültiger Wert für {0}.").format(key))
+	if len(wert) > 140:
+		frappe.throw(_("Der Wert ist zu lang."))
+	if wert:
+		frappe.defaults.set_user_default(_default_key(key), wert)
+	else:
+		frappe.defaults.clear_user_default(_default_key(key))
+	return {key: wert}
+
+
 # ----------------------------------------------------------------- Umrechnung Frappe <-> Oberfläche
 def typ_ui(t):
 	return "fremd" if t == "Fremd" else "intern"
@@ -98,7 +135,7 @@ def bootstrap():
 
 	user = frappe.session.user
 	return {
-		"benutzer": {"id": user, "name": frappe.utils.get_fullname(user), "rollen": frappe.get_roles(user)},
+		"benutzer": {"id": user, "name": frappe.utils.get_fullname(user), "rollen": frappe.get_roles(user), "einstellungen": einstellungen(user)},
 		**stammdaten(),
 		"bauteile": bauteil.alle_ui(),
 		"angebote": angebot.alle_ui(),
