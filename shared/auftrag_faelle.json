@@ -1,0 +1,604 @@
+[
+ {
+  "name": "einzelangebot mit angebotsmenge",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": false,
+    "stufen": []
+   },
+   "arbeitsgaenge": []
+  },
+  "wahl": null,
+  "menge": 10,
+  "kostenAus": [],
+  "erwartet": {
+   "menge": 10,
+   "einzelpreis": 14,
+   "staffelMenge": null,
+   "kosten": [
+    {
+     "label": "Rüstkosten",
+     "betrag": 100
+    },
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    }
+   ],
+   "summe": 260,
+   "unterStaffel": false
+  }
+ },
+ {
+  "name": "einzelangebot mit anderer menge",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": false,
+    "stufen": []
+   },
+   "arbeitsgaenge": []
+  },
+  "wahl": null,
+  "menge": 100,
+  "kostenAus": [],
+  "erwartet": {
+   "menge": 100,
+   "einzelpreis": 14,
+   "staffelMenge": null,
+   "kosten": [
+    {
+     "label": "Rüstkosten",
+     "betrag": 100
+    },
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    }
+   ],
+   "summe": 1520,
+   "unterStaffel": false
+  }
+ },
+ {
+  "name": "einzelangebot mit abgewaehlten kosten",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": false,
+    "stufen": []
+   },
+   "arbeitsgaenge": []
+  },
+  "wahl": null,
+  "menge": 10,
+  "kostenAus": [
+   "Rüstkosten"
+  ],
+  "erwartet": {
+   "menge": 10,
+   "einzelpreis": 14,
+   "staffelMenge": null,
+   "kosten": [
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    }
+   ],
+   "summe": 160,
+   "unterStaffel": false
+  }
+ },
+ {
+  "name": "staffel erste stufe",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": true,
+    "stufen": [
+     {
+      "menge": 5,
+      "extra": 0
+     },
+     {
+      "menge": 25,
+      "extra": 0
+     },
+     {
+      "menge": 100,
+      "extra": 0
+     }
+    ]
+   },
+   "arbeitsgaenge": []
+  },
+  "wahl": 5,
+  "menge": 5,
+  "kostenAus": [],
+  "erwartet": {
+   "menge": 5,
+   "einzelpreis": 34,
+   "staffelMenge": 5,
+   "kosten": [
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    }
+   ],
+   "summe": 190,
+   "unterStaffel": false
+  }
+ },
+ {
+  "name": "staffel mittlere stufe mit freier menge",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": true,
+    "stufen": [
+     {
+      "menge": 5,
+      "extra": 0
+     },
+     {
+      "menge": 25,
+      "extra": 0
+     },
+     {
+      "menge": 100,
+      "extra": 0
+     }
+    ]
+   },
+   "arbeitsgaenge": []
+  },
+  "wahl": 25,
+  "menge": 30,
+  "kostenAus": [],
+  "erwartet": {
+   "menge": 30,
+   "einzelpreis": 18,
+   "staffelMenge": 25,
+   "kosten": [
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    }
+   ],
+   "summe": 560,
+   "unterStaffel": false
+  }
+ },
+ {
+  "name": "staffel menge unter der stufe",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": true,
+    "stufen": [
+     {
+      "menge": 5,
+      "extra": 0
+     },
+     {
+      "menge": 25,
+      "extra": 0
+     },
+     {
+      "menge": 100,
+      "extra": 0
+     }
+    ]
+   },
+   "arbeitsgaenge": []
+  },
+  "wahl": 25,
+  "menge": 20,
+  "kostenAus": [],
+  "erwartet": {
+   "menge": 20,
+   "einzelpreis": 18,
+   "staffelMenge": 25,
+   "kosten": [
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    }
+   ],
+   "summe": 380,
+   "unterStaffel": true
+  }
+ },
+ {
+  "name": "staffel mit abgewaehlter messkosten",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": true,
+    "stufen": [
+     {
+      "menge": 5,
+      "extra": 0
+     },
+     {
+      "menge": 25,
+      "extra": 0
+     }
+    ]
+   },
+   "arbeitsgaenge": []
+  },
+  "wahl": 25,
+  "menge": 25,
+  "kostenAus": [
+   "Messkosten"
+  ],
+  "erwartet": {
+   "menge": 25,
+   "einzelpreis": 18,
+   "staffelMenge": 25,
+   "kosten": [],
+   "summe": 450,
+   "unterStaffel": false
+  }
+ },
+ {
+  "name": "unbekannte staffel faellt auf die erste zurueck",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": true,
+    "stufen": [
+     {
+      "menge": 5,
+      "extra": 0
+     },
+     {
+      "menge": 25,
+      "extra": 0
+     }
+    ]
+   },
+   "arbeitsgaenge": []
+  },
+  "wahl": 77,
+  "menge": 5,
+  "kostenAus": [],
+  "erwartet": {
+   "menge": 5,
+   "einzelpreis": 34,
+   "staffelMenge": 5,
+   "kosten": [
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    }
+   ],
+   "summe": 190,
+   "unterStaffel": false
+  }
+ },
+ {
+  "name": "staffel mit fremdvergabe einmalig",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": true,
+    "stufen": [
+     {
+      "menge": 5,
+      "extra": 0
+     },
+     {
+      "menge": 25,
+      "extra": 0
+     }
+    ]
+   },
+   "arbeitsgaenge": [
+    {
+     "id": "c",
+     "name": "Härten",
+     "typ": "fremd",
+     "lieferant": "L",
+     "fremdProStk": 0.6,
+     "fremdEinmal": 80
+    }
+   ]
+  },
+  "wahl": 25,
+  "menge": 25,
+  "kostenAus": [],
+  "erwartet": {
+   "menge": 25,
+   "einzelpreis": 18.6,
+   "staffelMenge": 25,
+   "kosten": [
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    },
+    {
+     "label": "Fremdvergabe Härten",
+     "betrag": 80
+    }
+   ],
+   "summe": 565,
+   "unterStaffel": false
+  }
+ },
+ {
+  "name": "einzelangebot mit fremdvergabe",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": false,
+    "stufen": []
+   },
+   "arbeitsgaenge": [
+    {
+     "id": "c",
+     "name": "Eloxieren",
+     "typ": "fremd",
+     "lieferant": "L",
+     "fremdProStk": 1.2,
+     "fremdEinmal": 45
+    }
+   ]
+  },
+  "wahl": null,
+  "menge": 12,
+  "kostenAus": [],
+  "erwartet": {
+   "menge": 12,
+   "einzelpreis": 15.2,
+   "staffelMenge": null,
+   "kosten": [
+    {
+     "label": "Rüstkosten",
+     "betrag": 100
+    },
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    },
+    {
+     "label": "Fremdvergabe Eloxieren",
+     "betrag": 45
+    }
+   ],
+   "summe": 347.4,
+   "unterStaffel": false
+  }
+ },
+ {
+  "name": "menge null wird eins",
+  "teil": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": false,
+    "stufen": []
+   },
+   "arbeitsgaenge": []
+  },
+  "wahl": null,
+  "menge": 0,
+  "kostenAus": [],
+  "erwartet": {
+   "menge": 1,
+   "einzelpreis": 14,
+   "staffelMenge": null,
+   "kosten": [
+    {
+     "label": "Rüstkosten",
+     "betrag": 100
+    },
+    {
+     "label": "Messkosten",
+     "betrag": 20
+    }
+   ],
+   "summe": 134,
+   "unterStaffel": false
+  }
+ }
+]

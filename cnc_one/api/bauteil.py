@@ -60,17 +60,25 @@ def sicherstellen(kunde, teilenummer, name="", zeichnungsnr="", material=""):
 	return doc
 
 
+def plan_setzen(kunde, teilenummer, arbeitsgaenge, name="", zeichnungsnr="", material=""):
+	"""Setzt den Arbeitsplan am Bauteil des Kunden. Fehlt das Bauteil, wird es angelegt. Ohne Kunde oder Teilenummer: None."""
+	doc = sicherstellen(kunde, teilenummer, name, zeichnungsnr, material)
+	if not doc:
+		return None
+	doc.set("arbeitsplan", [])
+	for a in arbeitsgaenge or []:
+		doc.append("arbeitsplan", arbeitsgang_zeile(a))
+	doc.save()
+	return doc
+
+
 @frappe.whitelist(methods=["POST"])
 def plan_speichern(kunde, teilenummer, arbeitsgaenge, name="", zeichnungsnr="", material=""):
 	"""Speichert den Arbeitsplan am Bauteil. Fehlt das Bauteil, wird es angelegt."""
 	nur_cnc()
 	if isinstance(arbeitsgaenge, str):
 		arbeitsgaenge = frappe.parse_json(arbeitsgaenge)
-	doc = sicherstellen(kunde, teilenummer, name, zeichnungsnr, material)
+	doc = plan_setzen(kunde, teilenummer, arbeitsgaenge, name, zeichnungsnr, material)
 	if not doc:
 		frappe.throw(_("Für den Arbeitsplan braucht das Bauteil einen Kunden und eine Teilenummer."))
-	doc.set("arbeitsplan", [])
-	for a in arbeitsgaenge or []:
-		doc.append("arbeitsplan", arbeitsgang_zeile(a))
-	doc.save()
 	return bauteil_ui(doc)
