@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { uid } from '../lib/format.js';
+import { einstellungSpeichern } from '../data/einstellungen.js';
 
 export const useUi = defineStore('ui', () => {
   const dark = ref(document.documentElement.classList.contains('dark'));
@@ -10,7 +11,7 @@ export const useUi = defineStore('ui', () => {
   function setDark(v) {
     dark.value = v;
     document.documentElement.classList.toggle('dark', v);
-    try { localStorage.setItem('cnc-one:theme', v ? 'dark' : 'light'); } catch { /* egal */ }
+    einstellungSpeichern('theme', v ? 'dark' : 'light');
   }
   const toggleDark = () => setDark(!dark.value);
 

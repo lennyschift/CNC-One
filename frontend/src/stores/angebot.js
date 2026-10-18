@@ -5,8 +5,7 @@ import { uid } from '../lib/format.js';
 import { eur } from '../lib/format.js';
 import { useUi } from './ui.js';
 import { useBelege } from './belege.js';
-
-const SITZUNG = 'cnc-one:workbench:v2';
+import { einstellung, einstellungSpeichern } from '../data/einstellungen.js';
 
 export function neuesTeil(name = 'Neues Bauteil') {
   return {
@@ -66,20 +65,12 @@ function demoTeile() {
 
 const leererKopf = () => ({ kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache' });
 
-function ladenSitzung() {
-  try {
-    const raw = localStorage.getItem(SITZUNG);
-    if (raw) return JSON.parse(raw);
-  } catch { /* egal */ }
-  return {};
-}
-
 // Das Angebot, an dem gerade gearbeitet wird. Es liegt als Entwurf in Frappe und wird nach jeder Änderung
-// kurz verzögert gespeichert. Im Browser merkt sich die Workbench nur, welches Angebot offen war.
+// kurz verzögert gespeichert. In Frappe merkt sich die Workbench je Benutzer, welches Angebot offen war.
 export const useAngebot = defineStore('angebot', () => {
   const ui = useUi();
   const belege = useBelege();
-  const sitzung = ladenSitzung();
+  const sitzung = { angebotId: einstellung('workbenchAngebot'), auswahlId: einstellung('workbenchAuswahl') };
 
   const kopf = ref(leererKopf());
   const teile = ref([]);
@@ -149,7 +140,8 @@ export const useAngebot = defineStore('angebot', () => {
 
   watch([kopf, teile], planeSpeichern, { deep: true });
   watch([angebotId, auswahlId], () => {
-    try { localStorage.setItem(SITZUNG, JSON.stringify({ angebotId: angebotId.value, auswahlId: auswahlId.value })); } catch { /* egal */ }
+    einstellungSpeichern('workbenchAngebot', angebotId.value ?? '');
+    einstellungSpeichern('workbenchAuswahl', auswahlId.value ?? '');
   });
 
   // Beim Start das zuletzt offene Entwurf-Angebot wieder aufnehmen

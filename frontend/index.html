@@ -6,8 +6,8 @@
     <title>CNC One</title>
     <script>
       try {
-        var t = localStorage.getItem('cnc-one:theme');
-        var dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        // Im Betrieb setzt Frappe das gespeicherte Farbschema in die Seite (cnc_one/www), hier gilt die Systemeinstellung
+        var dark = matchMedia('(prefers-color-scheme: dark)').matches;
         document.documentElement.classList.toggle('dark', dark);
       } catch (e) {}
     </script>
