@@ -279,6 +279,38 @@ DOCTYPES += [
         Table("sendungen", "Fertigungssendung", "Sendungen (Fremdvergabe)"),
         Table("buchungen", "Fertigungsbuchung", "Buchungen"),
     ]),
+    dict(name="Anfrageposition", istable=1, fields=[
+        Data("position_key", "Position", read_only=1, in_list_view=1),
+        Data("teil_id", "Bauteil in der Workbench", read_only=1),
+        Link("bauteil", "Bauteil", "Bauteil"),
+        Data("teilenummer", "Teilenummer", in_list_view=1),
+        Data("bezeichnung", "Bezeichnung", in_list_view=1),
+        Data("zeichnungsnr", "Zeichnungsnummer"),
+        Data("material", "Werkstoff"),
+        Data("ag_id", "Arbeitsgang", read_only=1),
+        Data("ag_name", "Arbeitsgang", in_list_view=1),
+        Json("mengen", "Angefragte Mengen"),
+    ]),
+    dict(name="Anfragepreis", istable=1, fields=[
+        Data("position_key", "Position", read_only=1, in_list_view=1),
+        Int("menge", "Menge", in_list_view=1),
+        Money("pro_stk", "Preis je Stück", in_list_view=1),
+        Money("einmalig", "Einmalig", in_list_view=1),
+    ]),
+    dict(name="Lieferantenanfrage", autoname="LA-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="send", extra={"search_fields": "lieferant,angebot,kunde_name"}, fields=[
+        Link("lieferant", "Lieferant", "Lieferant", reqd=1, in_list_view=1, in_standard_filter=1),
+        Link("angebot", "Angebot", "Angebot", reqd=1, in_list_view=1, in_standard_filter=1),
+        Data("kunde_name", "Kundenname", read_only=1),
+        Select("status", ["Gesendet", "Angebot erhalten", "Abgesagt"], "Status", default="Gesendet", read_only=1, in_list_view=1, in_standard_filter=1),
+        Section("sb_notiz", "Anfrage"),
+        Text("notiz", "Hinweis an den Lieferanten"),
+        Section("sb_antwort", "Angebot des Lieferanten"),
+        Data("lieferantenangebot_nr", "Angebotsnummer des Lieferanten"),
+        Date("gueltig_bis", "Gültig bis"),
+        Section("sb_pos", "Positionen und Preise"),
+        Table("positionen", "Anfrageposition", "Positionen"),
+        Table("preise", "Anfragepreis", "Preise des Lieferanten"),
+    ]),
 ]
 
 

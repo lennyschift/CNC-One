@@ -1,0 +1,54 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "position_key",
+  "menge",
+  "pro_stk",
+  "einmalig"
+ ],
+ "fields": [
+  {
+   "fieldname": "position_key",
+   "fieldtype": "Data",
+   "label": "Position",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "menge",
+   "fieldtype": "Int",
+   "label": "Menge",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "pro_stk",
+   "fieldtype": "Currency",
+   "label": "Preis je Stück",
+   "precision": "2",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "einmalig",
+   "fieldtype": "Currency",
+   "label": "Einmalig",
+   "precision": "2",
+   "in_list_view": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Anfragepreis",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "autoname": "hash"
+}
