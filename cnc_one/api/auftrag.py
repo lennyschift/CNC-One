@@ -8,14 +8,20 @@ from cnc_one.api.stamm import arbeitsgang_ui, kunde_ui, nur_cnc
 from cnc_one.logic.beleg import position_fuer_auftrag
 from cnc_one.logic.daten import als_json, datum, iso
 from cnc_one.logic.kalkulation import berechne
+from cnc_one.logic.lieferung import geliefert_je_position, lieferstatus
 from cnc_one.logic.serien import STANDARD_STELLEN, bereich, hoechste, ueberschneidet
 
 
 def auftrag_ui(d):
 	"""Der Auftrag in der Form, die die Oberfläche erwartet."""
 	kunde = frappe.get_doc("Kunde", d.kunde) if d.kunde else None
+	geliefert = geliefert_je_position(d.name) if d.name else {}
+	gefertigt = {r.auftragsposition_key: int(r.produziert or 0) for r in frappe.get_all("Fertigungsbauteil", filters={"auftrag": d.name}, fields=["auftragsposition_key", "produziert"])} if d.name else {}
+	bestellt_summe = sum(p.menge or 0 for p in d.positionen)
+	geliefert_summe = sum(min(geliefert.get(p.position_key, {}).get("menge", 0), p.menge or 0) for p in d.positionen)
 	return {
 		"id": d.name,
+		"lieferung": {"bestellt": bestellt_summe, "geliefert": geliefert_summe, "status": lieferstatus(bestellt_summe, geliefert_summe)},
 		"angebotId": d.angebot,
 		"kundeName": d.kunde_name or "",
 		"kunde": kunde_ui(kunde) if kunde else None,
@@ -41,6 +47,9 @@ def auftrag_ui(d):
 				"serienVon": p.serien_von or None,
 				"serienBis": p.serien_bis or None,
 				"serienStellen": p.serien_stellen or STANDARD_STELLEN,
+				"gefertigt": gefertigt.get(p.position_key, 0),
+				"geliefert": geliefert.get(p.position_key, {}).get("menge", 0),
+				"lieferscheine": geliefert.get(p.position_key, {}).get("lieferscheine", []),
 			}
 			for p in d.positionen
 		],
