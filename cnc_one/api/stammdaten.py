@@ -121,6 +121,8 @@ def bauteil_setzen(doc, d):
 	material = _text(d.get("material"))
 	doc.material = material if material and frappe.db.exists("Material", material) else None
 	doc.status = d.get("status") if d.get("status") in ("Aktiv", "Gesperrt") else "Aktiv"
+	doc.seriennummern = 1 if d.get("seriennummern") else 0
+	doc.letzte_seriennummer = max(0, int(d.get("letzteSeriennummer") or 0))
 	doc.set("arbeitsplan", [])
 	for a in d.get("arbeitsgaenge") or []:
 		doc.append("arbeitsplan", arbeitsgang_zeile(a))

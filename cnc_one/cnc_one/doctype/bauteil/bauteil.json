@@ -11,6 +11,9 @@
   "revision",
   "material",
   "status",
+  "sb_serie",
+  "seriennummern",
+  "letzte_seriennummer",
   "sb_dateien",
   "vorschaubild",
   "step_datei",
@@ -64,6 +67,23 @@
    "options": "Aktiv\nGesperrt",
    "default": "Aktiv",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "sb_serie",
+   "fieldtype": "Section Break",
+   "label": "Seriennummern"
+  },
+  {
+   "fieldname": "seriennummern",
+   "fieldtype": "Check",
+   "label": "Seriennummern führen",
+   "description": "Die Nummern nennt der Kunde je Auftrag, sie sind fortlaufend"
+  },
+  {
+   "fieldname": "letzte_seriennummer",
+   "fieldtype": "Int",
+   "label": "Letzte vergebene Seriennummer",
+   "description": "Wird beim Anlegen eines Auftrags fortgeschrieben"
   },
   {
    "fieldname": "sb_dateien",

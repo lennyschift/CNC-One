@@ -37,7 +37,14 @@ def angebot_ui(d):
 			"kundeName": d.kunde_name or "",
 			"kunde": kunde_ui(kunde) if kunde else None,
 		},
-		"positionen": [{"key": z.position_key, "teil": _json(z.kalkulation), "ergebnis": _json(z.ergebnis)} for z in d.positionen],
+		"positionen": [
+			{
+				"key": z.position_key, "teil": _json(z.kalkulation), "ergebnis": _json(z.ergebnis),
+				"bauteilId": z.bauteil or "", "herkunft": ("neu" if z.bauteil_neu else "bestand") if z.bauteil else "",
+				"seriennummern": bool(z.bauteil and frappe.db.get_value("Bauteil", z.bauteil, "seriennummern")),
+			}
+			for z in d.positionen
+		],
 		"netto": d.netto or 0,
 		"entwurfId": "",
 	}
@@ -76,14 +83,24 @@ def entwurf_speichern(angebot):
 	doc.gueltig_wochen = int(kopf.get("gueltigWochen") or 4)
 	doc.lieferzeit = kopf.get("lieferzeit") or ""
 
+	# Was dieses Angebot an Bauteilen schon verknüpft hat: Position -> (Bauteil, mit diesem Angebot neu angelegt)
+	alt = {z.position_key: (z.bauteil, bool(z.bauteil_neu)) for z in doc.positionen if z.bauteil}
 	doc.set("positionen", [])
+	behalten = set()
 	for t in teile:
 		zeile = doc.append("positionen", {"kalkulation": json.dumps(t, ensure_ascii=False)})
-		# Bauteil des Kunden anlegen oder wiederfinden, sobald Kunde und Teilenummer da sind
-		b = bauteil_api.sicherstellen(kunde, t.get("teilenummer"), t.get("name"), t.get("zeichnungsnr"), t.get("material"))
+		# Bauteil des Kunden wiederfinden oder neu anlegen, sobald Kunde und Teilenummer da sind. Nie doppelt.
+		b, neu = bauteil_api.fuer_position(kunde, t, alt.get(str(t.get("id"))))
 		zeile.bauteil = b.name if b else None
+		zeile.bauteil_neu = 1 if neu else 0
+		if b:
+			behalten.add(b.name)
 
 	doc.save() if not doc.is_new() else doc.insert()
+	# Bauteile, die dieses Angebot neu angelegt hatte und die nicht mehr vorkommen, wieder entfernen
+	for name, neu in alt.values():
+		if neu and name not in behalten:
+			bauteil_api.aufraeumen(name)
 	return angebot_ui(doc)
 
 

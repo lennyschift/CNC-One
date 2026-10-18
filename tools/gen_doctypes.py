@@ -149,6 +149,9 @@ DOCTYPES += [
         Data("revision", "Revision"),
         Link("material", "Material", "Werkstoff"),
         Select("status", ["Aktiv", "Gesperrt"], "Status", default="Aktiv", in_list_view=1),
+        Section("sb_serie", "Seriennummern"),
+        Check("seriennummern", "Seriennummern führen", description="Die Nummern nennt der Kunde je Auftrag, sie sind fortlaufend"),
+        Int("letzte_seriennummer", "Letzte vergebene Seriennummer", description="Wird beim Anlegen eines Auftrags fortgeschrieben"),
         Section("sb_dateien", "Dateien"),
         F("vorschaubild", "Attach Image", "Vorschaubild", description="entsteht später aus dem STEP-Modell"),
         F("step_datei", "Attach", "STEP-Modell"),
@@ -158,6 +161,7 @@ DOCTYPES += [
     dict(name="Angebotsposition", istable=1, fields=[
         Data("position_key", "Schlüssel", read_only=1, description="Kennung der Position aus der Workbench"),
         Link("bauteil", "Bauteil", "Bauteil", in_list_view=1),
+        Check("bauteil_neu", "Bauteil mit diesem Angebot neu angelegt", read_only=1),
         Data("teilenummer", "Teilenummer", read_only=1, in_list_view=1),
         Data("bezeichnung", "Bezeichnung", read_only=1, in_list_view=1),
         Data("zeichnungsnr", "Zeichnungsnummer", read_only=1),

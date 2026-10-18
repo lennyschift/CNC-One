@@ -6,6 +6,7 @@
  "field_order": [
   "position_key",
   "bauteil",
+  "bauteil_neu",
   "teilenummer",
   "bezeichnung",
   "zeichnungsnr",
@@ -29,6 +30,12 @@
    "label": "Bauteil",
    "options": "Bauteil",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "bauteil_neu",
+   "fieldtype": "Check",
+   "label": "Bauteil mit diesem Angebot neu angelegt",
+   "read_only": 1
   },
   {
    "fieldname": "teilenummer",

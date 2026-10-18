@@ -63,7 +63,8 @@ class TestAngebot(IntegrationTestCase):
 		self.assertTrue(all(z.bauteil for z in doc.positionen))
 		# zweites Speichern findet dieselben Bauteile, auch bei anderer Schreibweise
 		self.speichern([teil("t1", "Flansch", "zz-100")], id=r["id"])
-		self.assertEqual(frappe.db.count("Bauteil", {"kunde": self.kunde}), 2)
+		# das Bauteil der entfernten Position war neu und wird nicht mehr gebraucht
+		self.assertEqual(frappe.db.count("Bauteil", {"kunde": self.kunde}), 1)
 
 	def test_aktualisieren_ersetzt_die_positionen(self):
 		r = self.speichern([teil("t1"), teil("t2", "Welle", "ZZ-200")])
@@ -188,3 +189,77 @@ class TestBauteil(IntegrationTestCase):
 		self.assertEqual(len(gefunden), 1)
 		self.assertEqual(gefunden[0]["kundeId"], self.kunde)
 		self.assertEqual(len(gefunden[0]["arbeitsgaenge"]), 2)
+
+
+class TestBauteilZuordnung(IntegrationTestCase):
+	"""Workbench-Bauteile: Bestandsbauteile wiederfinden, neue in den Stammdaten anlegen, nie doppelt."""
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Zuordnungskunde"}).insert().name
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+
+	def speichern(self, teile, id=None):
+		return angebot.entwurf_speichern({"id": id, "kopf": {"kundeId": self.kunde}, "teile": teile})
+
+	def bauteile(self, nr=None):
+		f = {"kunde": self.kunde}
+		if nr:
+			f["teilenummer"] = nr
+		return frappe.get_all("Bauteil", filters=f, pluck="name")
+
+	def test_neues_bauteil_entsteht_in_den_stammdaten_und_ist_als_neu_gekennzeichnet(self):
+		r = self.speichern([teil("t1", "Flansch", "ZZ-N1", seriennummern=True)])
+		p = r["positionen"][0]
+		self.assertEqual(p["herkunft"], "neu")
+		b = frappe.get_doc("Bauteil", p["bauteilId"])
+		self.assertEqual((b.teilenummer, b.bezeichnung, b.seriennummern), ("ZZ-N1", "Flansch", 1))
+		# bleibt auch beim nächsten Speichern "neu" und folgt den Änderungen
+		r2 = self.speichern([teil("t1", "Flansch neu", "ZZ-N1")], r["id"])
+		self.assertEqual(r2["positionen"][0]["herkunft"], "neu")
+		b.reload()
+		self.assertEqual((b.bezeichnung, b.seriennummern), ("Flansch neu", 0))
+
+	def test_bestandsbauteil_wird_wiedergefunden_und_nicht_veraendert(self):
+		vorhanden = bauteil.sicherstellen(self.kunde, "ZZ-B1", "Altes Bauteil", "Z-1", "")
+		r = self.speichern([teil("t1", "Anderer Name", "zz-b1")])
+		p = r["positionen"][0]
+		self.assertEqual((p["bauteilId"], p["herkunft"]), (vorhanden.name, "bestand"))
+		self.assertEqual(len(self.bauteile()), 1)
+		self.assertEqual(frappe.db.get_value("Bauteil", vorhanden.name, "bezeichnung"), "Altes Bauteil")
+
+	def test_keine_dubletten_bei_zwei_positionen_mit_derselben_nummer(self):
+		r = self.speichern([teil("t1", "A", "ZZ-D1"), teil("t2", "B", "ZZ-D1")])
+		self.assertEqual(len(self.bauteile("ZZ-D1")), 1)
+		self.assertEqual(r["positionen"][0]["bauteilId"], r["positionen"][1]["bauteilId"])
+
+	def test_geaenderte_teilenummer_benennt_das_neue_bauteil_um_statt_ein_zweites_anzulegen(self):
+		r = self.speichern([teil("t1", "Flansch", "ZZ-T")])
+		b1 = r["positionen"][0]["bauteilId"]
+		r = self.speichern([teil("t1", "Flansch", "ZZ-T2")], r["id"])
+		self.assertEqual(r["positionen"][0]["bauteilId"], b1)
+		self.assertEqual(len(self.bauteile()), 1)
+		self.assertEqual(frappe.db.get_value("Bauteil", b1, "teilenummer"), "ZZ-T2")
+
+	def test_wechsel_auf_ein_bestandsbauteil_raeumt_das_neue_auf(self):
+		bestand = bauteil.sicherstellen(self.kunde, "ZZ-BEST", "Bestand", "", "")
+		r = self.speichern([teil("t1", "Neu", "ZZ-TMP")])
+		r = self.speichern([teil("t1", "Neu", "ZZ-BEST")], r["id"])
+		p = r["positionen"][0]
+		self.assertEqual((p["bauteilId"], p["herkunft"]), (bestand.name, "bestand"))
+		self.assertEqual(self.bauteile(), [bestand.name])
+
+	def test_entferntes_bauteil_wird_aus_den_stammdaten_entfernt_wenn_es_neu_war(self):
+		bestand = bauteil.sicherstellen(self.kunde, "ZZ-STAY", "Bleibt", "", "")
+		r = self.speichern([teil("t1", "Neu", "ZZ-GONE"), teil("t2", "Alt", "ZZ-STAY")])
+		self.assertEqual(len(self.bauteile()), 2)
+		self.speichern([teil("t2", "Alt", "ZZ-STAY")], r["id"])
+		self.assertEqual(self.bauteile(), [bestand.name])
+
+	def test_ohne_teilenummer_gibt_es_noch_kein_bauteil(self):
+		r = self.speichern([teil("t1", "Skizze", "")])
+		self.assertEqual((r["positionen"][0]["bauteilId"], r["positionen"][0]["herkunft"]), ("", ""))
+		self.assertEqual(self.bauteile(), [])

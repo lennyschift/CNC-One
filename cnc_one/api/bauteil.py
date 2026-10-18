@@ -15,6 +15,8 @@ def bauteil_ui(d):
 		"zeichnungsnr": d.zeichnungsnr or "",
 		"material": d.material or "",
 		"arbeitsgaenge": [arbeitsgang_ui(r) for r in d.arbeitsplan],
+		"seriennummern": bool(d.seriennummern),
+		"letzteSeriennummer": d.letzte_seriennummer or 0,
 	}
 
 
@@ -58,6 +60,67 @@ def sicherstellen(kunde, teilenummer, name="", zeichnungsnr="", material=""):
 	doc.material = material if material and frappe.db.exists("Material", material) else None
 	doc.insert()
 	return doc
+
+
+def _material(name):
+	return name if name and frappe.db.exists("Material", name) else None
+
+
+def _angaben_setzen(doc, teil):
+	"""Bezeichnung, Zeichnung, Werkstoff und Seriennummern-Kennzeichen aus der Workbench ins Bauteil übernehmen."""
+	doc.bezeichnung = (teil.get("name") or "").strip()
+	doc.zeichnungsnr = (teil.get("zeichnungsnr") or "").strip()
+	doc.material = _material(teil.get("material"))
+	doc.seriennummern = 1 if teil.get("seriennummern") else 0
+
+
+def fuer_position(kunde, teil, alt=None):
+	"""Das Bauteil zu einem Workbench-Bauteil: wiederfinden oder neu anlegen, nie doppelt.
+
+	`alt` ist (Bauteil, neu) dieser Position aus dem letzten Speichern. Ein Bauteil, das dieses Angebot neu angelegt hat,
+	folgt den Änderungen in der Workbench (auch einer geänderten Teilenummer). Ein Bestandsbauteil bleibt unverändert.
+	Liefert (Dokument oder None, neu).
+	"""
+	nr = (teil.get("teilenummer") or "").strip()
+	if not kunde or not nr:
+		return None, False
+	alt_name, alt_neu = alt or (None, False)
+	vorhanden = finden(kunde, nr)
+	if vorhanden:
+		doc = frappe.get_doc("Bauteil", vorhanden)
+		neu = bool(alt_neu and vorhanden == alt_name)
+		if neu:
+			_angaben_setzen(doc, teil)
+			doc.save()
+		return doc, neu
+	if alt_neu and alt_name and frappe.db.get_value("Bauteil", alt_name, "kunde") == kunde and not _anderweitig_verwendet(alt_name):
+		doc = frappe.get_doc("Bauteil", alt_name)
+		doc.teilenummer = nr
+		_angaben_setzen(doc, teil)
+		doc.save()
+		return doc, True
+	doc = frappe.new_doc("Bauteil")
+	doc.kunde = kunde
+	doc.teilenummer = nr
+	_angaben_setzen(doc, teil)
+	doc.insert()
+	return doc, True
+
+
+def _anderweitig_verwendet(name):
+	"""Wird das Bauteil außerhalb des eben bearbeiteten Angebots schon gebraucht (Aufträge, Fertigung, Anfragen, andere Angebote)?"""
+	for dt in ("Auftragsposition", "Fertigungsbauteil", "Anfrageposition"):
+		if frappe.db.exists(dt, {"bauteil": name}):
+			return True
+	return frappe.db.count("Angebotsposition", {"bauteil": name}) > 1
+
+
+def aufraeumen(name):
+	"""Löscht ein von einem Angebot neu angelegtes Bauteil wieder, wenn es nirgends gebraucht wird."""
+	try:
+		frappe.delete_doc("Bauteil", name)
+	except frappe.LinkExistsError:
+		frappe.clear_messages()
 
 
 def plan_setzen(kunde, teilenummer, arbeitsgaenge, name="", zeichnungsnr="", material=""):
