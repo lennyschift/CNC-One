@@ -17,7 +17,8 @@
   "fremd_pro_stk",
   "fremd_einmal",
   "anfrage",
-  "bestellung"
+  "bestellung",
+  "serie"
  ],
  "fields": [
   {
@@ -104,6 +105,12 @@
    "fieldname": "bestellung",
    "fieldtype": "Data",
    "label": "Bestellung"
+  },
+  {
+   "fieldname": "serie",
+   "fieldtype": "Check",
+   "label": "Bringt die Seriennummer an",
+   "read_only": 1
   }
  ],
  "links": [],

@@ -14,7 +14,8 @@
   "lieferant",
   "fremd_pro_stk",
   "fremd_einmal",
-  "anfrage"
+  "anfrage",
+  "serie"
  ],
  "fields": [
   {
@@ -83,6 +84,13 @@
    "fieldname": "anfrage",
    "fieldtype": "Data",
    "label": "Anfrage, aus der der Preis stammt"
+  },
+  {
+   "fieldname": "serie",
+   "fieldtype": "Check",
+   "label": "Bringt die Seriennummer an",
+   "read_only": 1,
+   "description": "ergibt sich aus der Arbeitsgangart Seriennummern"
   }
  ],
  "links": [],

@@ -22,6 +22,8 @@ class Fertigungsbauteil(Document):
 			if s.ag_id not in ids:
 				frappe.throw(_("Eine Sendung gehört zu keinem Arbeitsgang."))
 		self.menge = max(1, int(self.menge or 0))
+		if (self.serien_von or 0) and (self.serien_bis or 0) < self.serien_von:
+			frappe.throw(_("Der Seriennummern-Bereich ist ungültig."))
 		self.produziert = regel.produziert(self.arbeitsgaenge)
 		self.ueberproduktion = regel.ueberproduktion(self.menge, self.produziert)
 

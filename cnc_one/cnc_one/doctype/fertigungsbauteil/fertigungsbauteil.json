@@ -20,6 +20,9 @@
   "status",
   "produziert",
   "ueberproduktion",
+  "serien_von",
+  "serien_bis",
+  "serien_stellen",
   "sb_roh",
   "roh_werkstoff",
   "roh_charge",
@@ -136,6 +139,24 @@
    "fieldname": "ueberproduktion",
    "fieldtype": "Int",
    "label": "Überproduktion",
+   "read_only": 1
+  },
+  {
+   "fieldname": "serien_von",
+   "fieldtype": "Int",
+   "label": "Seriennummer von",
+   "read_only": 1
+  },
+  {
+   "fieldname": "serien_bis",
+   "fieldtype": "Int",
+   "label": "Seriennummer bis",
+   "read_only": 1
+  },
+  {
+   "fieldname": "serien_stellen",
+   "fieldtype": "Int",
+   "label": "Stellen der Seriennummer",
    "read_only": 1
   },
   {

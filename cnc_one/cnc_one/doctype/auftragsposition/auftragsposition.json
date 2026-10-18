@@ -16,7 +16,10 @@
   "staffel_menge",
   "liefertermin",
   "summe",
-  "arbeitsplan"
+  "arbeitsplan",
+  "serien_von",
+  "serien_bis",
+  "serien_stellen"
  ],
  "fields": [
   {
@@ -99,6 +102,21 @@
    "fieldname": "arbeitsplan",
    "fieldtype": "JSON",
    "label": "Arbeitsplan zum Zeitpunkt der Bestellung"
+  },
+  {
+   "fieldname": "serien_von",
+   "fieldtype": "Int",
+   "label": "Seriennummer von"
+  },
+  {
+   "fieldname": "serien_bis",
+   "fieldtype": "Int",
+   "label": "Seriennummer bis"
+  },
+  {
+   "fieldname": "serien_stellen",
+   "fieldtype": "Int",
+   "label": "Stellen der Seriennummer"
   }
  ],
  "links": [],

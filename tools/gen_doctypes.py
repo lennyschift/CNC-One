@@ -76,6 +76,7 @@ DOCTYPES = [
         Money("fremd_pro_stk", "Fremdvergabe je Stück"),
         Money("fremd_einmal", "Fremdvergabe einmalig"),
         Data("anfrage", "Anfrage, aus der der Preis stammt"),
+        Check("serie", "Bringt die Seriennummer an", read_only=1, description="ergibt sich aus der Arbeitsgangart Seriennummern"),
     ]),
     dict(name="Kunde Adresse", istable=1, fields=[
         Select("typ", ["Rechnung und Lieferung", "Rechnung", "Lieferung"], "Art", default="Rechnung und Lieferung", in_list_view=1),
@@ -118,6 +119,7 @@ DOCTYPES = [
         Data("bezeichnung", "Bezeichnung", reqd=1, in_list_view=1),
         Select("typ", ["Intern", "Fremd"], "Art", default="Intern", reqd=1, in_list_view=1),
         Check("aktiv", "Aktiv", default="1", in_list_view=1),
+        Check("serie", "Seriennummern-Arbeitsgang", read_only=1, description="Systemart: bringt die Seriennummer an, lässt sich nicht löschen oder umbenennen"),
     ]),
     dict(name="Kunde", autoname="K-.####", title="kundenname", rechte=stamm_rechte(("CNC Vertrieb",)), icon="users", fields=[
         Data("kundenname", "Kunde", reqd=1, in_list_view=1),
@@ -151,6 +153,7 @@ DOCTYPES += [
         Select("status", ["Aktiv", "Gesperrt"], "Status", default="Aktiv", in_list_view=1),
         Section("sb_serie", "Seriennummern"),
         Check("seriennummern", "Seriennummern führen", description="Die Nummern nennt der Kunde je Auftrag, sie sind fortlaufend"),
+        Int("serien_stellen", "Stellen der Seriennummer", default="4", description="Seriennummern sind immer so lang, mit führenden Nullen (0001)"),
         Int("letzte_seriennummer", "Letzte vergebene Seriennummer", description="Wird beim Anlegen eines Auftrags fortgeschrieben"),
         Section("sb_dateien", "Dateien"),
         F("vorschaubild", "Attach Image", "Vorschaubild", description="entsteht später aus dem STEP-Modell"),
@@ -203,6 +206,9 @@ DOCTYPES += [
         Date("liefertermin", "Liefertermin", in_list_view=1),
         Money("summe", "Summe Position", read_only=1),
         Json("arbeitsplan", "Arbeitsplan zum Zeitpunkt der Bestellung"),
+        Int("serien_von", "Seriennummer von"),
+        Int("serien_bis", "Seriennummer bis"),
+        Int("serien_stellen", "Stellen der Seriennummer"),
     ]),
     dict(name="Auftragskosten", istable=1, fields=[
         Data("position_key", "Position", read_only=1, in_list_view=1),
@@ -236,6 +242,7 @@ DOCTYPES += [
         Money("fremd_einmal", "Fremdvergabe einmalig"),
         Data("anfrage", "Anfrage"),
         Data("bestellung", "Bestellung"),
+        Check("serie", "Bringt die Seriennummer an", read_only=1),
     ]),
     dict(name="Fertigungssendung", istable=1, fields=[
         Data("ag_id", "Arbeitsgang", read_only=1, in_list_view=1),
@@ -269,6 +276,9 @@ DOCTYPES += [
         Select("status", ["Offen", "In Fertigung", "Fertig"], "Status", default="Offen", in_list_view=1, in_standard_filter=1),
         Int("produziert", "Fertig durch alle Arbeitsgänge", read_only=1),
         Int("ueberproduktion", "Überproduktion", read_only=1),
+        Int("serien_von", "Seriennummer von", read_only=1),
+        Int("serien_bis", "Seriennummer bis", read_only=1),
+        Int("serien_stellen", "Stellen der Seriennummer", read_only=1),
         Section("sb_roh", "Rohmaterial"),
         Data("roh_werkstoff", "Werkstoff"),
         Data("roh_charge", "Charge"),

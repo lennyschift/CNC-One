@@ -13,6 +13,7 @@
   "status",
   "sb_serie",
   "seriennummern",
+  "serien_stellen",
   "letzte_seriennummer",
   "sb_dateien",
   "vorschaubild",
@@ -78,6 +79,13 @@
    "fieldtype": "Check",
    "label": "Seriennummern führen",
    "description": "Die Nummern nennt der Kunde je Auftrag, sie sind fortlaufend"
+  },
+  {
+   "fieldname": "serien_stellen",
+   "fieldtype": "Int",
+   "label": "Stellen der Seriennummer",
+   "default": "4",
+   "description": "Seriennummern sind immer so lang, mit führenden Nullen (0001)"
   },
   {
    "fieldname": "letzte_seriennummer",
