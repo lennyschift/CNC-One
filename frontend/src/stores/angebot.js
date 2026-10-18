@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia';
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { berechne, summe } from '../lib/calc.js';
 import { uid } from '../lib/format.js';
+import { eur } from '../lib/format.js';
 import { useUi } from './ui.js';
+import { useBelege } from './belege.js';
+import { useAnfragen } from './anfragen.js';
 
-const KEY = 'cnc-one:workbench:v1';
+const SITZUNG = 'cnc-one:workbench:v2';
 
 export function neuesTeil(name = 'Neues Bauteil') {
   return {
@@ -33,13 +36,13 @@ export function neuesTeil(name = 'Neues Bauteil') {
   };
 }
 
+// Beispiel-Bauteile zum Ausprobieren (Befehl "Beispiel-Bauteile einfügen")
 function demoTeile() {
   const a = neuesTeil('Flansch DN50');
   Object.assign(a, {
     teilenummer: 'F31.683.122', zeichnungsnr: 'Z-4711-B', menge: 50, maschine: 'Hermle C42',
     satzRuest: 105, satzStueck: 105, ruestMin: 90, stueckMin: 14,
     material: '1.4404 Edelstahl', materialPreisKg: 8.1, gewichtKg: 1.35, messkosten: 45,
-    inStueckpreis: { ruest: false, mess: false, sonder: false, express: false },
   });
   a.staffel.aktiv = true;
   const plan = (name, typ, extra = {}) => ({ id: uid(), name, typ, maschine: '', satz: 0, ruestMin: 0, stueckMin: 0, lieferant: '', fremdProStk: 0, fremdEinmal: 0, anfrageId: '', ...extra });
@@ -62,55 +65,115 @@ function demoTeile() {
   return [a, b, c];
 }
 
-function laden() {
+const leererKopf = () => ({ kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache' });
+
+function ladenSitzung() {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const d = JSON.parse(raw);
-      if (Array.isArray(d.teile)) return d;
-    }
+    const raw = localStorage.getItem(SITZUNG);
+    if (raw) return JSON.parse(raw);
   } catch { /* egal */ }
-  return null;
+  return {};
 }
 
+// Das Angebot, an dem gerade gearbeitet wird. Es liegt als Entwurf in Frappe und wird nach jeder Änderung
+// kurz verzögert gespeichert. Im Browser merkt sich die Workbench nur, welches Angebot offen war.
 export const useAngebot = defineStore('angebot', () => {
   const ui = useUi();
-  const gespeichert = laden();
+  const belege = useBelege();
+  const anfragen = useAnfragen();
+  const sitzung = ladenSitzung();
 
-  const kopf = ref(gespeichert?.kopf ?? { kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache' });
-  const teile = ref(gespeichert?.teile ?? demoTeile());
-  const auswahlId = ref(gespeichert?.auswahlId ?? teile.value[0]?.id ?? null);
-  const angebotId = ref(gespeichert?.angebotId ?? null);
-  // bleibt gleich, bis ein neues Angebot begonnen wird; so lassen sich Lieferantenanfragen schon vor dem Speichern zuordnen
-  const entwurfId = ref(gespeichert?.entwurfId ?? uid());
+  const kopf = ref(leererKopf());
+  const teile = ref([]);
+  const auswahlId = ref(null);
+  const angebotId = ref(null);
+  // Kennung des Entwurfs im Browser, damit Anfragen schon vor dem ersten Speichern zuzuordnen sind
+  const entwurfId = ref(sitzung.entwurfId ?? uid());
+  // 'gespeichert' | 'offen' | 'speichert' | 'fehler'
+  const speicherStand = ref('gespeichert');
 
-  watch([kopf, teile, auswahlId, angebotId, entwurfId], () => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify({ kopf: kopf.value, teile: teile.value, auswahlId: auswahlId.value, angebotId: angebotId.value, entwurfId: entwurfId.value }));
-    } catch { /* egal */ }
-  }, { deep: true });
+  let unterdrueckt = true;
+  let timer = 0;
+  let laeuft = false;
+  let nochmal = false;
 
-  function neu() {
-    teile.value = [];
-    auswahlId.value = null;
-    angebotId.value = null;
-    entwurfId.value = uid();
-    kopf.value = { kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache' };
+  const ergebnisse = computed(() => Object.fromEntries(teile.value.map((t) => [t.id, berechne(t)])));
+  const netto = computed(() => summe(Object.values(ergebnisse.value)));
+  const auswahl = computed(() => teile.value.find((t) => t.id === auswahlId.value) ?? null);
+
+  async function ruhig(fn) {
+    unterdrueckt = true;
+    fn();
+    await nextTick();
+    unterdrueckt = false;
   }
 
-  // Gespeichertes Angebot (Entwurf) zum Weiterbearbeiten in die Workbench laden.
+  // Gespeichertes Angebot (Entwurf) zum Weiterbearbeiten laden.
   function ausAngebot(record) {
+    unterdrueckt = true;
     const k = JSON.parse(JSON.stringify(record.kopf));
     kopf.value = { kundeId: k.kundeId, anfrageNr: k.anfrageNr, gueltigWochen: k.gueltigWochen, lieferzeit: k.lieferzeit };
     teile.value = record.positionen.map((p) => JSON.parse(JSON.stringify(p.teil)));
-    auswahlId.value = teile.value[0]?.id ?? null;
+    auswahlId.value = teile.value.find((t) => t.id === sitzung.auswahlId)?.id ?? teile.value[0]?.id ?? null;
     angebotId.value = record.id;
-    entwurfId.value = record.entwurfId ?? uid();
+    entwurfId.value = sitzung.entwurfId ?? uid();
+    speicherStand.value = 'gespeichert';
+    nextTick().then(() => { unterdrueckt = false; });
   }
 
-  const auswahl = computed(() => teile.value.find((t) => t.id === auswahlId.value) ?? null);
-  const ergebnisse = computed(() => Object.fromEntries(teile.value.map((t) => [t.id, berechne(t)])));
-  const netto = computed(() => summe(Object.values(ergebnisse.value)));
+  async function speichern() {
+    clearTimeout(timer);
+    if (laeuft) { nochmal = true; return; }
+    if (!angebotId.value && !teile.value.length && !kopf.value.kundeId) { speicherStand.value = 'gespeichert'; return; }
+    laeuft = true;
+    speicherStand.value = 'speichert';
+    const nettoClient = netto.value;
+    try {
+      const rec = await belege.angebotSpeichern({ angebotId: angebotId.value, kopf: kopf.value, teile: teile.value });
+      angebotId.value = rec.id;
+      anfragen.verknuepfen(entwurfId.value, rec.id);
+      if (!nochmal && Math.abs(rec.netto - nettoClient) > 0.01) {
+        ui.toast(`Server rechnet anders: ${eur(rec.netto)} statt ${eur(nettoClient)}`, 'warn');
+      }
+      speicherStand.value = 'gespeichert';
+    } catch (e) {
+      speicherStand.value = 'fehler';
+      ui.toast(e.message, 'warn');
+    } finally {
+      laeuft = false;
+      if (nochmal) { nochmal = false; speichern(); }
+    }
+  }
+
+  function planeSpeichern() {
+    if (unterdrueckt) return;
+    if (!angebotId.value && !teile.value.length && !kopf.value.kundeId) return;
+    speicherStand.value = 'offen';
+    clearTimeout(timer);
+    timer = setTimeout(speichern, 900);
+  }
+
+  watch([kopf, teile], planeSpeichern, { deep: true });
+  watch([angebotId, entwurfId, auswahlId], () => {
+    try { localStorage.setItem(SITZUNG, JSON.stringify({ angebotId: angebotId.value, entwurfId: entwurfId.value, auswahlId: auswahlId.value })); } catch { /* egal */ }
+  });
+
+  // Beim Start das zuletzt offene Entwurf-Angebot wieder aufnehmen
+  const letztes = sitzung.angebotId ? belege.angebot(sitzung.angebotId) : null;
+  if (letztes && letztes.status === 'Entwurf') ausAngebot(letztes);
+  else nextTick().then(() => { unterdrueckt = false; });
+
+  async function neu() {
+    if (speicherStand.value === 'offen') await speichern();
+    await ruhig(() => {
+      teile.value = [];
+      auswahlId.value = null;
+      angebotId.value = null;
+      entwurfId.value = uid();
+      kopf.value = leererKopf();
+      speicherStand.value = 'gespeichert';
+    });
+  }
 
   function hinzufuegen(name) {
     const t = neuesTeil(name);
@@ -133,6 +196,8 @@ export const useAngebot = defineStore('angebot', () => {
     kopie.id = uid();
     kopie.name = `${q.name} (Kopie)`;
     kopie.dateien = [];
+    // Arbeitsgänge der Kopie bekommen eigene Kennungen, sonst hängen Anfragen an beiden
+    kopie.arbeitsgaenge = (kopie.arbeitsgaenge ?? []).map((a) => ({ ...a, id: uid(), anfrageId: '' }));
     const i = teile.value.findIndex((t) => t.id === id);
     teile.value.splice(i + 1, 0, kopie);
     auswahlId.value = kopie.id;
@@ -177,14 +242,12 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast(`${files.length} Datei${files.length === 1 ? '' : 'en'} → ${neu} neue${neu === 1 ? 's' : ''} Bauteil${neu === 1 ? '' : 'e'}`, 'ok');
   }
 
-  function zuruecksetzen() {
-    teile.value = demoTeile();
-    auswahlId.value = teile.value[0].id;
-    kopf.value = { kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache' };
-    angebotId.value = null;
-    entwurfId.value = uid();
-    ui.toast('Beispieldaten geladen');
+  function beispieleEinfuegen() {
+    const neue = demoTeile();
+    teile.value.push(...neue);
+    auswahlId.value = neue[0].id;
+    ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, auswahlId, angebotId, entwurfId, auswahl, ergebnisse, netto, neu, ausAngebot, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, zuruecksetzen };
+  return { kopf, teile, auswahlId, angebotId, entwurfId, speicherStand, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, beispieleEinfuegen };
 });

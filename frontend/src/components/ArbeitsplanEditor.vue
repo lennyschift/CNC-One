@@ -19,6 +19,8 @@ const props = defineProps({
   teilenummer: { type: String, default: '' },
   // Bauteil der Workbench; nur damit lassen sich Lieferantenanfragen auslösen
   teil: { type: Object, default: null },
+  // Angaben zum Bauteil, wenn kein Workbench-Bauteil übergeben wird (z. B. im Auftrag)
+  teilInfo: { type: Object, default: null },
   // Für Vorlagen: kein Bauteil, daher weder Vorlage anwenden noch am Bauteil speichern
   ohneBauteil: { type: Boolean, default: false },
 });
@@ -50,9 +52,9 @@ watch(() => [props.kundeId, props.teilenummer], () => {
   }
 }, { immediate: true });
 
-function bauteilSpeichern() {
-  if (!stamm.planSpeichern(props.kundeId, props.teilenummer, props.arbeitsgaenge)) return;
-  ui.toast('Arbeitsplan am Bauteil gespeichert', 'ok');
+async function bauteilSpeichern() {
+  const info = props.teil ?? props.teilInfo ?? {};
+  if (await stamm.planSpeichern(props.kundeId, props.teilenummer, props.arbeitsgaenge, info)) ui.toast('Arbeitsplan am Bauteil gespeichert', 'ok');
 }
 
 function hinzu(typ) { props.arbeitsgaenge.push(leererArbeitsgang(typ, uid)); }

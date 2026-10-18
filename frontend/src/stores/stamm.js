@@ -1,34 +1,21 @@
 import { defineStore } from 'pinia';
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 import { uid } from '../lib/format.js';
 import { planAus } from '../lib/fertigung.js';
 import { call } from '../data/api.js';
 import { stammdatenRoh } from '../data/repo.js';
 import { useUi } from './ui.js';
 
-const KEY = 'cnc-one:stamm:v2';
 const kopie = (o) => JSON.parse(JSON.stringify(o));
 
-function ladenPlaene() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw).plaene ?? {};
-  } catch { /* egal */ }
-  return {};
-}
-
-// Arbeitsgangarten und Vorlagen liegen in Frappe. Der Arbeitsplan am Bauteil liegt noch im Browser,
-// bis es das Teil als eigenen Doctype gibt.
+// Arbeitsgangarten, Vorlagen und die Arbeitspläne der Bauteile liegen in Frappe.
+// `plaene` ist nur der Zwischenspeicher im Browser, abgelegt nach Kunde und Teilenummer.
 export const useStamm = defineStore('stamm', () => {
   const ui = useUi();
   const roh = stammdatenRoh();
   const arten = ref(kopie(roh.arten));
   const vorlagen = ref(kopie(roh.vorlagen));
-  const plaene = ref(ladenPlaene());
-
-  watch(plaene, () => {
-    try { localStorage.setItem(KEY, JSON.stringify({ plaene: plaene.value })); } catch { /* egal */ }
-  }, { deep: true });
+  const plaene = ref({});
 
   // Fehler der API werden angezeigt, die Oberfläche bleibt bedienbar.
   async function sicher(fn) {
@@ -40,15 +27,28 @@ export const useStamm = defineStore('stamm', () => {
     return kundeId && t ? `${kundeId}|${t}` : '';
   };
   const hatPlan = (kundeId, teilenummer) => !!plaene.value[teilKey(kundeId, teilenummer)]?.length;
+  for (const b of roh.bauteile ?? []) {
+    if (b.arbeitsgaenge.length) plaene.value[teilKey(b.kundeId, b.teilenummer)] = kopie(b.arbeitsgaenge);
+  }
 
   function planFuer(kundeId, teilenummer) {
     const p = plaene.value[teilKey(kundeId, teilenummer)];
     return p?.length ? kopie(p) : null;
   }
-  function planSpeichern(kundeId, teilenummer, arbeitsgaenge) {
+  // Speichert den Arbeitsplan am Bauteil in Frappe. `info` (name, zeichnungsnr, material) füllt ein neues Bauteil.
+  async function planSpeichern(kundeId, teilenummer, arbeitsgaenge, info = {}) {
     const k = teilKey(kundeId, teilenummer);
     if (!k) return false;
-    plaene.value[k] = planAus(arbeitsgaenge, uid);
+    const b = await sicher(() => call('cnc_one.api.bauteil.plan_speichern', {
+      kunde: kundeId,
+      teilenummer: String(teilenummer).trim(),
+      arbeitsgaenge: planAus(arbeitsgaenge, uid),
+      name: info.name ?? '',
+      zeichnungsnr: info.zeichnungsnr ?? '',
+      material: info.material ?? '',
+    }));
+    if (!b) return false;
+    plaene.value[k] = kopie(b.arbeitsgaenge);
     return true;
   }
 

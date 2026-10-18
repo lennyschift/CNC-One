@@ -148,11 +148,11 @@ export const useFertigung = defineStore('fertigung', () => {
     ui.toast(`${neu.length} Arbeitsgänge aus der Vorlage hinzugefügt`, 'ok');
   }
 
-  function planAmBauteilSpeichern(fbId) {
+  async function planAmBauteilSpeichern(fbId) {
     const fb = bauteil(fbId);
     if (!fb) return;
-    if (stamm.planSpeichern(fb.kundeId, fb.teil.teilenummer, fb.arbeitsgaenge)) ui.toast('Arbeitsplan am Bauteil gespeichert', 'ok');
-    else ui.toast('Dafür braucht das Bauteil einen Kunden und eine Teilenummer', 'warn');
+    if (await stamm.planSpeichern(fb.kundeId, fb.teil.teilenummer, fb.arbeitsgaenge, fb.teil)) ui.toast('Arbeitsplan am Bauteil gespeichert', 'ok');
+    else if (!stamm.teilKey(fb.kundeId, fb.teil.teilenummer)) ui.toast('Dafür braucht das Bauteil einen Kunden und eine Teilenummer', 'warn');
   }
 
   function arbeitsgangWeg(fbId, agId) {

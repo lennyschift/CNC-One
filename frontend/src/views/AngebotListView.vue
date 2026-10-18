@@ -22,8 +22,8 @@ const zeilen = computed(() => b.angebote
   .map((x) => ({ ...x, anzeige: b.statusVon(x) }))
   .filter((x) => filter.value === 'Alle' || x.anzeige.includes(filter.value) || (filter.value === 'Beauftragt' && x.anzeige === 'Teilweise beauftragt')));
 
-function neu() {
-  a.neu();
+async function neu() {
+  await a.neu();
   router.push('/workbench');
 }
 const de = (iso) => new Date(iso).toLocaleDateString('de-DE');

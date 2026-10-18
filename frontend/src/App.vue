@@ -29,7 +29,7 @@ function onDateien(files) {
   a.dateienHinzufuegen(files);
 }
 
-const untertitel = computed(() => (route.meta.bereich === 'workbench' ? (a.angebotId ? `${a.angebotId} · Entwurf wird bearbeitet` : 'Neues Angebot · nicht gespeichert') : ''));
+const untertitel = computed(() => (route.meta.bereich === 'workbench' ? (a.angebotId ? `${a.angebotId} · Entwurf` : 'Neues Angebot') : ''));
 
 const befehle = computed(() => [
   { id: 'go-wb', label: 'Zur Workbench', gruppe: 'Gehe zu', icon: Calculator, run: () => router.push('/workbench') },
@@ -42,7 +42,7 @@ const befehle = computed(() => [
   { id: 'dup', label: 'Aktuelles Bauteil duplizieren', gruppe: 'Aktion', icon: Copy, run: () => a.auswahlId && a.duplizieren(a.auswahlId) },
   { id: 'del', label: 'Aktuelles Bauteil löschen', gruppe: 'Aktion', icon: Trash2, run: () => a.auswahlId && a.loeschen(a.auswahlId) },
   { id: 'theme', label: ui.dark ? 'Zu hellem Design wechseln' : 'Zu dunklem Design wechseln', stichworte: 'dunkel hell theme modus', gruppe: 'Ansicht', icon: ui.dark ? Sun : Moon, run: ui.toggleDark },
-  { id: 'reset', label: 'Beispieldaten neu laden', gruppe: 'Daten', icon: RotateCcw, run: a.zuruecksetzen },
+  { id: 'beispiel', label: 'Beispiel-Bauteile einfügen', stichworte: 'demo testdaten', gruppe: 'Daten', icon: RotateCcw, run: () => { router.push('/workbench'); a.beispieleEinfuegen(); } },
   ...a.teile.map((t, i) => ({ id: 'teil-' + t.id, label: `Gehe zu: ${i + 1}. ${t.name || 'Ohne Namen'}`, gruppe: 'Bauteil', icon: Layers, run: () => { a.auswahlId = t.id; } })),
 ]);
 

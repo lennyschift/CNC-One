@@ -28,9 +28,8 @@ function bearbeiten() {
   draft.ausAngebot(angebot.value);
   router.push('/workbench');
 }
-function loeschen() {
-  b.angebotLoeschen(angebot.value.id);
-  router.push('/angebote');
+async function loeschen() {
+  if (await b.angebotLoeschen(angebot.value.id)) router.push('/angebote');
 }
 function angelegt(auftrag) {
   dialog.value = false;

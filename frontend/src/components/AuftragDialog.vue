@@ -57,7 +57,7 @@ function anlegen() {
     arbeitsgaenge: planAus(s.z.plan, uid),
   }));
   for (const s of sicht.value.filter((x) => x.z.aktiv)) {
-    if (s.z.planSpeichern && s.z.plan.length) stamm.planSpeichern(kundeId, s.p.teil.teilenummer, s.z.plan);
+    if (s.z.planSpeichern && s.z.plan.length) stamm.planSpeichern(kundeId, s.p.teil.teilenummer, s.z.plan, s.p.teil);
   }
   const neu = b.auftragAnlegen({ angebotId: props.angebot.id, kundenbestellnr: bestellnr.wert, positionen });
   emit('angelegt', neu);
@@ -125,7 +125,7 @@ function anlegen() {
                         <ChevronDown :size="15" class="ml-auto text-mute transition" :class="s.z.planOffen ? 'rotate-180' : ''" />
                       </button>
                       <div v-if="s.z.planOffen" class="border-t border-line p-4">
-                        <ArbeitsplanEditor :arbeitsgaenge="s.z.plan" :kunde-id="kundeId" :teilenummer="s.p.teil.teilenummer" />
+                        <ArbeitsplanEditor :arbeitsgaenge="s.z.plan" :kunde-id="kundeId" :teilenummer="s.p.teil.teilenummer" :teil-info="s.p.teil" />
                         <div class="mt-3"><Toggle v-model="s.z.planSpeichern" klein label="Beim Anlegen des Auftrags am Bauteil speichern" /></div>
                         <p v-if="s.z.plan.some((a) => a.typ === 'fremd')" class="mt-2 flex items-center gap-1.5 text-xs text-mute"><Truck :size="13" /> Fremdvergaben werden nach dem Auftrag beim Lieferanten bestellt (folgt als eigener Schritt).</p>
                       </div>

@@ -1,12 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { MapPin, UserRound, Hash, Save, FilePlus2, Send } from '@lucide/vue';
+import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle } from '@lucide/vue';
 import AnfrageDialog from '../components/AnfrageDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
 import { useAnfragen } from '../stores/anfragen.js';
 import { fremdPositionen } from '../lib/anfrage.js';
-import { useBelege } from '../stores/belege.js';
 import { useUi } from '../stores/ui.js';
 import CustomerCombobox from '../components/CustomerCombobox.vue';
 import PartList from '../components/PartList.vue';
@@ -19,19 +18,16 @@ import { useAngebot } from '../stores/angebot.js';
 import { onMounted } from 'vue';
 
 const a = useAngebot();
-const belege = useBelege();
 const anfragenStore = useAnfragen();
 const ui = useUi();
 const router = useRouter();
 
-function speichern() {
+// Der Entwurf wird laufend gespeichert. Der Knopf speichert sofort und öffnet die Ansicht des Angebots.
+async function ansehen() {
   if (!kunde.value) { ui.toast('Bitte zuerst einen Kunden wählen', 'warn'); return; }
   if (!a.teile.length) { ui.toast('Das Angebot enthält noch kein Bauteil', 'warn'); return; }
-  const rec = belege.angebotSpeichern({ angebotId: a.angebotId, kopf: a.kopf, teile: a.teile }, kunde.value);
-  a.angebotId = rec.id;
-  anfragenStore.verknuepfen(a.entwurfId, rec.id);
-  ui.toast(`${rec.id} gespeichert`, 'ok');
-  router.push(`/angebote/${rec.id}`);
+  await a.speichern();
+  if (a.speicherStand === 'gespeichert' && a.angebotId) router.push(`/angebote/${a.angebotId}`);
 }
 const ziel = computed(() => ({ entwurfId: a.entwurfId, angebotId: a.angebotId }));
 const bezug = computed(() => ({ entwurfId: a.entwurfId, angebotId: a.angebotId ?? '', kundeName: kunde.value?.name ?? '' }));
@@ -43,8 +39,8 @@ function anfrageOeffnen(ag) {
   anfrageAg.value = ag?.id ?? '';
   anfrageOffen.value = true;
 }
-function neuesAngebot() {
-  a.neu();
+async function neuesAngebot() {
+  await a.neu();
   ui.toast('Neues, leeres Angebot');
 }
 const kunden = ref([]);
@@ -83,8 +79,14 @@ const mwst = computed(() => a.netto * 0.19);
           </div>
           <button v-if="anzahlFremd" class="btn mt-4 w-full justify-center !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" @click="anfrageOeffnen()"><Send :size="15" /> Lieferantenanfrage ({{ anzahlFremd }} Fremdvergabe{{ anzahlFremd === 1 ? '' : 'n' }}<template v-if="anzahlAnfragen">, {{ anzahlAnfragen }} gesendet</template>)</button>
           <div class="mt-2 flex gap-2">
-            <button class="btn btn-primary flex-1 justify-center" @click="speichern"><Save :size="16" /> {{ a.angebotId ? 'Speichern' : 'Als Angebot speichern' }}</button>
+            <button class="btn btn-primary flex-1 justify-center" @click="ansehen"><Eye :size="16" /> Angebot ansehen</button>
             <button class="btn !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" title="Neues, leeres Angebot beginnen" @click="neuesAngebot"><FilePlus2 :size="16" /></button>
+          </div>
+          <div class="mt-3 flex items-center justify-center gap-1.5 text-xs opacity-70">
+            <Loader v-if="a.speicherStand === 'speichert' || a.speicherStand === 'offen'" :size="12" class="animate-spin" />
+            <AlertTriangle v-else-if="a.speicherStand === 'fehler'" :size="12" />
+            <Check v-else :size="12" />
+            {{ a.speicherStand === 'fehler' ? 'Speichern fehlgeschlagen' : a.speicherStand === 'gespeichert' ? (a.angebotId ? `${a.angebotId} gespeichert` : 'Noch nichts zu speichern') : 'Speichert …' }}
           </div>
         </div>
       </div>
