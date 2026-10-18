@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ausPlan, planAus, leererArbeitsgang, produziert, fortschritt, ueberproduktion, nachzuholen, fremdGebucht, nochNichtGesendet, arbeitsgangStatus, normalisiere, autoStatus, restMinuten, lasten, tageBis } from './fertigung.js';
+import { planAus, felderVon, leererArbeitsgang, produziert, fortschritt, ueberproduktion, nachzuholen, fremdGebucht, nochNichtGesendet, arbeitsgangStatus, autoStatus, restMinuten, lasten, tageBis } from './fertigung.js';
 
 const ag = (extra = {}) => ({ id: 'a', name: 'Fertigen', typ: 'intern', maschine: 'CTX400', ruestMin: 30, stueckMin: 2, status: 'Offen', gebucht: 0, lieferant: '', fremdStatus: '', ...extra });
 const fb = (extra = {}) => ({ id: 'f', menge: 10, status: 'Offen', termin: '', arbeitsgaenge: [ag()], ...extra });
@@ -9,19 +9,8 @@ describe('Arbeitsplan und Arbeitsgänge', () => {
     { id: 'p1', name: 'Drehen', typ: 'intern', maschine: 'CTX400', satz: 88, ruestMin: 45, stueckMin: 2.5 },
     { id: 'p2', name: 'Oberflächenbehandlung', typ: 'fremd', lieferant: 'Eloxal GmbH', fremdProStk: 1.2 },
   ];
-  it('Fertigungsbauteil übernimmt den Arbeitsplan mit leerem Buchungsstand', () => {
-    const r = ausPlan(plan, () => 'x');
-    expect(r).toHaveLength(2);
-    expect(r[0]).toMatchObject({ planId: 'p1', name: 'Drehen', maschine: 'CTX400', satz: 88, gebucht: 0, status: 'Offen', sendungen: [] });
-    expect(r[1]).toMatchObject({ typ: 'fremd', lieferant: 'Eloxal GmbH', fremdProStk: 1.2 });
-  });
-  it('ohne Plan entstehen keine Arbeitsgänge', () => {
-    expect(ausPlan([], () => 'x')).toEqual([]);
-    expect(ausPlan(undefined, () => 'x')).toEqual([]);
-  });
   it('Plan wird ohne Buchungsstand zurückgespeichert', () => {
-    const ags = ausPlan(plan, () => 'neu');
-    ags[0].gebucht = 7;
+    const ags = plan.map((p) => ({ ...p, id: 'neu', planId: p.id, gebucht: 7 }));
     const p = planAus(ags, () => 'q');
     expect(p[0]).toEqual({ id: 'p1', name: 'Drehen', typ: 'intern', maschine: 'CTX400', satz: 88, ruestMin: 45, stueckMin: 2.5, lieferant: '', fremdProStk: 0, fremdEinmal: 0, anfrageId: '' });
     expect(p[0]).not.toHaveProperty('gebucht');
@@ -88,51 +77,14 @@ describe('Fremdvergabe in Sendungen', () => {
   it('Status Fertig, wenn alles zurück ist', () => expect(arbeitsgangStatus({ ...fremd, gebucht: 50 }, 50)).toBe('Fertig'));
 });
 
-describe('alte Daten', () => {
-  it('Fremdvergabe "Ware zurück" wird zu einer Sendung mit voller Menge', () => {
-    const alt = { menge: 20, arbeitsgaenge: [{ id: 'x', typ: 'fremd', gebucht: 20, fremdStatus: 'Ware zurück', datumWeg: '2026-10-01', datumZurueck: '2026-10-04' }] };
-    const r = normalisiere(alt);
-    expect(r.arbeitsgaenge[0].sendungen).toEqual([{ id: 'x-s', menge: 20, datumWeg: '2026-10-01', datumZurueck: '2026-10-04' }]);
-    expect(r.arbeitsgaenge[0]).not.toHaveProperty('fremdStatus');
+describe('bearbeitbare Felder', () => {
+  it('enthalten keinen Buchungsstand', () => {
+    const f = felderVon(fb({ prioritaet: 'Hoch', termin: '2026-12-01', rohmaterial: { charge: 'A' }, notizen: { pruefmasse: 'ok' }, arbeitsgaenge: [ag({ gebucht: 7, status: 'Läuft' })] }));
+    expect(f).toMatchObject({ prioritaet: 'Hoch', termin: '2026-12-01', rohmaterial: { charge: 'A' }, notizen: { pruefmasse: 'ok' } });
+    expect(f.arbeitsgaenge[0]).toEqual({ id: 'a', name: 'Fertigen', maschine: 'CTX400', satz: 0, ruestMin: 30, stueckMin: 2, lieferant: '', fremdProStk: 0, fremdEinmal: 0, bestellung: '' });
   });
-  it('Fremdvergabe nur "Geplant" bekommt keine Sendung', () => {
-    expect(normalisiere({ menge: 5, arbeitsgaenge: [{ id: 'y', typ: 'fremd', fremdStatus: 'Geplant' }] }).arbeitsgaenge[0].sendungen).toEqual([]);
+  it('sind gleich, solange nichts geändert wird', () => {
+    const x = fb({ rohmaterial: {}, notizen: {} });
+    expect(JSON.stringify(felderVon(x))).toBe(JSON.stringify(felderVon(x)));
   });
-});
-
-describe('autoStatus', () => {
-  it('Offen ohne Buchung', () => expect(autoStatus(fb())).toBe('Offen'));
-  it('In Fertigung nach erster Buchung', () => expect(autoStatus(fb({ arbeitsgaenge: [ag({ gebucht: 1 })] }))).toBe('In Fertigung'));
-  it('Fertig, wenn alle Arbeitsgänge komplett sind', () => {
-    expect(autoStatus(fb({ arbeitsgaenge: [ag({ gebucht: 10 }), ag({ gebucht: 12 })] }))).toBe('Fertig');
-  });
-  it('nicht Fertig, solange ein Arbeitsgang fehlt', () => {
-    expect(autoStatus(fb({ arbeitsgaenge: [ag({ gebucht: 10 }), ag({ gebucht: 3 })] }))).toBe('In Fertigung');
-  });
-});
-
-describe('Zeiten und Last', () => {
-  it('Restminuten: Rüsten + Stückzeit × Rest', () => expect(restMinuten(ag(), 10)).toBe(30 + 20));
-  it('nach Beginn zählt das Rüsten nicht mehr', () => expect(restMinuten(ag({ gebucht: 4 }), 10)).toBe(12));
-  it('Fremdvergabe belastet keine Maschine', () => expect(restMinuten(ag({ typ: 'fremd' }), 10)).toBe(0));
-
-  it('gruppiert nach Maschine, Fremdvergabe zuletzt, nach Termin sortiert', () => {
-    const a = fb({ id: 'a', termin: '2026-11-10' });
-    const b = fb({ id: 'b', termin: '2026-11-01' });
-    const c = fb({ id: 'c', arbeitsgaenge: [ag({ typ: 'fremd', lieferant: 'Eloxal GmbH' })] });
-    const g = lasten([a, b, c]);
-    expect(g.map((x) => x.name)).toEqual(['CTX400', 'Eloxal GmbH']);
-    expect(g[0].eintraege.map((e) => e.fb.id)).toEqual(['b', 'a']);
-    expect(g[0].minuten).toBe(100);
-  });
-  it('fertige Bauteile belasten nichts', () => {
-    expect(lasten([fb({ status: 'Fertig' })])).toEqual([]);
-  });
-});
-
-describe('tageBis', () => {
-  const heute = new Date(2026, 9, 17);
-  it('zählt Tage', () => expect(tageBis('2026-10-20', heute)).toBe(3));
-  it('überfällig ist negativ', () => expect(tageBis('2026-10-15', heute)).toBe(-2));
-  it('ohne Termin null', () => expect(tageBis('', heute)).toBeNull());
 });

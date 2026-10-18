@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, computed } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { X, AlertTriangle, ShoppingCart, ChevronDown, Workflow, Truck } from '@lucide/vue';
 import PartImage from './PartImage.vue';
 import NumField from './NumField.vue';
@@ -43,23 +43,27 @@ const anzahl = computed(() => sicht.value.filter((s) => s.z.aktiv).length);
 
 function waehle(s, o) { s.z.optId = o.id; s.z.menge = o.menge; }
 
-function anlegen() {
-  const positionen = sicht.value.filter((s) => s.z.aktiv).map((s) => ({
-    key: s.p.key + '-' + Date.now().toString(36),
+const speichert = ref(false);
+async function anlegen() {
+  if (speichert.value) return;
+  const aktive = sicht.value.filter((s) => s.z.aktiv);
+  // Der Server rechnet Preise und Summen selbst; hier geht nur die Auswahl hin.
+  const positionen = aktive.map((s) => ({
     angebotKey: s.p.key,
-    teil: { name: s.p.teil.name, teilenummer: s.p.teil.teilenummer, zeichnungsnr: s.p.teil.zeichnungsnr, material: s.p.teil.material, vorschaubild: s.p.teil.vorschaubild ?? '' },
-    menge: s.pos.menge,
-    einzelpreis: s.pos.einzelpreis,
-    staffelMenge: s.pos.staffelMenge,
+    optionId: s.z.optId,
+    menge: s.z.menge,
     termin: s.z.termin,
-    kosten: s.kosten.filter((k) => k.an).map(({ label, betrag }) => ({ label, betrag })),
-    summe: Math.round(s.summe * 100) / 100,
+    kostenAus: Object.keys(s.z.kostenAus).filter((label) => s.z.kostenAus[label]),
     arbeitsgaenge: planAus(s.z.plan, uid),
+    planSpeichern: s.z.planSpeichern,
   }));
-  for (const s of sicht.value.filter((x) => x.z.aktiv)) {
-    if (s.z.planSpeichern && s.z.plan.length) stamm.planSpeichern(kundeId, s.p.teil.teilenummer, s.z.plan, s.p.teil);
+  speichert.value = true;
+  const neu = await b.auftragAnlegen({ angebotId: props.angebot.id, kundenbestellnr: bestellnr.wert, positionen });
+  speichert.value = false;
+  if (!neu) return;
+  for (const s of aktive) {
+    if (s.z.planSpeichern && s.z.plan.length) stamm.planEintragen(kundeId, s.p.teil.teilenummer, planAus(s.z.plan, uid));
   }
-  const neu = b.auftragAnlegen({ angebotId: props.angebot.id, kundenbestellnr: bestellnr.wert, positionen });
   emit('angelegt', neu);
 }
 </script>
@@ -140,7 +144,7 @@ function anlegen() {
             <div><div class="text-xs text-mute">{{ anzahl }} Position{{ anzahl === 1 ? '' : 'en' }}</div><div class="text-xl font-semibold tnum">{{ eur(gesamt) }} <span class="text-xs font-normal text-mute">netto</span></div></div>
             <div class="flex gap-2">
               <button class="btn" @click="emit('schliessen')">Abbrechen</button>
-              <button class="btn btn-primary" :disabled="!anzahl" :class="!anzahl ? 'pointer-events-none opacity-40' : ''" @click="anlegen"><ShoppingCart :size="16" /> Auftrag anlegen</button>
+              <button class="btn btn-primary" :disabled="!anzahl || speichert" :class="!anzahl || speichert ? 'pointer-events-none opacity-40' : ''" @click="anlegen"><ShoppingCart :size="16" /> Auftrag anlegen</button>
             </div>
           </footer>
         </div>

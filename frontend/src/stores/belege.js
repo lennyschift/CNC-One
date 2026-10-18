@@ -1,33 +1,17 @@
 import { defineStore } from 'pinia';
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import { angebotStatus } from '../lib/beleg.js';
 import { call } from '../data/api.js';
 import { stammdatenRoh } from '../data/repo.js';
 import { useUi } from './ui.js';
 
-const KEY = 'cnc-one:belege:v2';
 const kopie = (o) => JSON.parse(JSON.stringify(o));
-const nummer = (prefix, n) => `${prefix}-${new Date().getFullYear()}-${String(n).padStart(4, '0')}`;
 
-function laden() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* egal */ }
-  return null;
-}
-
-// Angebote liegen in Frappe. Aufträge liegen noch im Browser und ziehen im nächsten Schritt um.
+// Angebote und Aufträge liegen in Frappe; der Speicher hier ist nur der Zwischenspeicher der Oberfläche.
 export const useBelege = defineStore('belege', () => {
   const ui = useUi();
-  const g = laden();
   const angebote = ref(kopie(stammdatenRoh().angebote ?? []));
-  const auftraege = ref(g?.auftraege ?? []);
-  const zaehler = ref(g?.zaehler ?? { AUF: 0 });
-
-  watch([auftraege, zaehler], () => {
-    try { localStorage.setItem(KEY, JSON.stringify({ auftraege: auftraege.value, zaehler: zaehler.value })); } catch { /* egal */ }
-  }, { deep: true });
+  const auftraege = ref(kopie(stammdatenRoh().auftraege ?? []));
 
   // bestellte Menge je Angebotsposition, aus den Aufträgen berechnet
   const bestellt = computed(() => {
@@ -85,24 +69,25 @@ export const useBelege = defineStore('belege', () => {
     return false;
   }
 
-  function auftragAnlegen({ angebotId, kundenbestellnr, positionen }) {
-    const a = angebot(angebotId);
-    zaehler.value.AUF += 1;
-    const neu = {
-      id: nummer('AUF', zaehler.value.AUF),
-      angebotId,
-      kundeName: a.kopf.kundeName,
-      kunde: kopie(a.kopf.kunde),
-      kundenbestellnr: kundenbestellnr || '',
-      datum: new Date().toISOString(),
-      status: 'Offen',
-      positionen,
-      netto: positionen.reduce((s, p) => s + p.summe, 0),
-    };
-    auftraege.value.unshift(neu);
-    ui.toast(`${neu.id} angelegt`, 'ok');
-    return neu;
+  // Auftrag aus einem gesendeten Angebot. Der Server rechnet Preise und Summen selbst und liefert den Auftrag zurück.
+  async function auftragAnlegen({ angebotId, kundenbestellnr, positionen }) {
+    const rec = await sicher(() => call('cnc_one.api.auftrag.aus_angebot', { angebot: angebotId, kundenbestellnr, positionen }));
+    if (!rec) return null;
+    auftraege.value.unshift(rec);
+    ui.toast(`${rec.id} angelegt`, 'ok');
+    return rec;
   }
 
-  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, angebotSpeichern, angebotSenden, angebotAblehnen, angebotLoeschen, auftragAnlegen };
+  // Antworten der Fertigung ändern Status oder Inhalt eines Auftrags
+  function auftragEinsetzen(rec) {
+    const i = auftraege.value.findIndex((a) => a.id === rec.id);
+    if (i >= 0) auftraege.value[i] = rec;
+    else auftraege.value.unshift(rec);
+  }
+  function auftragStatusSetzen(id, status) {
+    const a = auftrag(id);
+    if (a && status) a.status = status;
+  }
+
+  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, angebotSpeichern, angebotSenden, angebotAblehnen, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen };
 });

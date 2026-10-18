@@ -43,3 +43,14 @@ export function angebotStatus(angebot, bestelltJeKey) {
   if (!bestellt) return 'Gesendet';
   return bestellt === keys.length ? 'Beauftragt' : 'Teilweise beauftragt';
 }
+
+// Position für den Auftrag mit allem, was der Dialog auswählt: Staffel (optionId), Menge und abgewählte Kostenzeilen.
+// Der Server rechnet dasselbe nach (cnc_one/logic/beleg.py), geprüft mit shared/auftrag_faelle.json.
+export function positionFuerAuftrag(teil, ergebnis, optionId, menge, kostenAus = []) {
+  const opts = optionen(teil, ergebnis);
+  const opt = opts.find((o) => o.id === String(optionId)) ?? opts[0];
+  const pos = auftragsPosition(teil, ergebnis, opt, menge);
+  const kosten = pos.kosten.filter((k) => !kostenAus.includes(k.label));
+  const summe = r2(pos.einzelpreis * pos.menge + kosten.reduce((s, k) => s + k.betrag, 0));
+  return { ...pos, kosten, summe };
+}

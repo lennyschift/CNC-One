@@ -3,28 +3,6 @@ import { num } from './calc.js';
 
 export const STATUS = ['Offen', 'In Fertigung', 'Fertig'];
 
-// Arbeitsgang im Fertigungsbauteil aus einem Eintrag des Arbeitsplans (am Bauteil gespeichert).
-export function ausPlan(plan, uid) {
-  return (plan ?? []).map((p) => ({
-    id: uid(),
-    planId: p.id ?? '',
-    name: p.name ?? '',
-    typ: p.typ === 'fremd' ? 'fremd' : 'intern',
-    maschine: p.maschine ?? '',
-    satz: num(p.satz),
-    ruestMin: num(p.ruestMin),
-    stueckMin: num(p.stueckMin),
-    lieferant: p.lieferant ?? '',
-    fremdProStk: num(p.fremdProStk),
-    fremdEinmal: num(p.fremdEinmal),
-    anfrageId: p.anfrageId ?? '',
-    bestellung: '',
-    status: 'Offen',
-    gebucht: 0,
-    sendungen: [],
-  }));
-}
-
 // Eintrag des Arbeitsplans (ohne Buchungsstand) zum Speichern am Bauteil.
 export function planAus(arbeitsgaenge, uid) {
   return (arbeitsgaenge ?? []).map((a) => ({
@@ -92,23 +70,19 @@ export function arbeitsgangStatus(ag, menge) {
   return 'Offen';
 }
 
-// Alte, im Browser gespeicherte Fertigungsbauteile auf die aktuelle Form bringen.
-export function normalisiere(fb) {
-  for (const ag of fb.arbeitsgaenge ?? []) {
-    ag.sendungen ??= [];
-    ag.satz ??= 0;
-    ag.fremdProStk ??= 0;
-    ag.fremdEinmal ??= 0;
-    ag.anfrageId ??= '';
-    ag.bestellung ??= '';
-    if (ag.typ === 'fremd' && !ag.sendungen.length && ag.fremdStatus && ag.fremdStatus !== 'Geplant') {
-      ag.sendungen.push({ id: ag.id + '-s', menge: fb.menge, datumWeg: ag.datumWeg || '', datumZurueck: ag.fremdStatus === 'Ware zurück' ? (ag.datumZurueck || ag.datumWeg || '') : '' });
-    }
-    delete ag.fremdStatus;
-    delete ag.datumWeg;
-    delete ag.datumZurueck;
-  }
-  return fb;
+// Die frei bearbeitbaren Felder eines Fertigungsbauteils (ohne Buchungsstand, Status und Sendungen).
+// Sie werden automatisch gespeichert; der Server übernimmt nur diese Felder.
+export function felderVon(fb) {
+  return {
+    prioritaet: fb.prioritaet,
+    termin: fb.termin || '',
+    rohmaterial: { ...fb.rohmaterial },
+    notizen: { ...fb.notizen },
+    arbeitsgaenge: fb.arbeitsgaenge.map((a) => ({
+      id: a.id, name: a.name, maschine: a.maschine ?? '', satz: num(a.satz), ruestMin: num(a.ruestMin), stueckMin: num(a.stueckMin),
+      lieferant: a.lieferant ?? '', fremdProStk: num(a.fremdProStk), fremdEinmal: num(a.fremdEinmal), bestellung: a.bestellung ?? '',
+    })),
+  };
 }
 
 // Noch offene Minuten eines Arbeitsgangs (Rüsten nur, solange noch nichts gebucht ist).

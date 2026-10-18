@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { ArrowLeft, Cog, Truck, ChevronUp, ChevronDown, Trash2, Plus, Layers, NotebookPen, History, Send, PackageCheck, Save, Workflow, X } from '@lucide/vue';
@@ -9,13 +9,21 @@ import StatusBadge from '../components/StatusBadge.vue';
 import { repo } from '../data/repo.js';
 import { useFertigung } from '../stores/fertigung.js';
 import { useStamm } from '../stores/stamm.js';
-import { STATUS, produziert, fortschritt, ueberproduktion, nochNichtGesendet } from '../lib/fertigung.js';
+import { STATUS, produziert, fortschritt, ueberproduktion, nochNichtGesendet, felderVon } from '../lib/fertigung.js';
 import { zahl } from '../lib/format.js';
 
 const route = useRoute();
 const f = useFertigung();
 const stamm = useStamm();
 const fb = computed(() => f.bauteil(route.params.id));
+
+// Änderungen an Feldern (Namen, Zeiten, Material, Notizen ...) werden automatisch gespeichert.
+const feldStand = (x) => (x ? JSON.stringify([x.id, felderVon(x)]) : '');
+watch(() => feldStand(fb.value), (neu, alt) => {
+  if (!neu || !alt) return;
+  const id = JSON.parse(neu)[0];
+  if (id === JSON.parse(alt)[0]) f.felderPlanen(id);
+});
 
 const maschinen = ref([]);
 const lieferanten = ref([]);

@@ -52,6 +52,12 @@ export const useStamm = defineStore('stamm', () => {
     return true;
   }
 
+  // Übernimmt einen Arbeitsplan, den der Server schon am Bauteil gespeichert hat (z. B. beim Anlegen eines Auftrags).
+  function planEintragen(kundeId, teilenummer, arbeitsgaenge) {
+    const k = teilKey(kundeId, teilenummer);
+    if (k) plaene.value[k] = kopie(arbeitsgaenge);
+  }
+
   const vorlagenFuer = (kundeId) => vorlagen.value.filter((v) => !v.kundeId || v.kundeId === kundeId);
 
   // Arbeitsgänge einer Vorlage mit neuen Ids, damit mehrfaches Anwenden nichts vermischt.
@@ -86,5 +92,5 @@ export const useStamm = defineStore('stamm', () => {
     if (await sicher(() => call('cnc_one.api.stamm.art_loeschen', { id }))) arten.value = arten.value.filter((a) => a.id !== id);
   }
 
-  return { arten, vorlagen, plaene, teilKey, hatPlan, planFuer, planSpeichern, vorlagenFuer, vorlageKopie, vorlageNeu, vorlageSpeichern, vorlageLoeschen, artHinzu, artSpeichern, artLoeschen };
+  return { arten, vorlagen, plaene, teilKey, hatPlan, planFuer, planSpeichern, planEintragen, vorlagenFuer, vorlageKopie, vorlageNeu, vorlageSpeichern, vorlageLoeschen, artHinzu, artSpeichern, artLoeschen };
 });
