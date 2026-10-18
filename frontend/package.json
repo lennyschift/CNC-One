@@ -1,0 +1,29 @@
+{
+  "name": "cnc-one-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "build": "vite build",
+    "build:app": "vite build --base=/assets/cnc_one/frontend/ --outDir ../cnc_one/public/frontend --emptyOutDir",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "latest",
+    "@formkit/auto-animate": "latest",
+    "@vueuse/core": "latest",
+    "@lucide/vue": "latest",
+    "pinia": "latest",
+    "vue": "latest",
+    "vue-router": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "latest",
+    "@vitejs/plugin-vue": "latest",
+    "tailwindcss": "latest",
+    "vite": "latest",
+    "vitest": "latest"
+  }
+}

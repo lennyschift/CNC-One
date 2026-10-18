@@ -1,0 +1,123 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f4f4f1;
+  --surface: #ffffff;
+  --surface-2: #faf9f6;
+  --line: #e7e5df;
+  --ink: #1a1a19;
+  --mute: #6d6b64;
+  --accent: #d4242a;
+  --accent-soft: #fdecec;
+  --ok: #1f9d63;
+  --warn: #d98a0b;
+  --ring: rgb(212 36 42 / 0.28);
+}
+.dark {
+  --bg: #0c0c0d;
+  --surface: #151518;
+  --surface-2: #1b1b1f;
+  --line: #28282e;
+  --ink: #f3f3f1;
+  --mute: #9a99a1;
+  --accent: #f0494e;
+  --accent-soft: #2a1517;
+  --ok: #3ccf8e;
+  --warn: #f0a93a;
+  --ring: rgb(240 73 78 / 0.35);
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-mute: var(--mute);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+}
+
+/* Angebotsvorschau: wie Papier, in Hell- und Dunkelmodus gleich */
+.paper {
+  background: #fff;
+  color: #1a1a19;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 18px 40px -20px rgb(0 0 0 / 0.35);
+}
+@media print {
+  body * { visibility: hidden; }
+  .paper, .paper * { visibility: visible; }
+  .paper { position: absolute; inset: 0 auto auto 0; width: 100%; box-shadow: none; border-radius: 0; }
+  .no-print { display: none !important; }
+}
+
+html, body, #app { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter Variable', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+.tnum { font-variant-numeric: tabular-nums; }
+::selection { background: var(--ring); }
+
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.02), 0 8px 24px -16px rgb(0 0 0 / 0.12);
+}
+.field {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.875rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.field:hover { border-color: color-mix(in srgb, var(--mute) 45%, var(--line)); }
+.field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); background: var(--surface); }
+.label { font-size: 0.7rem; font-weight: 500; letter-spacing: 0.02em; color: var(--mute); }
+.btn {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  border-radius: 10px; padding: 0.5rem 0.8rem; font-size: 0.85rem; font-weight: 500;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  transition: transform 0.12s, background 0.15s, border-color 0.15s, box-shadow 0.15s; cursor: pointer;
+}
+.btn:hover { border-color: color-mix(in srgb, var(--mute) 50%, var(--line)); background: var(--surface-2); }
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); border-color: transparent; }
+
+.kbd {
+  font-size: 0.68rem; font-weight: 500; padding: 0.1rem 0.4rem; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--mute);
+}
+
+/* Übergänge */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.18s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+.pop-enter-active { transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.pop-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
+.pop-enter-from, .pop-leave-to { opacity: 0; transform: translateY(8px) scale(0.97); }
+.slide-enter-active, .slide-leave-active { transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.slide-enter-from { opacity: 0; transform: translateX(14px); }
+.slide-leave-to { opacity: 0; transform: translateX(-10px); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
