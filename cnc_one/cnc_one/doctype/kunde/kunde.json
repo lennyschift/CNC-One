@@ -1,0 +1,147 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "kundenname",
+  "kuerzel",
+  "aktiv",
+  "sb_steuer",
+  "ust_id",
+  "steuernummer",
+  "zahlungsbedingung",
+  "leitweg_id",
+  "lieferantennummer",
+  "sb_adressen",
+  "adressen",
+  "kontakte"
+ ],
+ "fields": [
+  {
+   "fieldname": "kundenname",
+   "fieldtype": "Data",
+   "label": "Kunde",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "kuerzel",
+   "fieldtype": "Data",
+   "label": "Kürzel",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "aktiv",
+   "fieldtype": "Check",
+   "label": "Aktiv",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sb_steuer",
+   "fieldtype": "Section Break",
+   "label": "Steuer und Rechnung"
+  },
+  {
+   "fieldname": "ust_id",
+   "fieldtype": "Data",
+   "label": "USt-IdNr."
+  },
+  {
+   "fieldname": "steuernummer",
+   "fieldtype": "Data",
+   "label": "Steuernummer"
+  },
+  {
+   "fieldname": "zahlungsbedingung",
+   "fieldtype": "Data",
+   "label": "Zahlungsbedingung"
+  },
+  {
+   "fieldname": "leitweg_id",
+   "fieldtype": "Data",
+   "label": "Leitweg-ID / Käuferreferenz"
+  },
+  {
+   "fieldname": "lieferantennummer",
+   "fieldtype": "Data",
+   "label": "Lieferantennummer beim Kunden"
+  },
+  {
+   "fieldname": "sb_adressen",
+   "fieldtype": "Section Break",
+   "label": "Adressen und Kontakte"
+  },
+  {
+   "fieldname": "adressen",
+   "fieldtype": "Table",
+   "label": "Adressen",
+   "options": "Kunde Adresse"
+  },
+  {
+   "fieldname": "kontakte",
+   "fieldtype": "Table",
+   "label": "Kontakte",
+   "options": "Kunde Kontakt"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Kunde",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "read": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "K-.####",
+ "naming_rule": "Expression (old style)",
+ "title_field": "kundenname",
+ "show_title_field_in_link": 1,
+ "search_fields": "kundenname",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "users"
+}

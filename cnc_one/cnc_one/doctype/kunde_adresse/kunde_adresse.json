@@ -1,0 +1,66 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "typ",
+  "strasse",
+  "plz",
+  "ort",
+  "land",
+  "standard"
+ ],
+ "fields": [
+  {
+   "fieldname": "typ",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Rechnung und Lieferung\nRechnung\nLieferung",
+   "default": "Rechnung und Lieferung",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "strasse",
+   "fieldtype": "Data",
+   "label": "Straße und Nummer",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "plz",
+   "fieldtype": "Data",
+   "label": "PLZ",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "ort",
+   "fieldtype": "Data",
+   "label": "Ort",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "land",
+   "fieldtype": "Data",
+   "label": "Land (ISO-2)",
+   "default": "DE"
+  },
+  {
+   "fieldname": "standard",
+   "fieldtype": "Check",
+   "label": "Standard"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Kunde Adresse",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "autoname": "hash"
+}

@@ -1,0 +1,65 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "anrede",
+  "vorname",
+  "nachname",
+  "email",
+  "telefon",
+  "ist_rechnungskontakt"
+ ],
+ "fields": [
+  {
+   "fieldname": "anrede",
+   "fieldtype": "Select",
+   "label": "Anrede",
+   "options": "\nHerr\nFrau"
+  },
+  {
+   "fieldname": "vorname",
+   "fieldtype": "Data",
+   "label": "Vorname",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "nachname",
+   "fieldtype": "Data",
+   "label": "Nachname",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "E-Mail",
+   "options": "Email",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "telefon",
+   "fieldtype": "Data",
+   "label": "Telefon"
+  },
+  {
+   "fieldname": "ist_rechnungskontakt",
+   "fieldtype": "Check",
+   "label": "Rechnungskontakt"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Kunde Kontakt",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "autoname": "hash"
+}

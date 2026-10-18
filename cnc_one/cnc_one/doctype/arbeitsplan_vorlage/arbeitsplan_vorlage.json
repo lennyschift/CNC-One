@@ -1,0 +1,95 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "vorlagenname",
+  "kunde",
+  "arbeitsgaenge"
+ ],
+ "fields": [
+  {
+   "fieldname": "vorlagenname",
+   "fieldtype": "Data",
+   "label": "Name der Vorlage",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "kunde",
+   "fieldtype": "Link",
+   "label": "Nur für Kunde",
+   "options": "Kunde",
+   "in_list_view": 1,
+   "description": "leer = für alle Kunden"
+  },
+  {
+   "fieldname": "arbeitsgaenge",
+   "fieldtype": "Table",
+   "label": "Arbeitsgänge",
+   "options": "Arbeitsgang Plan"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Arbeitsplan Vorlage",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "VL-.####",
+ "naming_rule": "Expression (old style)",
+ "title_field": "vorlagenname",
+ "show_title_field_in_link": 1,
+ "search_fields": "vorlagenname",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "workflow"
+}

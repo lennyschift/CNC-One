@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>CNC One</title>
+	<script>
+		window.frappe_csrf_token = "{{ csrf_token }}";
+		try {
+			var t = localStorage.getItem('cnc-one:theme');
+			var dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+			document.documentElement.classList.toggle('dark', dark);
+		} catch (e) {}
+	</script>
+	{{ style_tags | safe }}
+	{{ script_tags | safe }}
+</head>
+<body>
+	<div id="app"></div>
+</body>
+</html>
