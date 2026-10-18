@@ -6,7 +6,7 @@ from frappe import _
 
 from cnc_one.api import auftrag as auftrag_api
 from cnc_one.api import bauteil as bauteil_api
-from cnc_one.api.stamm import arbeitsgang_ui, arbeitsgang_zeile, nur_cnc, typ_db, typ_ui
+from cnc_one.api.stamm import arbeitsgang_ui, arbeitsgang_zeile, ist_serienart, nur_cnc, serienart_namen, typ_db, typ_ui
 from cnc_one.logic.daten import datum, iso
 
 FERTIGUNG_ROLLEN = ("CNC Admin", "CNC Vertrieb", "CNC Fertigung", "System Manager")
@@ -38,6 +38,9 @@ def fb_ui(d):
 		"id": d.name,
 		"auftragId": d.auftrag,
 		"auftragPosKey": d.auftragsposition_key or "",
+		"serienVon": d.serien_von or None,
+		"serienBis": d.serien_bis or None,
+		"serienStellen": d.serien_stellen or 4,
 		"kundeId": d.kunde or "",
 		"kundeName": d.kunde_name or "",
 		"teil": {
@@ -104,6 +107,7 @@ def starten(auftrag):
 			"bezeichnung": pos.bezeichnung, "zeichnungsnr": pos.zeichnungsnr, "material": pos.material,
 			"menge": pos.menge, "termin": pos.liefertermin, "prioritaet": "Normal", "status": "Offen",
 			"roh_werkstoff": pos.material or "",
+			"serien_von": pos.serien_von or None, "serien_bis": pos.serien_bis or None, "serien_stellen": pos.serien_stellen or 4,
 		})
 		for a in plan:
 			zeile = arbeitsgang_zeile({**a, "id": None})
@@ -245,6 +249,7 @@ def felder_speichern(id, felder):
 	if notizen:
 		doc.pruefmasse = notizen.get("pruefmasse", doc.pruefmasse)
 		doc.bemerkungen = notizen.get("bemerkungen", doc.bemerkungen)
+	serienarten = serienart_namen()
 	for neu in felder.get("arbeitsgaenge") or []:
 		ag = next((a for a in doc.arbeitsgaenge if a.ag_id == neu.get("id")), None)
 		if not ag:
@@ -258,5 +263,6 @@ def felder_speichern(id, felder):
 		ag.fremd_pro_stk = neu.get("fremdProStk") or 0
 		ag.fremd_einmal = neu.get("fremdEinmal") or 0
 		ag.bestellung = neu.get("bestellung") or ""
+		ag.serie = 1 if ist_serienart(ag.bezeichnung, serienarten) else 0
 	doc.save()
 	return _antwort(doc)

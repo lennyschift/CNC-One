@@ -59,7 +59,7 @@ class TestStamm(IntegrationTestCase):
 		self.assertEqual([a["id"] for a in v["arbeitsgaenge"]], ["ag-1", "ag-2"])
 		self.assertEqual(v["arbeitsgaenge"][0], {
 			"id": "ag-1", "name": "Drehen", "typ": "intern", "maschine": "ZZ M1", "satz": 50, "ruestMin": 30,
-			"stueckMin": 2.5, "lieferant": "", "fremdProStk": 0, "fremdEinmal": 0, "anfrageId": "",
+			"stueckMin": 2.5, "lieferant": "", "fremdProStk": 0, "fremdEinmal": 0, "anfrageId": "", "serie": False,
 		})
 		self.assertEqual(v["arbeitsgaenge"][1]["typ"], "fremd")
 		self.assertEqual(v["arbeitsgaenge"][1]["fremdEinmal"], 40)

@@ -16,6 +16,7 @@ def bauteil_ui(d):
 		"material": d.material or "",
 		"arbeitsgaenge": [arbeitsgang_ui(r) for r in d.arbeitsplan],
 		"seriennummern": bool(d.seriennummern),
+		"serienStellen": d.serien_stellen or 4,
 		"letzteSeriennummer": d.letzte_seriennummer or 0,
 	}
 

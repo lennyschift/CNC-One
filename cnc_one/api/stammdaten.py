@@ -9,6 +9,7 @@ from frappe import _
 
 from cnc_one.api import bauteil as bauteil_api
 from cnc_one.api.stamm import arbeitsgang_ui, arbeitsgang_zeile, nur_cnc, stammdaten
+from cnc_one.logic.serien import hoechste
 
 
 def _text(v):
@@ -122,7 +123,12 @@ def bauteil_setzen(doc, d):
 	doc.material = material if material and frappe.db.exists("Material", material) else None
 	doc.status = d.get("status") if d.get("status") in ("Aktiv", "Gesperrt") else "Aktiv"
 	doc.seriennummern = 1 if d.get("seriennummern") else 0
-	doc.letzte_seriennummer = max(0, int(d.get("letzteSeriennummer") or 0))
+	stellen = min(9, max(1, int(d.get("serienStellen") or 4)))
+	letzte = max(0, int(d.get("letzteSeriennummer") or 0))
+	if letzte > hoechste(stellen):
+		frappe.throw(_("Die letzte Seriennummer {0} passt nicht in {1} Stellen.").format(letzte, stellen))
+	doc.serien_stellen = stellen
+	doc.letzte_seriennummer = letzte
 	doc.set("arbeitsplan", [])
 	for a in d.get("arbeitsgaenge") or []:
 		doc.append("arbeitsplan", arbeitsgang_zeile(a))

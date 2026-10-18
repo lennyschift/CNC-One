@@ -72,7 +72,17 @@ def arbeitsgang_ui(r):
 		"fremdProStk": r.fremd_pro_stk or 0,
 		"fremdEinmal": r.fremd_einmal or 0,
 		"anfrageId": r.anfrage or "",
+		"serie": bool(r.serie),
 	}
+
+
+def serienart_namen():
+	"""Namen der Arbeitsgangarten, die Seriennummern anbringen (kleingeschrieben)."""
+	return {(n or "").strip().lower() for n in frappe.get_all("Arbeitsgangart", filters={"serie": 1}, pluck="bezeichnung")}
+
+
+def ist_serienart(name, namen=None):
+	return (name or "").strip().lower() in (namen if namen is not None else serienart_namen())
 
 
 def arbeitsgang_zeile(a):
@@ -89,6 +99,8 @@ def arbeitsgang_zeile(a):
 		"fremd_pro_stk": a.get("fremdProStk") or 0,
 		"fremd_einmal": a.get("fremdEinmal") or 0,
 		"anfrage": a.get("anfrageId") or "",
+		# ob der Arbeitsgang Seriennummern anbringt, ergibt sich allein aus der Arbeitsgangart (dem Namen)
+		"serie": 1 if ist_serienart(a.get("name")) else 0,
 	}
 
 
@@ -119,7 +131,7 @@ def vorlage_ui(d):
 
 
 def art_ui(d):
-	return {"id": d.name, "name": d.bezeichnung, "typ": typ_ui(d.typ)}
+	return {"id": d.name, "name": d.bezeichnung, "typ": typ_ui(d.typ), "serie": bool(d.serie)}
 
 
 # ----------------------------------------------------------------- Lesen
