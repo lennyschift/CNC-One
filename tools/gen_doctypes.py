@@ -140,6 +140,48 @@ DOCTYPES = [
     ]),
 ]
 
+DOCTYPES += [
+    dict(name="Bauteil", autoname="BT-.#####", title="bezeichnung", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung")), icon="package", fields=[
+        Link("kunde", "Kunde", "Kunde", reqd=1, in_list_view=1, in_standard_filter=1),
+        Data("teilenummer", "Teilenummer", reqd=1, in_list_view=1, in_standard_filter=1),
+        Data("bezeichnung", "Bezeichnung", in_list_view=1),
+        Data("zeichnungsnr", "Zeichnungsnummer"),
+        Data("revision", "Revision"),
+        Link("material", "Material", "Werkstoff"),
+        Select("status", ["Aktiv", "Gesperrt"], "Status", default="Aktiv", in_list_view=1),
+        Section("sb_dateien", "Dateien"),
+        F("vorschaubild", "Attach Image", "Vorschaubild", description="entsteht später aus dem STEP-Modell"),
+        F("step_datei", "Attach", "STEP-Modell"),
+        Section("sb_plan", "Arbeitsplan"),
+        Table("arbeitsplan", "Arbeitsgang Plan", "Arbeitsgänge"),
+    ]),
+    dict(name="Angebotsposition", istable=1, fields=[
+        Data("position_key", "Schlüssel", read_only=1, description="Kennung der Position aus der Workbench"),
+        Link("bauteil", "Bauteil", "Bauteil", in_list_view=1),
+        Data("teilenummer", "Teilenummer", read_only=1, in_list_view=1),
+        Data("bezeichnung", "Bezeichnung", read_only=1, in_list_view=1),
+        Data("zeichnungsnr", "Zeichnungsnummer", read_only=1),
+        Data("material", "Werkstoff", read_only=1),
+        Int("menge", "Menge", read_only=1, in_list_view=1),
+        Money("netto", "Netto", read_only=1, in_list_view=1),
+        Json("kalkulation", "Kalkulation (Eingaben)"),
+        Json("ergebnis", "Ergebnis (vom Server berechnet)", read_only=1),
+    ]),
+    dict(name="Angebot", autoname="ANG-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="file-text", extra={"search_fields": "kunde_name,anfrage_nr"}, fields=[
+        Link("kunde", "Kunde", "Kunde", in_list_view=1, in_standard_filter=1),
+        Data("kunde_name", "Kundenname", read_only=1, in_list_view=1),
+        Select("status", ["Entwurf", "Gesendet", "Abgelehnt"], "Status", default="Entwurf", read_only=1, in_list_view=1, in_standard_filter=1),
+        Money("netto", "Netto", read_only=1, in_list_view=1),
+        Section("sb_kopf", "Angaben"),
+        Data("anfrage_nr", "Anfrage-Nr. des Kunden"),
+        Int("gueltig_wochen", "Gültig (Wochen)", default="4"),
+        Data("lieferzeit", "Lieferzeit", default="Nach Absprache"),
+        F("versandt_am", "Datetime", "Gesendet am", read_only=1),
+        Section("sb_pos", "Positionen"),
+        Table("positionen", "Angebotsposition", "Positionen"),
+    ]),
+]
+
 
 def doctype_json(d):
     fields = d["fields"]
