@@ -86,6 +86,12 @@ export const useRechnung = defineStore('rechnung', () => {
     return res;
   }
 
+  async function eRechnungNeu(id) {
+    const rec = await sicher(() => call('cnc_one.api.erechnung.neu_erzeugen', { id }));
+    if (rec) { einsetzen(rechnungen, rec); ui.toast(rec.eRechnung.hinweis ? 'E-Rechnung erzeugt, es fehlen noch Angaben' : 'E-Rechnung erzeugt', rec.eRechnung.hinweis ? 'warn' : 'ok'); }
+    return rec;
+  }
+
   // ---- Zahlung
   async function zahlungErfassen(rechnungId, werte) {
     const rec = await sicher(() => call('cnc_one.api.rechnung.zahlung_erfassen', { rechnung: rechnungId, ...werte }));
@@ -130,7 +136,7 @@ export const useRechnung = defineStore('rechnung', () => {
   }
 
   return {
-    rechnungen, mahnungen, rechnung, mahnung, fuerAuftrag, neuLaden, vorschlag, anlegen, speichern, verwerfen, festschreiben, stornieren,
+    rechnungen, mahnungen, rechnung, mahnung, fuerAuftrag, neuLaden, vorschlag, anlegen, speichern, verwerfen, festschreiben, stornieren, eRechnungNeu,
     zahlungErfassen, zahlungStornieren, mahnVorschlag, mahnungAnlegen, mahnungVersendet, mahnungZurueckziehen,
   };
 });

@@ -41,6 +41,7 @@ async function speichern() {
           <label class="block"><span class="label mb-1 block">Telefon</span><input v-model="f.telefon" class="field" :disabled="!darf" /></label>
           <label class="block"><span class="label mb-1 block">E-Mail</span><input v-model="f.email" class="field" :disabled="!darf" /></label>
           <label class="block"><span class="label mb-1 block">Webseite</span><input v-model="f.web" class="field" :disabled="!darf" /></label>
+          <label class="block"><span class="label mb-1 block">Ansprechpartner für Rechnungen</span><input v-model="f.ansprechpartner" class="field" placeholder="Name, für die E-Rechnung" :disabled="!darf" /></label>
         </div>
         <p class="mt-3 text-xs text-mute">Das Logo lässt sich später hier ergänzen.</p>
       </section>
