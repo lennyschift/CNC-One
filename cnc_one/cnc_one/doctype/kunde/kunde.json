@@ -13,6 +13,7 @@
   "zahlungsbedingung",
   "leitweg_id",
   "lieferantennummer",
+  "zahlungsziel_tage",
   "sb_adressen",
   "adressen",
   "kontakte"
@@ -67,6 +68,12 @@
    "fieldname": "lieferantennummer",
    "fieldtype": "Data",
    "label": "Lieferantennummer beim Kunden"
+  },
+  {
+   "fieldname": "zahlungsziel_tage",
+   "fieldtype": "Int",
+   "label": "Zahlungsziel (Tage)",
+   "description": "0 = Standard aus den Firmendaten"
   },
   {
    "fieldname": "sb_adressen",

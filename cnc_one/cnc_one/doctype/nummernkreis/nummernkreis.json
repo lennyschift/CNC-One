@@ -1,0 +1,80 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "schluessel",
+  "aktuell"
+ ],
+ "fields": [
+  {
+   "fieldname": "schluessel",
+   "fieldtype": "Data",
+   "label": "Schlüssel",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "description": "z. B. Rechnung-2026"
+  },
+  {
+   "fieldname": "aktuell",
+   "fieldtype": "Int",
+   "label": "Zuletzt vergebene Nummer",
+   "read_only": 1,
+   "in_list_view": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Nummernkreis",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "read": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "read": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "field:schluessel",
+ "naming_rule": "By fieldname",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "hash"
+}

@@ -6,7 +6,8 @@
  "field_order": [
   "position_key",
   "bezeichnung",
-  "betrag"
+  "betrag",
+  "abgerechnet_in"
  ],
  "fields": [
   {
@@ -28,6 +29,13 @@
    "label": "Betrag",
    "precision": "2",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "abgerechnet_in",
+   "fieldtype": "Data",
+   "label": "Abgerechnet in Rechnung",
+   "read_only": 1,
+   "description": "Sonderkosten werden in der ersten Rechnung vollständig abgerechnet"
   }
  ],
  "links": [],

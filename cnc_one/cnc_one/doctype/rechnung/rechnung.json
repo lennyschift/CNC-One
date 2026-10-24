@@ -1,0 +1,347 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "rechnungsnummer",
+  "kunde",
+  "kunde_name",
+  "auftrag",
+  "art",
+  "status",
+  "rechnungsdatum",
+  "leistung_von",
+  "leistung_bis",
+  "zahlungsziel_tage",
+  "faellig_am",
+  "sb_summen",
+  "netto",
+  "steuersatz",
+  "steuerbetrag",
+  "brutto",
+  "bezahlt",
+  "offen",
+  "steuerschluessel",
+  "sb_kopf",
+  "kundenbestellnr",
+  "rechnungsadresse",
+  "kunde_ust_id",
+  "leitweg_id",
+  "einleitung",
+  "bemerkung",
+  "zahlungshinweis",
+  "fusstext",
+  "firma_snapshot",
+  "sb_pos",
+  "positionen",
+  "sb_gobd",
+  "festgeschrieben_am",
+  "festgeschrieben_von",
+  "inhalt_hash",
+  "storno_zu",
+  "storniert_durch",
+  "storno_grund"
+ ],
+ "fields": [
+  {
+   "fieldname": "rechnungsnummer",
+   "fieldtype": "Data",
+   "label": "Rechnungsnummer",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "wird beim Festschreiben lückenlos vergeben"
+  },
+  {
+   "fieldname": "kunde",
+   "fieldtype": "Link",
+   "label": "Kunde",
+   "options": "Kunde",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "kunde_name",
+   "fieldtype": "Data",
+   "label": "Kundenname",
+   "read_only": 1
+  },
+  {
+   "fieldname": "auftrag",
+   "fieldtype": "Link",
+   "label": "Auftrag",
+   "options": "Auftrag",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "art",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Gesamtrechnung\nTeilrechnung\nStorno",
+   "default": "Gesamtrechnung",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Entwurf\nOffen\nTeilbezahlt\nBezahlt\nStorniert\nGutschrift",
+   "default": "Entwurf",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "rechnungsdatum",
+   "fieldtype": "Date",
+   "label": "Rechnungsdatum",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "leistung_von",
+   "fieldtype": "Date",
+   "label": "Leistungsdatum von"
+  },
+  {
+   "fieldname": "leistung_bis",
+   "fieldtype": "Date",
+   "label": "Leistungsdatum bis"
+  },
+  {
+   "fieldname": "zahlungsziel_tage",
+   "fieldtype": "Int",
+   "label": "Zahlungsziel (Tage)"
+  },
+  {
+   "fieldname": "faellig_am",
+   "fieldtype": "Date",
+   "label": "Fällig am",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sb_summen",
+   "fieldtype": "Section Break",
+   "label": "Summen"
+  },
+  {
+   "fieldname": "netto",
+   "fieldtype": "Currency",
+   "label": "Netto",
+   "precision": "2",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "steuersatz",
+   "fieldtype": "Float",
+   "label": "Steuersatz (%)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "steuerbetrag",
+   "fieldtype": "Currency",
+   "label": "Umsatzsteuer",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "brutto",
+   "fieldtype": "Currency",
+   "label": "Brutto",
+   "precision": "2",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "bezahlt",
+   "fieldtype": "Currency",
+   "label": "Bezahlt",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "offen",
+   "fieldtype": "Currency",
+   "label": "Offen",
+   "precision": "2",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "steuerschluessel",
+   "fieldtype": "Link",
+   "label": "Steuerschlüssel",
+   "options": "Steuerschluessel"
+  },
+  {
+   "fieldname": "sb_kopf",
+   "fieldtype": "Section Break",
+   "label": "Angaben"
+  },
+  {
+   "fieldname": "kundenbestellnr",
+   "fieldtype": "Data",
+   "label": "Bestellnummer des Kunden"
+  },
+  {
+   "fieldname": "rechnungsadresse",
+   "fieldtype": "Small Text",
+   "label": "Rechnungsadresse (zum Zeitpunkt der Rechnung)"
+  },
+  {
+   "fieldname": "kunde_ust_id",
+   "fieldtype": "Data",
+   "label": "USt-IdNr. des Kunden"
+  },
+  {
+   "fieldname": "leitweg_id",
+   "fieldtype": "Data",
+   "label": "Leitweg-ID"
+  },
+  {
+   "fieldname": "einleitung",
+   "fieldtype": "Small Text",
+   "label": "Einleitungstext"
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung"
+  },
+  {
+   "fieldname": "zahlungshinweis",
+   "fieldtype": "Small Text",
+   "label": "Zahlungshinweis mit Bankverbindungen"
+  },
+  {
+   "fieldname": "fusstext",
+   "fieldtype": "Small Text",
+   "label": "Fußtext"
+  },
+  {
+   "fieldname": "firma_snapshot",
+   "fieldtype": "JSON",
+   "label": "Firmendaten zum Zeitpunkt der Rechnung",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sb_pos",
+   "fieldtype": "Section Break",
+   "label": "Positionen"
+  },
+  {
+   "fieldname": "positionen",
+   "fieldtype": "Table",
+   "label": "Positionen",
+   "options": "Rechnungsposition"
+  },
+  {
+   "fieldname": "sb_gobd",
+   "fieldtype": "Section Break",
+   "label": "Festschreibung und Storno"
+  },
+  {
+   "fieldname": "festgeschrieben_am",
+   "fieldtype": "Datetime",
+   "label": "Festgeschrieben am",
+   "read_only": 1
+  },
+  {
+   "fieldname": "festgeschrieben_von",
+   "fieldtype": "Data",
+   "label": "Festgeschrieben von",
+   "read_only": 1
+  },
+  {
+   "fieldname": "inhalt_hash",
+   "fieldtype": "Data",
+   "label": "Prüfsumme des Inhalts",
+   "read_only": 1,
+   "description": "SHA-256 über den festgeschriebenen Inhalt"
+  },
+  {
+   "fieldname": "storno_zu",
+   "fieldtype": "Link",
+   "label": "Storno zu Rechnung",
+   "options": "Rechnung",
+   "read_only": 1
+  },
+  {
+   "fieldname": "storniert_durch",
+   "fieldtype": "Link",
+   "label": "Storniert durch",
+   "options": "Rechnung",
+   "read_only": 1
+  },
+  {
+   "fieldname": "storno_grund",
+   "fieldtype": "Data",
+   "label": "Stornogrund",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Rechnung",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "ENT-RE-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "receipt",
+ "search_fields": "rechnungsnummer,kunde_name,auftrag"
+}

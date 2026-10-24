@@ -1,0 +1,132 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "zeilen_id",
+  "art",
+  "bauteil",
+  "teilenummer",
+  "bezeichnung",
+  "zeichnungsnr",
+  "menge",
+  "einheit",
+  "einzelpreis",
+  "netto",
+  "auftragsposition_key",
+  "auftragskosten_name",
+  "lieferungen",
+  "lieferungen_text",
+  "serien_text"
+ ],
+ "fields": [
+  {
+   "fieldname": "zeilen_id",
+   "fieldtype": "Data",
+   "label": "Zeile",
+   "read_only": 1,
+   "in_list_view": 1,
+   "description": "1, 1.1 ... wie in der E-Rechnung"
+  },
+  {
+   "fieldname": "art",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Bauteil\nSonderkosten",
+   "default": "Bauteil",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "bauteil",
+   "fieldtype": "Link",
+   "label": "Bauteil",
+   "options": "Bauteil"
+  },
+  {
+   "fieldname": "teilenummer",
+   "fieldtype": "Data",
+   "label": "Teilenummer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bezeichnung",
+   "fieldtype": "Data",
+   "label": "Bezeichnung",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "zeichnungsnr",
+   "fieldtype": "Data",
+   "label": "Zeichnungsnummer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "menge",
+   "fieldtype": "Int",
+   "label": "Menge",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "einheit",
+   "fieldtype": "Data",
+   "label": "Einheit",
+   "default": "Stk"
+  },
+  {
+   "fieldname": "einzelpreis",
+   "fieldtype": "Currency",
+   "label": "Einzelpreis",
+   "precision": "2",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "netto",
+   "fieldtype": "Currency",
+   "label": "Zeilenbetrag netto",
+   "precision": "2",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "auftragsposition_key",
+   "fieldtype": "Data",
+   "label": "Auftragsposition",
+   "read_only": 1
+  },
+  {
+   "fieldname": "auftragskosten_name",
+   "fieldtype": "Data",
+   "label": "Kostenzeile im Auftrag",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lieferungen",
+   "fieldtype": "JSON",
+   "label": "Lieferscheine mit Mengen"
+  },
+  {
+   "fieldname": "lieferungen_text",
+   "fieldtype": "Small Text",
+   "label": "Geliefert mit"
+  },
+  {
+   "fieldname": "serien_text",
+   "fieldtype": "Data",
+   "label": "Seriennummern"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Rechnungsposition",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "autoname": "hash"
+}

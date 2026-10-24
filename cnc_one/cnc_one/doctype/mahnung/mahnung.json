@@ -1,0 +1,153 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "rechnung",
+  "kunde",
+  "kunde_name",
+  "stufe",
+  "status",
+  "datum",
+  "frist_bis",
+  "offener_betrag",
+  "gebuehr",
+  "versandt_am",
+  "text"
+ ],
+ "fields": [
+  {
+   "fieldname": "rechnung",
+   "fieldtype": "Link",
+   "label": "Rechnung",
+   "options": "Rechnung",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "kunde",
+   "fieldtype": "Link",
+   "label": "Kunde",
+   "options": "Kunde",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "kunde_name",
+   "fieldtype": "Data",
+   "label": "Kundenname",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stufe",
+   "fieldtype": "Select",
+   "label": "Stufe",
+   "options": "Zahlungserinnerung\n1. Mahnung\n2. Mahnung",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Angelegt\nVersendet\nErledigt\nZurückgezogen",
+   "default": "Angelegt",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "datum",
+   "fieldtype": "Date",
+   "label": "Datum",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "frist_bis",
+   "fieldtype": "Date",
+   "label": "Zahlen bis",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "offener_betrag",
+   "fieldtype": "Currency",
+   "label": "Offener Betrag",
+   "precision": "2"
+  },
+  {
+   "fieldname": "gebuehr",
+   "fieldtype": "Currency",
+   "label": "Mahngebühr",
+   "precision": "2"
+  },
+  {
+   "fieldname": "versandt_am",
+   "fieldtype": "Date",
+   "label": "Versendet am",
+   "read_only": 1
+  },
+  {
+   "fieldname": "text",
+   "fieldtype": "Small Text",
+   "label": "Text der Mahnung"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Mahnung",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "read": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "MA-.YYYY.-.####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "bell",
+ "search_fields": "rechnung,kunde_name"
+}

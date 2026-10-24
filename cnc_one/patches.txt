@@ -4,3 +4,4 @@ cnc_one.patches.v0_1.rollen_anlegen
 [post_model_sync]
 cnc_one.patches.v0_1.serienart_anlegen
 cnc_one.patches.v0_1.lager_aus_fertigung
+cnc_one.patches.v0_1.rechnung_grundausstattung
