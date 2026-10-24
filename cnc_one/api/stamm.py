@@ -143,7 +143,7 @@ def _namen(doctype, filters=None, order_by="creation asc"):
 def bootstrap():
 	"""Alles, was die Oberfläche beim Start braucht: Benutzer und Stammdaten."""
 	nur_cnc()
-	from cnc_one.api import anfrage, angebot, auftrag, bauteil, fertigung, lager, lieferschein
+	from cnc_one.api import anfrage, angebot, auftrag, bauteil, fertigung, firma, lager, lieferschein, mahnung, rechnung
 
 	user = frappe.session.user
 	return {
@@ -155,6 +155,9 @@ def bootstrap():
 		"fertigung": fertigung.alle_ui(),
 		"anfragen": anfrage.alle_ui(),
 		"lieferscheine": lieferschein.alle_ui(),
+		"rechnungen": rechnung.alle_ui(),
+		"mahnungen": mahnung.alle_ui(),
+		"firma": firma.firma_ui(),
 		"lager": lager.bestand_ui(),
 	}
 

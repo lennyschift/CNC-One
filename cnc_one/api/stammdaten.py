@@ -28,6 +28,7 @@ def kunde_voll_ui(d):
 		"zahlungsbedingung": d.zahlungsbedingung or "",
 		"leitwegId": d.leitweg_id or "",
 		"lieferantennr": d.lieferantennummer or "",
+		"zahlungszielTage": d.zahlungsziel_tage or 0,
 		"adressen": [
 			{"typ": a.typ or "Rechnung und Lieferung", "strasse": a.strasse or "", "plz": a.plz or "", "ort": a.ort or "", "land": a.land or "", "standard": bool(a.standard)}
 			for a in d.adressen
@@ -51,6 +52,7 @@ def kunde_setzen(doc, d):
 	doc.zahlungsbedingung = _text(d.get("zahlungsbedingung"))
 	doc.leitweg_id = _text(d.get("leitwegId"))
 	doc.lieferantennummer = _text(d.get("lieferantennr"))
+	doc.zahlungsziel_tage = max(0, int(d.get("zahlungszielTage") or 0))
 	doc.set("adressen", [])
 	adressen = [a for a in d.get("adressen") or [] if any(_text(a.get(k)) for k in ("strasse", "plz", "ort"))]
 	for i, a in enumerate(adressen):

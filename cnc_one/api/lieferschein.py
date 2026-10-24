@@ -5,7 +5,7 @@ from frappe import _
 from frappe.utils import today
 
 from cnc_one.api.stamm import nur_cnc
-from cnc_one.logic import lager
+from cnc_one.logic import abrechnung, lager
 from cnc_one.logic.daten import datum, iso
 from cnc_one.logic.lieferung import geliefert_je_position
 from cnc_one.logic.serien import STANDARD_STELLEN, bereich, hoechste
@@ -23,8 +23,10 @@ def adresse_zeilen(kunde):
 	return zeilen
 
 
-def lieferschein_ui(d):
+def lieferschein_ui(d, rechnungen=None):
+	rechnungen = abrechnung.rechnungen_je_lieferschein().get(d.name, []) if rechnungen is None else rechnungen.get(d.name, [])
 	return {
+		"rechnungen": rechnungen,
 		"id": d.name,
 		"kundeId": d.kunde,
 		"kundeName": d.kunde_name or "",
@@ -53,7 +55,8 @@ def lieferschein_ui(d):
 
 def alle_ui():
 	namen = frappe.get_list("Lieferschein", pluck="name", order_by="creation desc", limit_page_length=0)
-	return [lieferschein_ui(frappe.get_doc("Lieferschein", n)) for n in namen]
+	je_ls = abrechnung.rechnungen_je_lieferschein()
+	return [lieferschein_ui(frappe.get_doc("Lieferschein", n), je_ls) for n in namen]
 
 
 @frappe.whitelist(methods=["POST"])
