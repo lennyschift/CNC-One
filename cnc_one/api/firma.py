@@ -19,8 +19,8 @@ def firma_ui(d=None):
 		"adresse": [z for z in (d.strasse, ort) if z],
 		"telefon": d.telefon or "", "email": d.email or "", "web": d.web or "",
 		"steuernummer": d.steuernummer or "", "ustId": d.ust_id or "",
-		"handelsregister": d.handelsregister or "", "geschaeftsfuehrer": d.geschaeftsfuehrer or "",
-		"banken": [{"bezeichnung": b.bezeichnung or "", "iban": iban_formatiert(b.iban), "bic": b.bic or ""} for b in d.banken],
+			"handelsregister": d.handelsregister or "", "geschaeftsfuehrer": d.geschaeftsfuehrer or "", "ansprechpartner": d.ansprechpartner or "",
+			"banken": [{"bezeichnung": b.bezeichnung or "", "iban": iban_formatiert(b.iban), "bic": b.bic or ""} for b in d.banken],
 		"rechnungText": d.rechnung_text or "", "rechnungFusstext": d.rechnung_fusstext or "",
 		"zahlungszielTage": d.zahlungsziel_tage or 14,
 		"mahnfristTage": d.mahnfrist_tage or 7,
@@ -46,7 +46,7 @@ def speichern(daten):
 	zuordnung = {
 		"firmenname": "firmenname", "rechtsform": "rechtsform", "strasse": "strasse", "plz": "plz", "ort": "ort", "land": "land",
 		"telefon": "telefon", "email": "email", "web": "web", "steuernummer": "steuernummer", "ustId": "ust_id",
-		"handelsregister": "handelsregister", "geschaeftsfuehrer": "geschaeftsfuehrer",
+		"handelsregister": "handelsregister", "geschaeftsfuehrer": "geschaeftsfuehrer", "ansprechpartner": "ansprechpartner",
 		"rechnungText": "rechnung_text", "rechnungFusstext": "rechnung_fusstext",
 	}
 	for ui, feld in zuordnung.items():

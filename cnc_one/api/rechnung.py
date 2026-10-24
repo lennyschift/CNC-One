@@ -9,7 +9,7 @@ from frappe.utils import getdate, now_datetime, today
 
 from cnc_one.api.firma import firma_ui
 from cnc_one.api.stamm import nur_cnc
-from cnc_one.logic import abrechnung, nummernkreis
+from cnc_one.logic import abrechnung, erechnung, nummernkreis
 from cnc_one.logic.daten import datum, iso
 from cnc_one.logic.kalkulation import r2
 from cnc_one.logic.lieferung import geliefert_je_position
@@ -56,6 +56,11 @@ def rechnung_ui(d):
 		"steuersatz": d.steuersatz or 0,
 		"netto": d.netto or 0, "steuerbetrag": d.steuerbetrag or 0, "brutto": d.brutto or 0, "bezahlt": d.bezahlt or 0, "offen": d.offen or 0,
 		"stornoZu": d.storno_zu or "", "storniertDurch": d.storniert_durch or "", "stornoGrund": d.storno_grund or "",
+		"eRechnung": {
+			"status": d.erechnung_status or "", "hinweis": d.erechnung_hinweis or "",
+			"pdf": d.erechnung_status in ("ZUGFeRD und XRechnung", "ZUGFeRD", "Nur PDF"), "zugferd": d.erechnung_status in ("ZUGFeRD und XRechnung", "ZUGFeRD"),
+			"xrechnung": d.erechnung_status == "ZUGFeRD und XRechnung",
+		},
 		"festgeschriebenAm": iso(d.festgeschrieben_am), "festgeschriebenVon": d.festgeschrieben_von or "", "inhaltHash": d.inhalt_hash or "",
 		"positionen": [
 			{
@@ -131,10 +136,25 @@ def vorschlag(auftrag):
 
 
 # ------------------------------------------------------------------ Entwurf anlegen
-def _rechnungsadresse(kunde):
-	a = next((x for x in kunde.adressen if x.typ in ("Rechnung", "Rechnung und Lieferung") and x.standard), None) \
+def _adresse_des_kunden(kunde):
+	return next((x for x in kunde.adressen if x.typ in ("Rechnung", "Rechnung und Lieferung") and x.standard), None) \
 		or next((x for x in kunde.adressen if x.typ in ("Rechnung", "Rechnung und Lieferung")), None) \
 		or (kunde.adressen[0] if kunde.adressen else None)
+
+
+def kaeufer_felder(kunde):
+	"""Empfängerdaten für die E-Rechnung (als Snapshot an der Rechnung): Anschrift der Rechnungsadresse, E-Mail des Rechnungskontakts."""
+	a = _adresse_des_kunden(kunde)
+	kontakt = next((k for k in kunde.kontakte if k.ist_rechnungskontakt and k.email), None) or next((k for k in kunde.kontakte if k.email), None)
+	return {
+		"kunde_email": (kontakt.email if kontakt else "") or "",
+		"kunde_strasse": (a.strasse if a else "") or "", "kunde_plz": (a.plz if a else "") or "", "kunde_ort": (a.ort if a else "") or "",
+		"kunde_land": (erechnung.laendercode(a.land) or a.land) if a else "DE",
+	}
+
+
+def _rechnungsadresse(kunde):
+	a = _adresse_des_kunden(kunde)
 	zeilen = [kunde.kundenname]
 	if a:
 		land = a.land if (a.land or "").strip().upper() not in ("", "DE", "DEUTSCHLAND") else ""
@@ -232,6 +252,7 @@ def anlegen(auftrag, art, mengen=None, rechnungsdatum=None, bemerkung=""):
 	doc.rechnungsadresse = "\n".join(_rechnungsadresse(kunde))
 	doc.kunde_ust_id = kunde.ust_id or ""
 	doc.leitweg_id = kunde.leitweg_id or ""
+	doc.update(kaeufer_felder(kunde))
 	doc.einleitung = firma["rechnungText"]
 	doc.bemerkung = (bemerkung or "").strip()
 	schluessel, satz = _steuer()
@@ -353,6 +374,13 @@ def _zahlungshinweis(firma, nummer):
 	return "\n".join(zeilen)
 
 
+def _erechnung(doc):
+	"""E-Rechnung (PDF/A-3 mit ZUGFeRD, XRechnung) zur festgeschriebenen Rechnung ablegen; ein Fehler hält das Festschreiben nicht auf."""
+	from cnc_one.api import erechnung as ablage
+
+	ablage.erzeugen_sicher(doc)
+
+
 @frappe.whitelist(methods=["POST"])
 def festschreiben(id):
 	"""Schreibt den Entwurf fest: lückenlose Rechnungsnummer, Rechnungsdatum heute, Firmendaten als Snapshot, Prüfsumme.
@@ -391,7 +419,8 @@ def festschreiben(id):
 	for z in doc.positionen:
 		if z.art == "Sonderkosten" and z.auftragskosten_name:
 			frappe.db.set_value("Auftragskosten", z.auftragskosten_name, "abgerechnet_in", doc.name, update_modified=False)
-	return rechnung_ui(doc)
+	_erechnung(doc)
+	return rechnung_ui(frappe.get_doc("Rechnung", doc.name))
 
 
 @frappe.whitelist(methods=["POST"])
@@ -406,7 +435,8 @@ def stornieren(id, grund):
 		frappe.throw(_("Nur eine festgeschriebene Rechnung lässt sich stornieren."))
 	heute = getdate(today())
 	s = frappe.new_doc("Rechnung")
-	for f in ("kunde", "auftrag", "kundenbestellnr", "rechnungsadresse", "kunde_ust_id", "leitweg_id", "steuerschluessel", "steuersatz", "firma_snapshot", "fusstext"):
+	for f in ("kunde", "auftrag", "kundenbestellnr", "rechnungsadresse", "kunde_ust_id", "leitweg_id", "kunde_email", "kunde_strasse", "kunde_plz", "kunde_ort", "kunde_land",
+	"steuerschluessel", "steuersatz", "firma_snapshot", "fusstext"):
 		s.set(f, orig.get(f))
 	s.art = "Storno"
 	s.status = "Gutschrift"
@@ -439,6 +469,7 @@ def stornieren(id, grund):
 			frappe.db.set_value("Auftragskosten", z.auftragskosten_name, "abgerechnet_in", None, update_modified=False)
 	for m in frappe.get_all("Mahnung", filters={"rechnung": orig.name, "status": ["in", ["Angelegt", "Versendet"]]}, pluck="name"):
 		frappe.db.set_value("Mahnung", m, "status", "Zurückgezogen", update_modified=False)
+	_erechnung(s)
 	return {"storno": rechnung_ui(frappe.get_doc("Rechnung", s.name)), "original": rechnung_ui(frappe.get_doc("Rechnung", orig.name))}
 
 

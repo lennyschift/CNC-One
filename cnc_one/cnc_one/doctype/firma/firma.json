@@ -18,6 +18,7 @@
   "ust_id",
   "handelsregister",
   "geschaeftsfuehrer",
+  "ansprechpartner",
   "sb_bank",
   "banken",
   "sb_beleg",
@@ -101,6 +102,12 @@
    "fieldname": "geschaeftsfuehrer",
    "fieldtype": "Data",
    "label": "Geschäftsführer"
+  },
+  {
+   "fieldname": "ansprechpartner",
+   "fieldtype": "Data",
+   "label": "Ansprechpartner für Rechnungen",
+   "description": "Pflicht für die E-Rechnung (XRechnung)"
   },
   {
    "fieldname": "sb_bank",

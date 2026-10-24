@@ -28,6 +28,11 @@
   "rechnungsadresse",
   "kunde_ust_id",
   "leitweg_id",
+  "kunde_email",
+  "kunde_strasse",
+  "kunde_plz",
+  "kunde_ort",
+  "kunde_land",
   "einleitung",
   "bemerkung",
   "zahlungshinweis",
@@ -35,6 +40,9 @@
   "firma_snapshot",
   "sb_pos",
   "positionen",
+  "sb_erechnung",
+  "erechnung_status",
+  "erechnung_hinweis",
   "sb_gobd",
   "festgeschrieben_am",
   "festgeschrieben_von",
@@ -204,6 +212,32 @@
    "label": "Leitweg-ID"
   },
   {
+   "fieldname": "kunde_email",
+   "fieldtype": "Data",
+   "label": "E-Mail des Rechnungsempfängers"
+  },
+  {
+   "fieldname": "kunde_strasse",
+   "fieldtype": "Data",
+   "label": "Straße des Empfängers"
+  },
+  {
+   "fieldname": "kunde_plz",
+   "fieldtype": "Data",
+   "label": "PLZ des Empfängers"
+  },
+  {
+   "fieldname": "kunde_ort",
+   "fieldtype": "Data",
+   "label": "Ort des Empfängers"
+  },
+  {
+   "fieldname": "kunde_land",
+   "fieldtype": "Data",
+   "label": "Ländercode des Empfängers",
+   "default": "DE"
+  },
+  {
    "fieldname": "einleitung",
    "fieldtype": "Small Text",
    "label": "Einleitungstext"
@@ -239,6 +273,23 @@
    "fieldtype": "Table",
    "label": "Positionen",
    "options": "Rechnungsposition"
+  },
+  {
+   "fieldname": "sb_erechnung",
+   "fieldtype": "Section Break",
+   "label": "E-Rechnung"
+  },
+  {
+   "fieldname": "erechnung_status",
+   "fieldtype": "Data",
+   "label": "Stand der E-Rechnung",
+   "read_only": 1
+  },
+  {
+   "fieldname": "erechnung_hinweis",
+   "fieldtype": "Small Text",
+   "label": "Hinweis zur E-Rechnung",
+   "read_only": 1
   },
   {
    "fieldname": "sb_gobd",
