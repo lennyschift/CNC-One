@@ -11,6 +11,11 @@ import FertigungView from './views/FertigungView.vue';
 import FertigungDetailView from './views/FertigungDetailView.vue';
 import AnfragenListView from './views/AnfragenListView.vue';
 import AnfrageDetailView from './views/AnfrageDetailView.vue';
+import RechnungListView from './views/RechnungListView.vue';
+import RechnungDetailView from './views/RechnungDetailView.vue';
+import MahnwesenView from './views/MahnwesenView.vue';
+import MahnungDetailView from './views/MahnungDetailView.vue';
+import FirmaView from './views/FirmaView.vue';
 import LieferscheinListView from './views/LieferscheinListView.vue';
 import LieferscheinDetailView from './views/LieferscheinDetailView.vue';
 import LagerView from './views/LagerView.vue';
@@ -37,6 +42,11 @@ const router = createRouter({
     { path: '/fertigung/:id', component: FertigungDetailView, meta: { titel: 'Fertigungsbauteil', bereich: 'fertigung' } },
     { path: '/lieferscheine', component: LieferscheinListView, meta: { titel: 'Lieferscheine', bereich: 'lieferscheine' } },
     { path: '/lieferscheine/:id', component: LieferscheinDetailView, meta: { titel: 'Lieferschein', bereich: 'lieferscheine' } },
+    { path: '/rechnungen', component: RechnungListView, meta: { titel: 'Rechnungen', bereich: 'rechnungen', unterbereich: 'rechnungen' } },
+    { path: '/rechnungen/:id', component: RechnungDetailView, meta: { titel: 'Rechnung', bereich: 'rechnungen', unterbereich: 'rechnungen' } },
+    { path: '/mahnwesen', component: MahnwesenView, meta: { titel: 'Mahnwesen', bereich: 'rechnungen', unterbereich: 'mahnwesen' } },
+    { path: '/mahnungen/:id', component: MahnungDetailView, meta: { titel: 'Mahnung', bereich: 'rechnungen', unterbereich: 'mahnwesen' } },
+    { path: '/stammdaten/firma', component: FirmaView, meta: { titel: 'Stammdaten: Firma', bereich: 'stammdaten' } },
     { path: '/lager', component: LagerView, meta: { titel: 'Lager', bereich: 'lager' } },
     { path: '/anfragen', component: AnfragenListView, meta: { titel: 'Lieferantenanfragen', bereich: 'anfragen' } },
     { path: '/anfragen/:id', component: AnfrageDetailView, meta: { titel: 'Lieferantenanfrage', bereich: 'anfragen' } },

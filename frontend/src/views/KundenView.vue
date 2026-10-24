@@ -22,7 +22,7 @@ const zeilen = computed(() => {
 
 const leerAdresse = () => ({ typ: 'Rechnung und Lieferung', strasse: '', plz: '', ort: '', land: '', standard: false });
 const leerKontakt = () => ({ anrede: '', vorname: '', nachname: '', email: '', telefon: '', rechnungskontakt: false });
-const leer = () => ({ id: '', name: '', kuerzel: '', aktiv: true, ustId: '', steuernummer: '', zahlungsbedingung: '', leitwegId: '', lieferantennr: '', adressen: [leerAdresse()], kontakte: [leerKontakt()] });
+const leer = () => ({ id: '', name: '', kuerzel: '', aktiv: true, ustId: '', steuernummer: '', zahlungsbedingung: '', leitwegId: '', lieferantennr: '', zahlungszielTage: 0, adressen: [leerAdresse()], kontakte: [leerKontakt()] });
 
 const k = ref(null);
 const speichert = ref(false);
@@ -80,6 +80,7 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
         <label class="block"><span class="label mb-1 block">Zahlungsbedingung</span><input v-model="k.zahlungsbedingung" class="field" placeholder="z. B. 14 Tage netto" /></label>
         <label class="block"><span class="label mb-1 block">Leitweg-ID (E-Rechnung)</span><input v-model="k.leitwegId" class="field" /></label>
         <label class="block"><span class="label mb-1 block">Unsere Lieferantennummer beim Kunden</span><input v-model="k.lieferantennr" class="field" /></label>
+        <label class="block"><span class="label mb-1 block">Zahlungsziel (Tage)</span><input v-model.number="k.zahlungszielTage" type="number" min="0" class="field" placeholder="leer oder 0 = Standard der Firma" /></label>
       </div>
 
       <section>

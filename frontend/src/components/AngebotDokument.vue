@@ -3,9 +3,13 @@
 // durch das serverseitige Druckformat (PDF) in Frappe ersetzt.
 import { computed } from 'vue';
 import PartImage from './PartImage.vue';
+import BelegKopf from './BelegKopf.vue';
+import BelegFuss from './BelegFuss.vue';
+import { useFirma } from '../stores/firma.js';
 import { eur, zahl } from '../lib/format.js';
 
 const props = defineProps({ angebot: { type: Object, required: true } });
+const firma = useFirma();
 
 const datum = computed(() => new Date(props.angebot.versandt ?? props.angebot.erstellt));
 const gueltigBis = computed(() => {
@@ -19,16 +23,7 @@ const mwst = computed(() => props.angebot.netto * 0.19);
 
 <template>
   <article class="paper mx-auto w-full max-w-[820px] px-12 py-10 text-[13px] leading-relaxed">
-    <header class="flex items-start justify-between border-b-2 pb-5" style="border-color: #d4242a">
-      <div>
-        <div class="text-2xl font-bold tracking-wide" style="color: #d4242a">HOHENSTEIN</div>
-        <div class="text-[11px] uppercase tracking-[0.2em] text-neutral-500">CNC-Fertigung</div>
-      </div>
-      <div class="text-right text-[11px] text-neutral-500">
-        <div>Hohenstein GmbH</div>
-        <div>Musterstraße 1 · 72000 Beispielstadt</div>
-      </div>
-    </header>
+    <BelegKopf :firma="firma.firma" />
 
     <section class="mt-8 flex justify-between gap-8">
       <div>
@@ -92,7 +87,8 @@ const mwst = computed(() => props.angebot.netto * 0.19);
 
     <footer class="mt-10 text-[12px] text-neutral-600">
       <p>Lieferzeit: {{ angebot.kopf.lieferzeit }}. Das Angebot ist {{ zahl(angebot.kopf.gueltigWochen, 0) }} Wochen gültig. Alle Preise netto zuzüglich gesetzlicher Mehrwertsteuer.</p>
-      <p class="mt-3">Mit freundlichen Grüßen<br />Hohenstein GmbH</p>
+      <p class="mt-3">Mit freundlichen Grüßen<br />{{ firma.firma.firmenname }}</p>
     </footer>
+    <BelegFuss :firma="firma.firma" />
   </article>
 </template>

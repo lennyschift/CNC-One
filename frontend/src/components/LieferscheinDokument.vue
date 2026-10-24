@@ -2,23 +2,18 @@
 // Lieferschein als Dokument (Papier). Bewusst ohne Preise und Kosten. Wird später durch das Druckformat in Frappe ersetzt.
 import PartImage from './PartImage.vue';
 import { bereichText } from '../lib/serien.js';
+import BelegKopf from './BelegKopf.vue';
+import BelegFuss from './BelegFuss.vue';
+import { useFirma } from '../stores/firma.js';
 
 defineProps({ lieferschein: { type: Object, required: true } });
+const firma = useFirma();
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
 </script>
 
 <template>
   <article class="paper mx-auto w-full max-w-[820px] px-12 py-10 text-[13px] leading-relaxed">
-    <header class="flex items-start justify-between border-b-2 pb-5" style="border-color: #d4242a">
-      <div>
-        <div class="text-2xl font-bold tracking-wide" style="color: #d4242a">HOHENSTEIN</div>
-        <div class="text-[11px] uppercase tracking-[0.2em] text-neutral-500">CNC-Fertigung</div>
-      </div>
-      <div class="text-right text-[11px] text-neutral-500">
-        <div>Hohenstein GmbH</div>
-        <div>Musterstraße 1 · 72000 Beispielstadt</div>
-      </div>
-    </header>
+    <BelegKopf :firma="firma.firma" />
 
     <section class="mt-8 flex justify-between gap-8">
       <div>
@@ -56,5 +51,6 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
       <div class="border-t border-neutral-300 pt-1">Datum, Unterschrift Warenausgang</div>
       <div class="border-t border-neutral-300 pt-1">Datum, Unterschrift Empfänger</div>
     </footer>
+    <BelegFuss :firma="firma.firma" />
   </article>
 </template>

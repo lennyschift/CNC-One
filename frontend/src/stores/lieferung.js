@@ -29,6 +29,11 @@ export const useLieferung = defineStore('lieferung', () => {
     return rec;
   }
 
+  // Nach Rechnungen ändert sich in den Lieferscheinen der Verweis „berechnet in …“
+  async function neuLaden() {
+    try { lieferscheine.value = await call('cnc_one.api.lieferschein.liste'); } catch { /* alter Stand bleibt */ }
+  }
+
   const vorschlag = (auftrag) => sicher(() => call('cnc_one.api.lieferschein.vorschlag', { auftrag }));
 
   async function nachLieferung() {
@@ -70,5 +75,5 @@ export const useLieferung = defineStore('lieferung', () => {
     return r;
   }
 
-  return { lieferscheine, lager, lieferschein, fuerAuftrag, vorschlag, anlegen, geliefertSetzen, stornieren, lagerLaden, buchungen, korrigieren };
+  return { lieferscheine, lager, lieferschein, fuerAuftrag, neuLaden, vorschlag, anlegen, geliefertSetzen, stornieren, lagerLaden, buchungen, korrigieren };
 });

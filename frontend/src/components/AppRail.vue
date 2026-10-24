@@ -19,7 +19,7 @@ const punkte = [
   { id: 'anfragen', label: 'Lieferantenanfragen', icon: Send, to: '/anfragen' },
   { id: 'lieferscheine', label: 'Lieferscheine', icon: Truck, to: '/lieferscheine' },
   { id: 'lager', label: 'Lager', icon: Warehouse, to: '/lager' },
-  { id: 'rechnungen', label: 'Rechnungen', icon: Receipt },
+  { id: 'rechnungen', label: 'Rechnungen', icon: Receipt, to: '/rechnungen' },
 ];
 </script>
 

@@ -1,8 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory, Truck } from '@lucide/vue';
+import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory, Truck, Receipt } from '@lucide/vue';
+import { useRouter } from 'vue-router';
 import LieferscheinDialog from '../components/LieferscheinDialog.vue';
+import RechnungDialog from '../components/RechnungDialog.vue';
+import { auftragStand } from '../lib/auftragstand.js';
+import { useRechnung } from '../stores/rechnung.js';
 import { bereichText } from '../lib/serien.js';
 import WorkflowSteps from '../components/WorkflowSteps.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -18,13 +22,16 @@ const f = useFertigung();
 const auftrag = computed(() => b.auftrag(route.params.id));
 onMounted(() => b.auftraegeNeuLaden());
 const lieferDialog = ref(false);
+const rechnungDialog = ref(false);
+const router = useRouter();
+const re = useRechnung();
 const fbs = computed(() => (auftrag.value ? f.fuerAuftrag(auftrag.value.id) : []));
 // Ein Haken gibt es erst, wenn der Schritt wirklich fertig ist. Ein Lieferschein vor der Fertigung hakt die Fertigung nicht ab.
-const stand = computed(() => {
-  if (!fbs.value.length) return 1;
-  if (!fbs.value.every((x) => x.status === 'Fertig')) return 2;
-  return auftrag.value?.lieferung?.status === 'Geliefert' ? 4 : 3;
-});
+const stand = computed(() => auftragStand({
+  fertigungsbauteile: fbs.value, lieferung: auftrag.value?.lieferung, abrechnung: auftrag.value?.abrechnung, rechnungen: auftrag.value ? re.fuerAuftrag(auftrag.value.id) : [],
+}));
+const rechnungen = computed(() => (auftrag.value ? re.fuerAuftrag(auftrag.value.id) : []));
+function rechnungAngelegt(rec) { rechnungDialog.value = false; router.push(`/rechnungen/${rec.id}`); }
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
 const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
 </script>
@@ -42,6 +49,12 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
           <RouterLink v-else to="/fertigung" class="btn mt-4"><Factory :size="16" /> Zur Fertigung</RouterLink>
           <button v-if="auftrag.lieferung.status !== 'Geliefert'" class="btn mt-4 ml-2" @click="lieferDialog = true"><Truck :size="16" /> Lieferschein erstellen</button>
           <span class="ml-2 mt-4 inline-block align-middle"><StatusBadge :status="auftrag.lieferung.status" /></span>
+          <button v-if="auftrag.abrechnung.status !== 'Berechnet'" class="btn mt-4 ml-2" @click="rechnungDialog = true"><Receipt :size="16" /> Rechnung erstellen</button>
+          <span v-if="auftrag.abrechnung.berechnet" class="ml-2 mt-4 inline-block align-middle"><StatusBadge :status="auftrag.abrechnung.status" /></span>
+          <div v-if="rechnungen.length" class="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+            <span class="text-mute">Rechnungen:</span>
+            <RouterLink v-for="x in rechnungen" :key="x.id" :to="`/rechnungen/${x.id}`" class="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface2 px-2.5 py-0.5 hover:border-accent/50"><span class="font-semibold text-accent tnum">{{ x.nummer || 'Entwurf' }}</span><StatusBadge :status="x.status" /></RouterLink>
+          </div>
         </div>
         <div class="w-full max-w-xl"><WorkflowSteps :stand="stand" /></div>
       </div>
@@ -70,10 +83,12 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
             <span class="inline-flex items-center gap-1" :class="p.geliefert >= p.menge ? 'text-ok' : p.geliefert ? 'text-warn' : ''"><Truck :size="12" /> geliefert {{ p.geliefert }} / {{ p.menge }}</span>
             <span v-if="p.gefertigt || fbZu(p.key)">gefertigt {{ p.gefertigt }}</span>
             <RouterLink v-for="ls in p.lieferscheine" :key="ls.id" :to="`/lieferscheine/${ls.id}`" class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-accent hover:underline"><span class="tnum">{{ ls.id }}</span><span class="text-mute">{{ ls.menge }} Stk</span></RouterLink>
+            <span class="inline-flex items-center gap-1" :class="p.berechnet >= p.menge ? 'text-ok' : p.berechnet ? 'text-warn' : ''"><Receipt :size="12" /> berechnet {{ p.berechnet }} / {{ p.menge }}</span>
+            <RouterLink v-for="x in p.rechnungen" :key="x.id" :to="`/rechnungen/${x.id}`" class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-accent hover:underline"><span class="tnum">{{ x.nummer || 'Entwurf' }}</span><span class="text-mute">{{ x.menge }} Stk</span></RouterLink>
             <span v-if="p.serienVon" class="inline-flex items-center gap-1 text-ink"><Hash :size="12" /> Seriennummern {{ bereichText(p.serienVon, p.serienBis, p.serienStellen) }}</span>
             <span class="inline-flex items-center gap-1"><CalendarDays :size="12" /> Liefertermin {{ p.termin ? new Date(p.termin).toLocaleDateString('de-DE') : 'offen' }}</span>
           </div>
-          <div v-for="k in p.kosten" :key="k.label" class="mt-1 flex justify-between pl-4 text-xs text-mute"><span>↳ {{ k.label }}</span><span class="tnum">{{ eur(k.betrag) }}</span></div>
+          <div v-for="k in p.kosten" :key="k.label" class="mt-1 flex justify-between pl-4 text-xs text-mute"><span>↳ {{ k.label }}<template v-if="p.kostenAbgerechnet[k.label]"> · abgerechnet in <RouterLink :to="`/rechnungen/${p.kostenAbgerechnet[k.label]}`" class="text-accent hover:underline">{{ re.rechnung(p.kostenAbgerechnet[k.label])?.nummer || 'Entwurf' }}</RouterLink></template></span><span class="tnum">{{ eur(k.betrag) }}</span></div>
 
           <RouterLink v-if="fbZu(p.key)" :to="`/fertigung/${fbZu(p.key).id}`" class="mt-3 flex items-center gap-3 rounded-xl bg-surface2 px-3.5 py-2.5 text-sm transition hover:bg-accent-soft">
             <Factory :size="15" class="text-accent" />
@@ -84,6 +99,7 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
         </div>
       </div>
     </section>
+    <RechnungDialog v-if="rechnungDialog" :auftrag-id="auftrag.id" @schliessen="rechnungDialog = false" @angelegt="rechnungAngelegt" />
     <LieferscheinDialog v-if="lieferDialog" :auftrag-id="auftrag.id" @schliessen="lieferDialog = false" @angelegt="lieferDialog = false" />
   </div>
   <div v-else class="card mx-auto grid max-w-lg place-items-center p-14 text-center">

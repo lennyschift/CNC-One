@@ -6,7 +6,7 @@ import { STAMM_PUNKTE } from '../data/stammNav.js';
 import { stammdatenRoh } from '../data/repo.js';
 
 const daten = stammdatenRoh();
-const anzahl = (p) => (daten[p.zaehler] ?? []).length;
+const anzahl = (p) => (p.zaehler ? (daten[p.zaehler] ?? []).length : '');
 </script>
 
 <template>

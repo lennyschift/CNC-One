@@ -5,9 +5,11 @@ import { ArrowLeft, Printer, PackageCheck, XCircle } from '@lucide/vue';
 import LieferscheinDokument from '../components/LieferscheinDokument.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import { useLieferung } from '../stores/lieferung.js';
+import { useRechnung } from '../stores/rechnung.js';
 
 const route = useRoute();
 const l = useLieferung();
+const re = useRechnung();
 const ls = computed(() => l.lieferschein(route.params.id));
 const auftraege = computed(() => [...new Set((ls.value?.positionen ?? []).map((p) => p.auftragId).filter(Boolean))]);
 const stornoFrage = ref(false);
@@ -35,6 +37,10 @@ const drucken = () => window.print();
         </div>
         <p v-if="ls.status === 'Bereit'" class="mt-3 text-xs text-mute">Die Menge ist im Fertigbauteil Lager schon abgebucht. Ist noch nicht alles gefertigt, steht dort ein Minus, das mit der Fertigung ausgeglichen wird.</p>
         <p v-if="ls.status === 'Storniert'" class="mt-3 text-xs text-mute">Storniert: die Menge ist ins Lager zurückgebucht und im Auftrag wieder frei.</p>
+      </section>
+      <section v-if="ls.rechnungen?.length" class="card p-5">
+        <h3 class="mb-2 text-sm font-semibold">Berechnet in</h3>
+        <ul class="space-y-1 text-sm"><li v-for="r in ls.rechnungen" :key="r"><RouterLink :to="`/rechnungen/${r}`" class="text-accent hover:underline tnum">{{ re.rechnung(r)?.nummer || 'Entwurf' }}</RouterLink></li></ul>
       </section>
       <section v-if="auftraege.length" class="card p-5">
         <h3 class="mb-2 text-sm font-semibold">Zugehörige Aufträge</h3>
