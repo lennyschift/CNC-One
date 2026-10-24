@@ -1,6 +1,6 @@
 <script setup>
 // Rechnung als Dokument (Papier). Zeigt je Bauteil, mit welchen Lieferscheinen es geliefert wurde. Wird später durch das
-// serverseitige Druckformat mit E-Rechnung (ZUGFeRD/XRechnung) ersetzt.
+// serverseitige Druckformat mit E-Rechnung (ZUGFeRD) ersetzt.
 import { computed } from 'vue';
 import BelegKopf from './BelegKopf.vue';
 import BelegFuss from './BelegFuss.vue';
@@ -14,6 +14,23 @@ const aktuelleFirma = useFirma();
 const firma = computed(() => props.rechnung.firma ?? aktuelleFirma.firma);
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
 const storno = computed(() => props.rechnung.art === 'Storno');
+// Sonderkosten stehen wie in der E-Rechnung als Zuschläge unter ihrer Bauteilposition; die letzte Zuschlagszeile trägt die Positionssumme
+const zeilen = computed(() => {
+  const liste = props.rechnung.positionen.map((p) => ({ ...p }));
+  let eltern = null;
+  let letzte = null;
+  for (const p of liste) {
+    if (p.art === 'Bauteil') { eltern = { zeile: p.zeile, summe: p.netto }; letzte = null; }
+    else if (p.art === 'Sonderkosten' && eltern) {
+      eltern.summe = Math.round((eltern.summe + p.netto) * 100) / 100;
+      p.zuschlagZu = eltern.zeile;
+      letzte = p;
+      letzte.positionssumme = eltern.summe;
+      liste.filter((q) => q !== p && q.zuschlagZu === p.zuschlagZu).forEach((q) => { delete q.positionssumme; });
+    }
+  }
+  return liste;
+});
 const leistung = computed(() => {
   const { leistungVon: v, leistungBis: b } = props.rechnung;
   if (!v) return '';
@@ -56,13 +73,14 @@ const leistung = computed(() => {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="p in rechnung.positionen" :key="p.zeile" class="break-inside-avoid border-b border-neutral-100 align-top" :class="p.art === 'Sonderkosten' ? 'text-neutral-600' : ''">
+        <template v-for="p in zeilen" :key="p.zeile">
+        <tr class="break-inside-avoid border-b border-neutral-100 align-top" :class="p.art === 'Sonderkosten' ? 'text-neutral-600' : ''">
           <td class="py-2.5 text-neutral-400 tnum">{{ p.zeile }}</td>
           <td class="py-2.5 pr-3">
             <div class="flex gap-3">
               <PartImage v-if="p.art === 'Bauteil'" :teil="p.teil" :groesse="40" />
               <div class="min-w-0" :class="p.art === 'Sonderkosten' ? 'pl-3' : ''">
-                <div :class="p.art === 'Bauteil' ? 'font-semibold' : ''">{{ p.bezeichnung }}</div>
+                <div :class="p.art === 'Bauteil' ? 'font-semibold' : ''"><template v-if="p.zuschlagZu">Zuschlag zu Position {{ p.zuschlagZu }}: </template>{{ p.bezeichnung }}</div>
                 <div v-if="p.teil.teilenummer || p.teil.zeichnungsnr" class="text-[12px] text-neutral-500"><span v-if="p.teil.teilenummer">Teilenummer {{ p.teil.teilenummer }}</span><span v-if="p.teil.zeichnungsnr"> · Zeichnung {{ p.teil.zeichnungsnr }}</span></div>
                 <div v-if="p.lieferungenText" class="text-[12px] text-neutral-500">{{ p.lieferungenText }}</div>
                 <div v-if="p.serienText" class="text-[12px] text-neutral-500">Seriennummern <span class="tnum">{{ p.serienText }}</span></div>
@@ -73,6 +91,10 @@ const leistung = computed(() => {
           <td class="whitespace-nowrap py-2.5 text-right tnum">{{ p.art === 'Bauteil' ? eur(p.einzelpreis) : '' }}</td>
           <td class="whitespace-nowrap py-2.5 text-right font-medium tnum">{{ eur(p.netto) }}</td>
         </tr>
+        <tr v-if="p.positionssumme !== undefined" class="break-inside-avoid border-b border-neutral-300 font-semibold">
+          <td /><td colspan="3" class="py-1.5 text-right">Position {{ p.zuschlagZu }} mit Zuschlägen</td><td class="whitespace-nowrap py-1.5 text-right tnum">{{ eur(p.positionssumme) }}</td>
+        </tr>
+        </template>
       </tbody>
     </table>
 

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft, Printer, Lock, Trash2, Banknote, BellRing, Undo2, FileText, Truck, ShieldCheck, FileDown, FileCode, TriangleAlert } from '@lucide/vue';
+import { ArrowLeft, Printer, Lock, Trash2, Banknote, BellRing, Undo2, FileText, Truck, ShieldCheck, FileDown, TriangleAlert } from '@lucide/vue';
 import RechnungDokument from '../components/RechnungDokument.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import NumField from '../components/NumField.vue';
@@ -64,7 +64,7 @@ async function mahnen() { const m = await store.mahnungAnlegen(r.value.id); if (
 const lieferscheine = computed(() => [...new Set((r.value?.positionen ?? []).flatMap((p) => (p.lieferungen ?? []).map((l) => l.lieferschein)))]);
 // ---- E-Rechnung
 const laedt = ref(false);
-const datei = (art) => `/api/method/cnc_one.api.erechnung.herunterladen?id=${encodeURIComponent(r.value.id)}&art=${art}`;
+const datei = computed(() => `/api/method/cnc_one.api.erechnung.herunterladen?id=${encodeURIComponent(r.value.id)}`);
 async function eRechnungNeu() { laedt.value = true; await store.eRechnungNeu(r.value.id); laedt.value = false; }
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
 const drucken = () => window.print();
@@ -101,12 +101,9 @@ const drucken = () => window.print();
       <!-- E-Rechnung -->
       <section v-if="mitNummer && r.eRechnung" class="card p-5">
         <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold"><FileDown :size="16" class="text-accent" /> E-Rechnung</h3>
-        <p class="mb-3 text-xs text-mute">Die Rechnung als PDF mit eingebetteten Rechnungsdaten (ZUGFeRD, PDF/A-3) und als XRechnung-XML, zum Versenden per E-Mail oder an Behörden.</p>
-        <div class="space-y-2">
-          <a v-if="r.eRechnung.pdf" :href="datei('pdf')" target="_blank" rel="noopener" class="btn w-full justify-center"><FileDown :size="16" /> {{ r.eRechnung.zugferd ? 'PDF mit ZUGFeRD' : 'PDF (ohne ZUGFeRD)' }}</a>
-          <a v-if="r.eRechnung.xrechnung" :href="datei('xml')" download class="btn w-full justify-center"><FileCode :size="16" /> XRechnung (XML)</a>
-        </div>
-        <p v-if="r.eRechnung.hinweis" class="mt-3 flex items-start gap-1.5 rounded-lg bg-accent-soft px-3 py-2 text-xs text-accent"><TriangleAlert :size="14" class="mt-0.5 shrink-0" /><span>{{ r.eRechnung.hinweis }} Die Angaben stehen in den <RouterLink to="/stammdaten/firma" class="underline">Firmendaten</RouterLink> und beim Kunden (Kontakt mit E-Mail).</span></p>
+        <p class="mb-3 text-xs text-mute">Die Rechnung als PDF mit eingebetteten Rechnungsdaten (ZUGFeRD, PDF/A-3), zum Versenden per E-Mail.</p>
+        <a v-if="r.eRechnung.pdf" :href="datei" target="_blank" rel="noopener" class="btn w-full justify-center"><FileDown :size="16" /> {{ r.eRechnung.zugferd ? 'PDF mit ZUGFeRD' : 'PDF (ohne ZUGFeRD)' }}</a>
+        <p v-if="r.eRechnung.hinweis" class="mt-3 flex items-start gap-1.5 rounded-lg bg-accent-soft px-3 py-2 text-xs text-accent"><TriangleAlert :size="14" class="mt-0.5 shrink-0" /><span>{{ r.eRechnung.hinweis }} Die Angaben stehen in den <RouterLink to="/stammdaten/firma" class="underline">Firmendaten</RouterLink> und beim Kunden (Anschrift).</span></p>
         <p v-else-if="r.eRechnung.status === 'Fehler'" class="mt-3 text-xs text-accent">Die E-Rechnung ließ sich nicht erzeugen.</p>
         <button v-if="darfBuchen" class="btn mt-2 w-full justify-center !text-mute" :disabled="laedt" @click="eRechnungNeu">{{ r.eRechnung.status ? 'E-Rechnung neu erzeugen' : 'E-Rechnung erzeugen' }}</button>
       </section>
