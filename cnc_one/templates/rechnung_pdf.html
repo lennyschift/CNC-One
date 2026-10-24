@@ -29,6 +29,7 @@
   tr { break-inside: avoid; }
   .pos { color: #999; width: 9mm; }
   .sonder td { color: #555; }
+  .possumme td { border-bottom: 0.6pt solid #bbb; font-weight: bold; padding: 1.4mm 0; }
   .sonder .text { padding-left: 4mm; }
   .name { font-weight: bold; }
   .klein { font-size: 7.6pt; color: #666; }
@@ -83,7 +84,7 @@
     <tr class="{{ 'sonder' if p.art == 'Sonderkosten' else '' }}">
       <td class="pos">{{ p.zeile }}</td>
       <td class="text">
-        <div class="{{ 'name' if p.art == 'Bauteil' else '' }}">{{ p.bezeichnung }}</div>
+        <div class="{{ 'name' if p.art == 'Bauteil' else '' }}">{% if p.art == 'Sonderkosten' %}Zuschlag zu Position {{ p.zuschlagZu }}: {% endif %}{{ p.bezeichnung }}</div>
         {% if p.teil.teilenummer or p.teil.zeichnungsnr %}<div class="klein">{% if p.teil.teilenummer %}Teilenummer {{ p.teil.teilenummer }}{% endif %}{% if p.teil.zeichnungsnr %} · Zeichnung {{ p.teil.zeichnungsnr }}{% endif %}</div>{% endif %}
         {% if p.lieferungenText %}<div class="klein">{{ p.lieferungenText }}</div>{% endif %}
         {% if p.serienText %}<div class="klein">Seriennummern {{ p.serienText }}</div>{% endif %}
@@ -92,6 +93,9 @@
       <td class="r">{% if p.art == 'Bauteil' %}{{ eur(p.einzelpreis) }}{% endif %}</td>
       <td class="r">{{ eur(p.netto) }}</td>
     </tr>
+    {% if p.positionssumme is defined %}
+    <tr class="possumme"><td></td><td class="r" colspan="3">Position {{ p.zuschlagZu }} mit Zuschlägen</td><td class="r">{{ eur(p.positionssumme) }}</td></tr>
+    {% endif %}
   {% endfor %}
   </tbody>
 </table>

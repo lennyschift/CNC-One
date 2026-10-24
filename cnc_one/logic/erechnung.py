@@ -1,11 +1,10 @@
 """E-Rechnung: XML nach EN 16931 im Format UN/CEFACT Cross Industry Invoice (CII), ohne Datenbankzugriff.
 
-Zwei Ausprägungen aus denselben Daten:
-- "xrechnung": XRechnung 3.0 (eigenständige XML-Datei, z. B. für Behörden)
-- "zugferd":   ZUGFeRD / Factur-X, Profil EN 16931 (XML, das in das PDF/A-3 eingebettet wird)
+Ausgabe ist ZUGFeRD / Factur-X im Profil EN 16931 (das XML wird in das PDF/A-3 eingebettet). Eine eigenständige XRechnung für Behörden
+gibt es bewusst nicht: CNC One rechnet nur im B2B-Bereich.
 
-Eingabe ist ein Dictionary (siehe `api/erechnung.py`, `daten_aus_rechnung`). `fehlende_angaben` nennt, was für die jeweilige
-Ausprägung noch fehlt, bevor sie erzeugt werden kann.
+Eingabe ist ein Dictionary (siehe `api/erechnung.py`, `daten_aus_rechnung`). `fehlende_angaben` nennt, was noch fehlt, bevor das
+XML erzeugt werden kann.
 """
 
 from datetime import date, datetime
@@ -20,12 +19,7 @@ NS = {
 	"qdt": "urn:un:unece:uncefact:data:standard:QualifiedDataType:100",
 }
 
-LEITFADEN = {
-	"xrechnung": "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0",
-	"zugferd": "urn:cen.eu:en16931:2017",
-}
-
-PROZESS_XRECHNUNG = "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0"  # Geschäftsprozess nach Peppol BIS Billing 3.0, Pflicht in XRechnung
+LEITFADEN = "urn:cen.eu:en16931:2017"  # ZUGFeRD / Factur-X, Profil EN 16931
 
 LAENDER = {
 	"DEUTSCHLAND": "DE", "GERMANY": "DE", "ÖSTERREICH": "AT", "OESTERREICH": "AT", "AUSTRIA": "AT", "SCHWEIZ": "CH", "SWITZERLAND": "CH",
@@ -63,37 +57,26 @@ def _d102(d):
 
 
 def fehlende_angaben(d):
-	"""Was für welche Ausprägung noch fehlt: { 'zugferd': [...], 'xrechnung': [...] }. `xrechnung` enthält auch die Punkte von `zugferd`."""
+	"""Was für das ZUGFeRD-XML noch fehlt (Liste von Hinweisen für den Benutzer)."""
 	v, k = d["verkaeufer"], d["kaeufer"]
-	zug = []
+	fehlt = []
 	if not (v.get("name") or "").strip():
-		zug.append("Name der Firma")
-	if not ((v.get("ust_id") or "").strip() or (v.get("steuernummer") or "").strip()):
-		zug.append("USt-IdNr. oder Steuernummer der Firma")
-	if not laendercode(v.get("land")):
-		zug.append("Land der Firma (z. B. Deutschland)")
-	if not (k.get("name") or "").strip():
-		zug.append("Name des Kunden")
-	if not laendercode(k.get("land")):
-		zug.append("Land des Kunden (Ländercode wie DE)")
-	if not d["zeilen"]:
-		zug.append("Rechnungspositionen")
-	xr = list(zug)
+		fehlt.append("Name der Firma")
 	if not (v.get("plz") or "").strip() or not (v.get("ort") or "").strip():
-		xr.append("PLZ und Ort der Firma")
-	if not (v.get("ansprechpartner") or "").strip():
-		xr.append("Ansprechpartner der Firma")
-	if not (v.get("telefon") or "").strip():
-		xr.append("Telefonnummer der Firma")
-	if not (v.get("email") or "").strip():
-		xr.append("E-Mail der Firma")
-	if not (v.get("iban") or "").strip():
-		xr.append("IBAN der Firma")
+		fehlt.append("PLZ und Ort der Firma")
+	if not ((v.get("ust_id") or "").strip() or (v.get("steuernummer") or "").strip()):
+		fehlt.append("USt-IdNr. oder Steuernummer der Firma")
+	if not laendercode(v.get("land")):
+		fehlt.append("Land der Firma (z. B. Deutschland)")
+	if not (k.get("name") or "").strip():
+		fehlt.append("Name des Kunden")
 	if not (k.get("plz") or "").strip() or not (k.get("ort") or "").strip():
-		xr.append("PLZ und Ort des Kunden")
-	if not (k.get("email") or "").strip():
-		xr.append("E-Mail des Rechnungsempfängers (Ansprechpartner beim Kunden)")
-	return {"zugferd": zug, "xrechnung": xr}
+		fehlt.append("PLZ und Ort des Kunden")
+	if not laendercode(k.get("land")):
+		fehlt.append("Land des Kunden (Ländercode wie DE)")
+	if not d["zeilen"]:
+		fehlt.append("Rechnungspositionen")
+	return fehlt
 
 
 class _Baum:
@@ -139,8 +122,8 @@ def _partei(eltern, name, p, kontakt=False, steuer=True):
 	return t
 
 
-def baue_cii(d, profil):
-	"""Erzeugt das CII-XML (bytes, UTF-8) für `profil` 'xrechnung' oder 'zugferd'. Stornorechnungen werden als Gutschrift (Typ 381) mit
+def baue_cii(d):
+	"""Erzeugt das ZUGFeRD-XML (CII, bytes UTF-8). Stornorechnungen werden als Gutschrift (Typ 381) mit
 	positiven Beträgen und Verweis auf die stornierte Rechnung ausgegeben."""
 	storno = d["art"] == "Storno"
 	satz = d.get("steuersatz", 19)
@@ -153,9 +136,7 @@ def baue_cii(d, profil):
 
 	# --- Kontext und Kopf
 	ctx = _Baum.neu(wurzel, "rsm:ExchangedDocumentContext")
-	if profil == "xrechnung":
-		_Baum.neu(_Baum.neu(ctx, "ram:BusinessProcessSpecifiedDocumentContextParameter"), "ram:ID", PROZESS_XRECHNUNG)
-	_Baum.neu(_Baum.neu(ctx, "ram:GuidelineSpecifiedDocumentContextParameter"), "ram:ID", LEITFADEN[profil])
+	_Baum.neu(_Baum.neu(ctx, "ram:GuidelineSpecifiedDocumentContextParameter"), "ram:ID", LEITFADEN)
 	dok = _Baum.neu(wurzel, "rsm:ExchangedDocument")
 	_Baum.neu(dok, "ram:ID", d["nummer"])
 	_Baum.neu(dok, "ram:TypeCode", "381" if storno else "380")
@@ -169,7 +150,7 @@ def baue_cii(d, profil):
 	for nr, z in enumerate(d["zeilen"], 1):
 		li = _Baum.neu(handel, "ram:IncludedSupplyChainTradeLineItem")
 		adl = _Baum.neu(li, "ram:AssociatedDocumentLineDocument")
-		_Baum.neu(adl, "ram:LineID", nr)  # fortlaufend ganzzahlig; die Gliederung 1.1 der Rechnung steht nur im PDF
+		_Baum.neu(adl, "ram:LineID", nr)  # fortlaufend ganzzahlig
 		if z.get("hinweis"):
 			_Baum.neu(_Baum.neu(adl, "ram:IncludedNote"), "ram:Content", z["hinweis"])
 		prod = _Baum.neu(li, "ram:SpecifiedTradeProduct")
@@ -187,6 +168,11 @@ def baue_cii(d, profil):
 		_Baum.neu(st, "ram:TypeCode", "VAT")
 		_Baum.neu(st, "ram:CategoryCode", kat)
 		_Baum.neu(st, "ram:RateApplicablePercent", betrag(satz))
+		for zs in z.get("zuschlaege", []):  # Positionszuschläge, z. B. Rüstkosten: Betrag und Begründung (BG-28)
+			sa = _Baum.neu(abr, "ram:SpecifiedTradeAllowanceCharge")
+			_Baum.neu(_Baum.neu(sa, "ram:ChargeIndicator"), "udt:Indicator", "true")
+			_Baum.neu(sa, "ram:ActualAmount", betrag(pos(zs["betrag"])))
+			_Baum.neu(sa, "ram:Reason", zs["text"])
 		_Baum.neu(_Baum.neu(abr, "ram:SpecifiedTradeSettlementLineMonetarySummation"), "ram:LineTotalAmount", betrag(pos(z["netto"])))
 
 	# --- Vereinbarung (Parteien, Referenzen)

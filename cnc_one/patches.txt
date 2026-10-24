@@ -5,3 +5,4 @@ cnc_one.patches.v0_1.rollen_anlegen
 cnc_one.patches.v0_1.serienart_anlegen
 cnc_one.patches.v0_1.lager_aus_fertigung
 cnc_one.patches.v0_1.rechnung_grundausstattung
+cnc_one.patches.v0_1.xrechnung_entfernen

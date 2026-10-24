@@ -107,7 +107,7 @@
    "fieldname": "ansprechpartner",
    "fieldtype": "Data",
    "label": "Ansprechpartner für Rechnungen",
-   "description": "Pflicht für die E-Rechnung (XRechnung)"
+   "description": "Steht als Kontakt in der E-Rechnung (ZUGFeRD)"
   },
   {
    "fieldname": "sb_bank",

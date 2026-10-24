@@ -58,8 +58,7 @@ def rechnung_ui(d):
 		"stornoZu": d.storno_zu or "", "storniertDurch": d.storniert_durch or "", "stornoGrund": d.storno_grund or "",
 		"eRechnung": {
 			"status": d.erechnung_status or "", "hinweis": d.erechnung_hinweis or "",
-			"pdf": d.erechnung_status in ("ZUGFeRD und XRechnung", "ZUGFeRD", "Nur PDF"), "zugferd": d.erechnung_status in ("ZUGFeRD und XRechnung", "ZUGFeRD"),
-			"xrechnung": d.erechnung_status == "ZUGFeRD und XRechnung",
+			"pdf": d.erechnung_status in ("ZUGFeRD", "Nur PDF"), "zugferd": d.erechnung_status == "ZUGFeRD",
 		},
 		"festgeschriebenAm": iso(d.festgeschrieben_am), "festgeschriebenVon": d.festgeschrieben_von or "", "inhaltHash": d.inhalt_hash or "",
 		"positionen": [
@@ -375,7 +374,7 @@ def _zahlungshinweis(firma, nummer):
 
 
 def _erechnung(doc):
-	"""E-Rechnung (PDF/A-3 mit ZUGFeRD, XRechnung) zur festgeschriebenen Rechnung ablegen; ein Fehler hält das Festschreiben nicht auf."""
+	"""E-Rechnung (PDF/A-3 mit ZUGFeRD) zur festgeschriebenen Rechnung ablegen; ein Fehler hält das Festschreiben nicht auf."""
 	from cnc_one.api import erechnung as ablage
 
 	ablage.erzeugen_sicher(doc)

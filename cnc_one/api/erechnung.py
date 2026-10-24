@@ -1,6 +1,6 @@
-"""E-Rechnung zu festgeschriebenen Rechnungen: ZUGFeRD-PDF (PDF/A-3 mit eingebettetem XML) und XRechnung-XML, abgelegt als private Dateien
-an der Rechnung. Die Daten stammen aus der Rechnung und ihrem Firmen-Snapshot; was dort fehlt (Ansprechpartner, Telefon, E-Mail), wird
-aus den aktuellen Firmendaten ergänzt, damit sich auch ältere Rechnungen nachträglich ausstellen lassen."""
+"""E-Rechnung zu festgeschriebenen Rechnungen: ZUGFeRD-PDF (PDF/A-3 mit eingebettetem XML), abgelegt als private Datei an der Rechnung.
+Eine eigenständige XRechnung gibt es nicht (nur B2B). Die Daten stammen aus der Rechnung und ihrem Firmen-Snapshot; was dort fehlt
+(Ansprechpartner, Telefon, E-Mail), wird aus den aktuellen Firmendaten ergänzt, damit sich auch ältere Rechnungen nachträglich ausstellen lassen."""
 
 import json
 import re
@@ -13,12 +13,11 @@ from cnc_one.api.firma import firma_ui
 from cnc_one.api.rechnung import BUCHHALTUNG, FESTGESCHRIEBEN, kaeufer_felder, rechnung_ui
 from cnc_one.api.stamm import nur_cnc
 from cnc_one.logic import erechnung, pdf
+from cnc_one.logic.kalkulation import r2
 
-STATUS_ALLES = "ZUGFeRD und XRechnung"
 STATUS_ZUGFERD = "ZUGFeRD"
 STATUS_PDF = "Nur PDF"
 STATUS_FEHLER = "Fehler"
-ZUGFERD_STATUS = (STATUS_ALLES, STATUS_ZUGFERD)
 EINHEITEN = {"Stk": "C62", "pauschal": "C62"}
 TEMPLATE = "templates/rechnung_pdf.html"
 
@@ -76,6 +75,28 @@ def _hinweis(p):
 	return " · ".join(teile)
 
 
+def _zeilen(doc):
+	"""Die Positionen der E-Rechnung. Sonderkosten (Zeile 1.1, 1.2 …) hängen als Zuschläge an ihrer Bauteilposition (BG-28), die Zeilensumme
+	enthält sie. Eine Sonderkosten-Zeile ohne Bauteilposition bleibt eine eigene Zeile."""
+	zeilen, eltern = [], {}
+	for p in doc.positionen:
+		nr = (p.zeilen_id or "").split(".")[0]
+		if p.art == "Sonderkosten" and nr in eltern:
+			z = eltern[nr]
+			z["zuschlaege"].append({"text": f"{p.bezeichnung} – Sonderkosten zu Position {nr}", "betrag": p.netto or 0})
+			z["netto"] = r2(z["netto"] + (p.netto or 0))
+			continue
+		z = {
+			"id": p.zeilen_id, "name": p.bezeichnung or p.teilenummer or "Position", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "",
+			"menge": p.menge, "einheit": EINHEITEN.get(p.einheit or "Stk", erechnung.EINHEIT_STUECK), "einzelpreis": p.einzelpreis or 0,
+			"netto": p.netto or 0, "hinweis": _hinweis(p), "zuschlaege": [],
+		}
+		zeilen.append(z)
+		if p.art == "Bauteil":
+			eltern[p.zeilen_id] = z
+	return zeilen
+
+
 def daten_aus_rechnung(doc, firma=None):
 	"""Das Eingabe-Dictionary für `logic.erechnung` aus einer (festgeschriebenen) Rechnung."""
 	firma = firma or _firma(doc)
@@ -108,22 +129,32 @@ def daten_aus_rechnung(doc, firma=None):
 		},
 		"kaeufer": _kaeufer(doc),
 		"steuersatz": doc.steuersatz or 19, "steuerkategorie": "S",
-		"zeilen": [
-			{
-				"id": p.zeilen_id, "name": p.bezeichnung or p.teilenummer or "Position", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "",
-				"menge": p.menge, "einheit": EINHEITEN.get(p.einheit or "Stk", erechnung.EINHEIT_STUECK), "einzelpreis": p.einzelpreis or 0,
-				"netto": p.netto or 0, "hinweis": _hinweis(p),
-			}
-			for p in doc.positionen
-		],
+		"zeilen": _zeilen(doc),
 		"netto": doc.netto or 0, "steuer": doc.steuerbetrag or 0, "brutto": doc.brutto or 0,
 	}
 
 
 # ------------------------------------------------------------------ PDF
+def _zuschlaege_markieren(positionen):
+	"""Sonderkosten erscheinen im PDF wie im XML als Zuschläge unter ihrer Bauteilposition; die letzte Zuschlagszeile trägt die Positionssumme."""
+	eltern = None
+	for p in positionen:
+		if p["art"] == "Bauteil":
+			eltern = {"pos": p, "summe": 0.0, "letzte": None}
+		elif p["art"] == "Sonderkosten" and eltern:
+			eltern["summe"] = r2(eltern["summe"] + p["netto"])
+			eltern["letzte"] = p
+			p["zuschlagZu"] = eltern["pos"]["zeile"]
+			p["positionssumme"] = r2(eltern["pos"]["netto"] + eltern["summe"])
+			for frueher in positionen:  # nur die letzte Zeile trägt die Summe
+				if frueher is not p and frueher.get("zuschlagZu") == p["zuschlagZu"]:
+					frueher.pop("positionssumme", None)
+
+
 def _html(doc, firma):
 	r = rechnung_ui(doc)
 	r["firma"] = firma
+	_zuschlaege_markieren(r["positionen"])
 	storno = doc.art == "Storno"
 	von, bis = _de(doc.leistung_von), _de(doc.leistung_bis)
 	kontext = {
@@ -136,27 +167,27 @@ def _html(doc, firma):
 
 
 # ------------------------------------------------------------------ Ablage
-def _dateiname(doc, art):
-	return f"{doc.rechnungsnummer}.pdf" if art == "pdf" else f"{doc.rechnungsnummer}_xrechnung.xml"
+def _dateiname(doc):
+	return f"{doc.rechnungsnummer}.pdf"
 
 
-def _fassungen(doc, art):
+def _fassungen(doc):
 	"""Alle abgelegten Fassungen (neueste zuerst): `<Nr>.pdf`, dann `<Nr>_v2.pdf` … Eine abgelegte Datei wird nie überschrieben (GoBD)."""
-	stamm, endung = _dateiname(doc, art).rsplit(".", 1)
-	liste = frappe.get_all("File", filters={"attached_to_doctype": "Rechnung", "attached_to_name": doc.name, "file_name": ["like", f"{stamm}%.{endung}"]}, fields=["name", "file_name"], order_by="creation desc, name desc")
-	return [x for x in liste if re.fullmatch(re.escape(stamm) + r"(_v\d+)?\." + endung, x.file_name)]
+	stamm = _dateiname(doc).rsplit(".", 1)[0]
+	liste = frappe.get_all("File", filters={"attached_to_doctype": "Rechnung", "attached_to_name": doc.name, "file_name": ["like", f"{stamm}%.pdf"]}, fields=["name", "file_name"], order_by="creation desc, name desc")
+	return [x for x in liste if re.fullmatch(re.escape(stamm) + r"(_v\d+)?\.pdf", x.file_name)]
 
 
-def _datei_suchen(doc, art):
-	f = _fassungen(doc, art)
+def _datei_suchen(doc):
+	f = _fassungen(doc)
 	return f[0].name if f else None
 
 
-def _ablegen(doc, art, inhalt):
-	stamm, endung = _dateiname(doc, art).rsplit(".", 1)
-	n = len(_fassungen(doc, art))
+def _ablegen(doc, inhalt):
+	stamm = _dateiname(doc).rsplit(".", 1)[0]
+	n = len(_fassungen(doc))
 	frappe.get_doc({
-		"doctype": "File", "file_name": f"{stamm}.{endung}" if not n else f"{stamm}_v{n + 1}.{endung}", "attached_to_doctype": "Rechnung",
+		"doctype": "File", "file_name": f"{stamm}.pdf" if not n else f"{stamm}_v{n + 1}.pdf", "attached_to_doctype": "Rechnung",
 		"attached_to_name": doc.name, "is_private": 1, "content": inhalt,
 	}).insert(ignore_permissions=True)
 
@@ -166,23 +197,19 @@ def _status_setzen(doc, status, hinweis=""):
 
 
 def erzeugen(doc):
-	"""Erzeugt PDF (immer, als PDF/A-3) und, soweit die Angaben reichen, ZUGFeRD-Anhang und XRechnung-XML. Gibt den Status zurück."""
+	"""Erzeugt das PDF (immer als PDF/A-3) und bettet das ZUGFeRD-XML ein, wenn die Pflichtangaben vorhanden sind. Gibt den Status zurück."""
 	if doc.status not in FESTGESCHRIEBEN + ("Gutschrift", "Storniert") or not doc.rechnungsnummer:
 		frappe.throw(_("Eine E-Rechnung gibt es nur zu festgeschriebenen Rechnungen."))
 	firma = _firma(doc)
 	d = daten_aus_rechnung(doc, firma)
 	fehlt = erechnung.fehlende_angaben(d)
-	xml_zugferd = erechnung.baue_cii(d, "zugferd") if not fehlt["zugferd"] else None
+	xml = erechnung.baue_cii(d) if not fehlt else None
 	titel = f"{'Stornorechnung' if doc.art == 'Storno' else 'Rechnung'} {doc.rechnungsnummer}"
-	_ablegen(doc, "pdf", pdf.pdf_a3(_html(doc, firma), xml_zugferd, titel=titel, autor=firma.get("firmenname", "")))
-	if not fehlt["xrechnung"]:
-		_ablegen(doc, "xml", erechnung.baue_cii(d, "xrechnung"))
-	if not fehlt["xrechnung"]:
-		status, hinweis = STATUS_ALLES, ""
-	elif not fehlt["zugferd"]:
-		status, hinweis = STATUS_ZUGFERD, "Für die XRechnung fehlt noch: " + ", ".join(fehlt["xrechnung"]) + "."
+	_ablegen(doc, pdf.pdf_a3(_html(doc, firma), xml, titel=titel, autor=firma.get("firmenname", "")))
+	if fehlt:
+		status, hinweis = STATUS_PDF, "Für ZUGFeRD fehlt noch: " + ", ".join(fehlt) + "."
 	else:
-		status, hinweis = STATUS_PDF, "Für ZUGFeRD und XRechnung fehlt noch: " + ", ".join(fehlt["xrechnung"]) + "."
+		status, hinweis = STATUS_ZUGFERD, ""
 	_status_setzen(doc, status, hinweis)
 	return status
 
@@ -211,23 +238,19 @@ def neu_erzeugen(id):
 
 
 @frappe.whitelist()
-def herunterladen(id, art):
-	"""Lädt das PDF (art=pdf) oder die XRechnung-XML (art=xml) einer Rechnung. Fehlt die Datei, wird sie erzeugt, wenn möglich."""
+def herunterladen(id):
+	"""Lädt das PDF (mit ZUGFeRD-Daten, soweit möglich) einer festgeschriebenen Rechnung. Fehlt die Datei, wird sie erzeugt."""
 	nur_cnc()
-	if art not in ("pdf", "xml"):
-		frappe.throw(_("Die Art der Datei ist pdf oder xml."))
 	doc = frappe.get_doc("Rechnung", id)
 	doc.check_permission("read")
-	if art == "xml" and doc.erechnung_status != STATUS_ALLES:
-		frappe.throw(_("Für diese Rechnung gibt es keine XRechnung. Prüfen Sie den Hinweis zur E-Rechnung."))
-	name = _datei_suchen(doc, art)
+	name = _datei_suchen(doc)
 	if not name and doc.status != "Entwurf":
 		erzeugen(doc)
-		name = _datei_suchen(doc, art)
+		name = _datei_suchen(doc)
 	if not name:
-		frappe.throw(_("Diese Datei gibt es nicht. Prüfen Sie den Hinweis zur E-Rechnung."))
+		frappe.throw(_("Zu dieser Rechnung gibt es noch kein PDF."))
 	datei = frappe.get_doc("File", name)
-	frappe.local.response.filename = datei.file_name
 	inhalt = datei.get_content()
+	frappe.local.response.filename = datei.file_name
 	frappe.local.response.filecontent = inhalt.encode("utf-8") if isinstance(inhalt, str) else inhalt
-	frappe.local.response.type = "pdf" if art == "pdf" else "download"
+	frappe.local.response.type = "pdf"

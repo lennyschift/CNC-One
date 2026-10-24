@@ -384,7 +384,7 @@ DOCTYPES += [
         Data("ust_id", "USt-IdNr."),
         Data("handelsregister", "Handelsregister"),
         Data("geschaeftsfuehrer", "Geschäftsführer"),
-        Data("ansprechpartner", "Ansprechpartner für Rechnungen", description="Pflicht für die E-Rechnung (XRechnung)"),
+        Data("ansprechpartner", "Ansprechpartner für Rechnungen", description="Steht als Kontakt in der E-Rechnung (ZUGFeRD)"),
         Section("sb_bank", "Bankverbindungen"),
         Table("banken", "Firma Bank", "Banken"),
         Section("sb_beleg", "Belege"),
