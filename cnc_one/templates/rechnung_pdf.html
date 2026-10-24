@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>{{ 'Stornorechnung' if storno else 'Rechnung' }} {{ r.nummer }}</title>
+<meta name="author" content="{{ f.firmenname }}">
+<style>
+  @page { size: A4; margin: 15mm 15mm 20mm 15mm;
+    @bottom-center { content: "Seite " counter(page) " von " counter(pages); font-family: "DejaVu Sans"; font-size: 7pt; color: #888; } }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", sans-serif; font-size: 8.4pt; line-height: 1.45; color: #1c1c1c; margin: 0; }
+  .kopf { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.6pt solid #d4242a; padding-bottom: 4mm; }
+  .firma { font-size: 16pt; font-weight: bold; letter-spacing: 0.5pt; color: #d4242a; text-transform: uppercase; }
+  .unterzeile { font-size: 6.5pt; letter-spacing: 2pt; text-transform: uppercase; color: #777; }
+  .adresse-rechts { text-align: right; font-size: 7.5pt; color: #666; }
+  .block { display: flex; justify-content: space-between; margin-top: 9mm; gap: 12mm; }
+  .block > div { flex: 1; }
+  .label { font-size: 6.5pt; letter-spacing: 1pt; text-transform: uppercase; color: #999; margin-bottom: 1mm; }
+  .meta { width: 68mm; flex: none; }
+  .meta td { border: 0; padding: 0.3mm 0; }
+  .meta .k { color: #777; padding-right: 4mm; }
+  .meta .v { text-align: right; white-space: nowrap; }
+  h1 { font-size: 13pt; margin: 9mm 0 2mm; }
+  .einleitung { color: #555; margin-bottom: 5mm; white-space: pre-line; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 6.5pt; font-weight: normal; letter-spacing: 0.8pt; text-transform: uppercase; color: #999; border-bottom: 0.6pt solid #bbb; padding: 1.2mm 0; }
+  th.r, td.r { text-align: right; white-space: nowrap; }
+  td { padding: 2.2mm 0; vertical-align: top; border-bottom: 0.3pt solid #e6e6e6; }
+  tr { break-inside: avoid; }
+  .pos { color: #999; width: 9mm; }
+  .sonder td { color: #555; }
+  .sonder .text { padding-left: 4mm; }
+  .name { font-weight: bold; }
+  .klein { font-size: 7.6pt; color: #666; }
+  .summen { display: flex; justify-content: flex-end; margin-top: 4mm; break-inside: avoid; }
+  .summen table { width: 70mm; }
+  .summen td { border: 0; padding: 0.6mm 0; }
+  .summen .gesamt td { border-top: 0.6pt solid #888; padding-top: 1.6mm; font-weight: bold; font-size: 10pt; }
+  .zahlung { margin-top: 7mm; break-inside: avoid; color: #444; }
+  .zahlung strong { color: #1c1c1c; }
+  .fuss { margin-top: 10mm; border-top: 0.6pt solid #bbb; padding-top: 2mm; display: flex; gap: 8mm; font-size: 6.6pt; color: #777; line-height: 1.5; break-inside: avoid; }
+  .fuss > div { flex: 1; }
+  .entwurf { position: fixed; top: 90mm; left: 40mm; transform: rotate(-30deg); font-size: 60pt; font-weight: bold; color: #e5e5e5; letter-spacing: 6pt; }
+</style>
+</head>
+<body>
+{% if r.status == 'Entwurf' %}<div class="entwurf">ENTWURF</div>{% endif %}
+
+<div class="kopf">
+  <div><div class="firma">{{ f.firmenname }}</div><div class="unterzeile">CNC-Fertigung</div></div>
+  <div class="adresse-rechts">
+    {% for z in f.adresse %}<div>{{ z }}</div>{% endfor %}
+    {% if f.telefon %}<div>Tel. {{ f.telefon }}</div>{% endif %}
+    {% if f.email %}<div>{{ f.email }}</div>{% endif %}
+  </div>
+</div>
+
+<div class="block">
+  <div>
+    <div class="label">Rechnungsempfänger</div>
+    {% for z in r.adresse %}<div{% if loop.first %} style="font-weight:bold"{% endif %}>{{ z }}</div>{% endfor %}
+    {% if r.kundeUstId %}<div class="klein" style="margin-top:1mm">USt-IdNr. {{ r.kundeUstId }}</div>{% endif %}
+    {% if r.leitwegId %}<div class="klein">Leitweg-ID {{ r.leitwegId }}</div>{% endif %}
+  </div>
+  <table class="meta">
+    <tr><td class="k">{{ 'Stornorechnung' if storno else 'Rechnung' }}</td><td class="v"><strong>{{ r.nummer or 'Entwurf' }}</strong></td></tr>
+    <tr><td class="k">Datum</td><td class="v">{{ de(r.rechnungsdatum) }}</td></tr>
+    {% if leistung %}<tr><td class="k">Leistungsdatum</td><td class="v">{{ leistung }}</td></tr>{% endif %}
+    {% if not storno %}<tr><td class="k">Fällig am</td><td class="v">{{ de(r.faelligAm) }}</td></tr>{% endif %}
+    {% if r.kundenbestellnr %}<tr><td class="k">Ihre Bestellung</td><td class="v">{{ r.kundenbestellnr }}</td></tr>{% endif %}
+    <tr><td class="k">Unser Auftrag</td><td class="v">{{ r.auftragId }}</td></tr>
+    {% if storno %}<tr><td class="k">Storno zu</td><td class="v">{{ vorgaenger_nummer }}</td></tr>{% endif %}
+  </table>
+</div>
+
+<h1>{{ 'Stornorechnung' if storno else 'Rechnung' }}{% if r.art == 'Teilrechnung' %} <span style="font-size:9pt;font-weight:normal;color:#777">(Teilrechnung)</span>{% endif %}</h1>
+{% if r.einleitung %}<div class="einleitung">{{ r.einleitung }}</div>{% endif %}
+
+<table>
+  <thead><tr><th class="pos">Pos.</th><th>Beschreibung</th><th class="r" style="width:22mm">Menge</th><th class="r" style="width:24mm">Einzelpreis</th><th class="r" style="width:26mm">Betrag</th></tr></thead>
+  <tbody>
+  {% for p in r.positionen %}
+    <tr class="{{ 'sonder' if p.art == 'Sonderkosten' else '' }}">
+      <td class="pos">{{ p.zeile }}</td>
+      <td class="text">
+        <div class="{{ 'name' if p.art == 'Bauteil' else '' }}">{{ p.bezeichnung }}</div>
+        {% if p.teil.teilenummer or p.teil.zeichnungsnr %}<div class="klein">{% if p.teil.teilenummer %}Teilenummer {{ p.teil.teilenummer }}{% endif %}{% if p.teil.zeichnungsnr %} · Zeichnung {{ p.teil.zeichnungsnr }}{% endif %}</div>{% endif %}
+        {% if p.lieferungenText %}<div class="klein">{{ p.lieferungenText }}</div>{% endif %}
+        {% if p.serienText %}<div class="klein">Seriennummern {{ p.serienText }}</div>{% endif %}
+      </td>
+      <td class="r">{% if p.art == 'Bauteil' %}{{ p.menge }} {{ p.einheit }}{% endif %}</td>
+      <td class="r">{% if p.art == 'Bauteil' %}{{ eur(p.einzelpreis) }}{% endif %}</td>
+      <td class="r">{{ eur(p.netto) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="summen"><table>
+  <tr><td>Summe netto</td><td class="r">{{ eur(r.netto) }}</td></tr>
+  <tr><td>zzgl. {{ r.steuersatz | int }} % Umsatzsteuer</td><td class="r">{{ eur(r.steuerbetrag) }}</td></tr>
+  <tr class="gesamt"><td>Rechnungsbetrag</td><td class="r">{{ eur(r.brutto) }}</td></tr>
+</table></div>
+
+{% if not storno and r.zahlungshinweis %}
+<div class="zahlung"><strong>Zahlbar bis {{ de(r.faelligAm) }} ohne Abzug.</strong><br>
+{% for z in r.zahlungshinweis.split('\n') %}{{ z }}<br>{% endfor %}</div>
+{% endif %}
+{% if r.bemerkung %}<p style="margin-top:4mm;white-space:pre-line;color:#555">{{ r.bemerkung }}</p>{% endif %}
+{% if r.fusstext %}<p class="klein" style="margin-top:3mm">{{ r.fusstext }}</p>{% endif %}
+
+<div class="fuss">
+  <div><strong>{{ f.firmenname }}{% if f.rechtsform %} {{ f.rechtsform }}{% endif %}</strong>{% for z in f.adresse %}<br>{{ z }}{% endfor %}</div>
+  <div>{% if f.steuernummer %}Steuernummer {{ f.steuernummer }}<br>{% endif %}{% if f.ustId %}USt-IdNr. {{ f.ustId }}<br>{% endif %}{% if f.handelsregister %}{{ f.handelsregister }}<br>{% endif %}{% if f.geschaeftsfuehrer %}Geschäftsführer: {{ f.geschaeftsfuehrer }}{% endif %}</div>
+  <div>{% for b in f.banken %}{{ b.bezeichnung }}: {{ b.iban }}{% if b.bic %} · {{ b.bic }}{% endif %}<br>{% endfor %}</div>
+</div>
+</body>
+</html>
