@@ -49,7 +49,7 @@ class TestStammdaten(IntegrationTestCase):
 		self.assertEqual((w["preisKg"], w["dichte"]), (4.2, 7.85))
 		aktuell = stammdaten.aktuell()
 		self.assertIn({"name": "ZZ Fräse", "satz": 99.5}, aktuell["maschinen"])
-		self.assertIn({"name": "ZZ Stahl", "preisKg": 4.2}, aktuell["materialien"])
+		self.assertIn({"name": "ZZ Stahl", "preisKg": 4.2, "schreibweisen": []}, aktuell["materialien"])
 
 	def test_name_ist_pflicht(self):
 		with self.assertRaises(frappe.ValidationError):

@@ -97,7 +97,7 @@ def maschine_setzen(doc, d):
 
 
 def material_ui(d):
-	return {"id": d.name, "name": d.materialname, "preisKg": d.preis_kg or 0, "dichte": d.dichte or 0, "aktiv": bool(d.aktiv)}
+	return {"id": d.name, "name": d.materialname, "preisKg": d.preis_kg or 0, "dichte": d.dichte or 0, "aktiv": bool(d.aktiv), "schreibweisen": d.schreibweisen or ""}
 
 
 def material_setzen(doc, d):
@@ -106,6 +106,8 @@ def material_setzen(doc, d):
 	doc.preis_kg = d.get("preisKg") or 0
 	doc.dichte = d.get("dichte") or 0
 	doc.aktiv = 1 if d.get("aktiv", True) else 0
+	if "schreibweisen" in d:
+		doc.schreibweisen = "\n".join(z.strip() for z in (d.get("schreibweisen") or "").splitlines() if z.strip())
 
 
 # ----------------------------------------------------------------- Bauteil

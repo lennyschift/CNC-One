@@ -16,7 +16,9 @@
   "zahlungsziel_tage",
   "sb_adressen",
   "adressen",
-  "kontakte"
+  "kontakte",
+  "sb_zeichnung",
+  "zeichnungsvorlage"
  ],
  "fields": [
   {
@@ -91,6 +93,18 @@
    "fieldtype": "Table",
    "label": "Kontakte",
    "options": "Kunde Kontakt"
+  },
+  {
+   "fieldname": "sb_zeichnung",
+   "fieldtype": "Section Break",
+   "label": "Zeichnungen"
+  },
+  {
+   "fieldname": "zeichnungsvorlage",
+   "fieldtype": "JSON",
+   "label": "Zeichnungsvorlage",
+   "read_only": 1,
+   "description": "Angelernte Regeln, wo auf den Zeichnungen dieses Kunden Teilenummer, Werkstoff usw. stehen"
   }
  ],
  "links": [],

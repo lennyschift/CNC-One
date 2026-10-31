@@ -7,7 +7,8 @@
   "materialname",
   "preis_kg",
   "dichte",
-  "aktiv"
+  "aktiv",
+  "schreibweisen"
  ],
  "fields": [
   {
@@ -36,6 +37,12 @@
    "label": "Aktiv",
    "default": "1",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "schreibweisen",
+   "fieldtype": "Small Text",
+   "label": "Schreibweisen auf Zeichnungen",
+   "description": "Eine je Zeile, z. B. X5CrNi18-10 für 1.4301; wird beim Anlernen in der Workbench ergänzt"
   }
  ],
  "links": [],

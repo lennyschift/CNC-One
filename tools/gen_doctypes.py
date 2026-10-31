@@ -106,6 +106,7 @@ DOCTYPES = [
         Money("preis_kg", "Preis (€/kg)", in_list_view=1),
         Num("dichte", "Dichte (kg/dm³)"),
         Check("aktiv", "Aktiv", default="1", in_list_view=1),
+        Text("schreibweisen", "Schreibweisen auf Zeichnungen", description="Eine je Zeile, z. B. X5CrNi18-10 für 1.4301; wird beim Anlernen in der Workbench ergänzt"),
     ]),
     dict(name="Lieferant", autoname="field:lieferantenname", title="lieferantenname", rechte=stamm_rechte(("CNC Vertrieb",)), icon="truck", fields=[
         Data("lieferantenname", "Lieferant", reqd=1, unique=1, in_list_view=1),
@@ -135,6 +136,8 @@ DOCTYPES = [
         Section("sb_adressen", "Adressen und Kontakte"),
         Table("adressen", "Kunde Adresse", "Adressen"),
         Table("kontakte", "Kunde Kontakt", "Kontakte"),
+        Section("sb_zeichnung", "Zeichnungen"),
+        Json("zeichnungsvorlage", "Zeichnungsvorlage", read_only=1, description="Angelernte Regeln, wo auf den Zeichnungen dieses Kunden Teilenummer, Werkstoff usw. stehen"),
     ]),
     dict(name="Arbeitsplan Vorlage", autoname="VL-.####", title="vorlagenname", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung")), icon="workflow", fields=[
         Data("vorlagenname", "Name der Vorlage", reqd=1, in_list_view=1),
