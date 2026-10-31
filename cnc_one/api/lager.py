@@ -17,12 +17,12 @@ def bestand_ui():
 	)
 	out = []
 	for z in zeilen:
-		b = frappe.db.get_value("Bauteil", z.bauteil, ["kunde", "teilenummer", "bezeichnung", "zeichnungsnr", "serien_stellen"], as_dict=True)
+		b = frappe.db.get_value("Bauteil", z.bauteil, ["kunde", "teilenummer", "bezeichnung", "zeichnungsnr", "serien_stellen", "vorschaubild"], as_dict=True)
 		if not b:
 			continue
 		out.append({
 			"bauteilId": z.bauteil,
-			"teil": {"name": b.bezeichnung or "", "teilenummer": b.teilenummer or "", "zeichnungsnr": b.zeichnungsnr or "", "vorschaubild": ""},
+			"teil": {"name": b.bezeichnung or "", "teilenummer": b.teilenummer or "", "zeichnungsnr": b.zeichnungsnr or "", "vorschaubild": b.vorschaubild or ""},
 			"kundeId": b.kunde,
 			"kundeName": frappe.db.get_value("Kunde", b.kunde, "kundenname") or "",
 			"bestand": int(z.bestand or 0),

@@ -18,6 +18,7 @@
   "sb_dateien",
   "vorschaubild",
   "step_datei",
+  "zeichnung",
   "sb_plan",
   "arbeitsplan"
  ],
@@ -102,12 +103,17 @@
    "fieldname": "vorschaubild",
    "fieldtype": "Attach Image",
    "label": "Vorschaubild",
-   "description": "entsteht später aus dem STEP-Modell"
+   "description": "entsteht aus dem STEP-Modell"
   },
   {
    "fieldname": "step_datei",
    "fieldtype": "Attach",
    "label": "STEP-Modell"
+  },
+  {
+   "fieldname": "zeichnung",
+   "fieldtype": "Attach",
+   "label": "Zeichnung (PDF)"
   },
   {
    "fieldname": "sb_plan",

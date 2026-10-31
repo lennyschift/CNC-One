@@ -45,7 +45,7 @@ def fb_ui(d):
 		"kundeName": d.kunde_name or "",
 		"teil": {
 			"name": d.bezeichnung or "", "teilenummer": d.teilenummer or "", "zeichnungsnr": d.zeichnungsnr or "",
-			"material": d.material or "", "vorschaubild": "",
+			"material": d.material or "", "vorschaubild": bauteil_api.vorschau(d.bauteil),
 		},
 		"menge": d.menge,
 		"termin": datum(d.termin),

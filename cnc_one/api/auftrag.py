@@ -39,7 +39,7 @@ def auftrag_ui(d):
 				"angebotKey": p.angebot_position_key or "",
 				"teil": {
 					"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "",
-					"material": p.material or "", "vorschaubild": "",
+					"material": p.material or "", "vorschaubild": bauteil_api.vorschau(p.bauteil),
 				},
 				"menge": p.menge,
 				"einzelpreis": p.einzelpreis or 0,

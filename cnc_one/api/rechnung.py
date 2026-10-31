@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate, now_datetime, today
 
+from cnc_one.api.bauteil import vorschau
 from cnc_one.api.firma import firma_ui
 from cnc_one.api.stamm import nur_cnc
 from cnc_one.logic import abrechnung, erechnung, nummernkreis
@@ -64,7 +65,7 @@ def rechnung_ui(d):
 		"positionen": [
 			{
 				"zeile": p.zeilen_id, "art": p.art, "bauteilId": p.bauteil or "",
-				"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": ""},
+				"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": vorschau(p.bauteil)},
 				"bezeichnung": p.bezeichnung or "", "menge": p.menge, "einheit": p.einheit or "Stk", "einzelpreis": p.einzelpreis or 0, "netto": p.netto or 0,
 				"auftragPosKey": p.auftragsposition_key or "", "auftragskosten": p.auftragskosten_name or "",
 				"lieferungen": json.loads(p.lieferungen) if p.lieferungen and isinstance(p.lieferungen, str) else (p.lieferungen or []),
@@ -118,7 +119,7 @@ def vorschlag(auftrag):
 		b = berechnet.get(p.position_key, {}).get("menge", 0)
 		positionen.append({
 			"key": p.position_key, "bauteilId": p.bauteil or "",
-			"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": ""},
+			"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": vorschau(p.bauteil)},
 			"bestellt": p.menge, "geliefert": geliefert.get(p.position_key, {}).get("menge", 0), "berechnet": b, "offen": max(0, p.menge - b),
 			"einzelpreis": p.einzelpreis or 0,
 			"kosten": [{"name": k.name, "label": k.bezeichnung, "betrag": k.betrag or 0, "inRechnung": k.name in belegt} for k in auf.kosten if k.position_key == p.position_key],

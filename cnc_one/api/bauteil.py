@@ -18,7 +18,15 @@ def bauteil_ui(d):
 		"seriennummern": bool(d.seriennummern),
 		"serienStellen": d.serien_stellen or 4,
 		"letzteSeriennummer": d.letzte_seriennummer or 0,
+		"vorschaubild": d.vorschaubild or "",
+		"stepDatei": d.step_datei or "",
+		"zeichnung": d.zeichnung or "",
 	}
+
+
+def vorschau(name):
+	"""Vorschaubild eines Bauteils (url) oder leer."""
+	return (frappe.db.get_value("Bauteil", name, "vorschaubild") or "") if name else ""
 
 
 def alle_ui():
@@ -73,6 +81,38 @@ def _angaben_setzen(doc, teil):
 	doc.zeichnungsnr = (teil.get("zeichnungsnr") or "").strip()
 	doc.material = _material(teil.get("material"))
 	doc.seriennummern = 1 if teil.get("seriennummern") else 0
+	_dateien_setzen(doc, teil)
+
+
+def dateien_aus_teil(teil):
+	"""STEP-Modell, Zeichnung und Vorschaubild eines Workbench-Bauteils (hochgeladene Dateien): { feld: url }."""
+	erste = {}
+	for d in teil.get("dateien") or []:
+		url = d.get("url") or ""
+		if url and d.get("art") in ("STEP", "Zeichnung"):
+			erste.setdefault("step_datei" if d["art"] == "STEP" else "zeichnung", url)
+	if teil.get("vorschaubild"):
+		erste["vorschaubild"] = teil["vorschaubild"]
+	return erste
+
+
+def _dateien_setzen(doc, teil, nur_leere=False):
+	"""Übernimmt die Dateien ins Bauteil. Die am Angebot hochgeladene Datei wird vom Angebot gelöst, Frappe hängt sie beim
+	Speichern dann an das Bauteil (ohne Kopie). So bleibt sie erhalten, wenn das Angebot gelöscht wird, und alle mit
+	Leserecht am Bauteil sehen sie."""
+	geaendert = False
+	for feld, url in dateien_aus_teil(teil).items():
+		if doc.get(feld) != url and not (nur_leere and doc.get(feld)):
+			_vom_angebot_loesen(url)
+			doc.set(feld, url)
+			geaendert = True
+	return geaendert
+
+
+def _vom_angebot_loesen(url):
+	name = frappe.db.get_value("File", {"file_url": url, "attached_to_doctype": "Angebot"}, "name")
+	if name:
+		frappe.db.set_value("File", name, {"attached_to_doctype": None, "attached_to_name": None, "attached_to_field": None}, update_modified=False)
 
 
 def fuer_position(kunde, teil, alt=None):
@@ -92,6 +132,8 @@ def fuer_position(kunde, teil, alt=None):
 		neu = bool(alt_neu and vorhanden == alt_name)
 		if neu:
 			_angaben_setzen(doc, teil)
+			doc.save()
+		elif _dateien_setzen(doc, teil, nur_leere=True):
 			doc.save()
 		return doc, neu
 	if alt_neu and alt_name and frappe.db.get_value("Bauteil", alt_name, "kunde") == kunde and not _anderweitig_verwendet(alt_name):

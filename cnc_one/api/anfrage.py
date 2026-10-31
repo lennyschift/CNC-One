@@ -34,7 +34,7 @@ def anfrage_ui(d):
 				"teilId": p.teil_id or "",
 				"teil": {
 					"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "",
-					"material": p.material or "", "vorschaubild": "",
+					"material": p.material or "", "vorschaubild": bauteil_api.vorschau(p.bauteil),
 				},
 				"agId": p.ag_id or "",
 				"agName": p.ag_name or "",

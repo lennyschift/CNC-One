@@ -4,6 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import today
 
+from cnc_one.api.bauteil import vorschau
 from cnc_one.api.stamm import nur_cnc
 from cnc_one.logic import abrechnung, lager
 from cnc_one.logic.daten import datum, iso
@@ -40,7 +41,7 @@ def lieferschein_ui(d, rechnungen=None):
 		"positionen": [
 			{
 				"bauteilId": p.bauteil or "",
-				"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": ""},
+				"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": vorschau(p.bauteil)},
 				"menge": p.menge,
 				"auftragId": p.auftrag or "",
 				"auftragPosKey": p.auftragsposition_key or "",
@@ -82,7 +83,7 @@ def vorschlag(auftrag):
 		positionen.append({
 			"auftragPosKey": p.position_key,
 			"bauteilId": p.bauteil or "",
-			"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": ""},
+			"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": vorschau(p.bauteil)},
 			"bestellt": p.menge, "gefertigt": fertig, "geliefert": g, "offen": offen,
 			"vorschlag": max(0, min(offen, fertig - g)),
 			# nächste ungelieferte Nummer des bestellten Bereichs
