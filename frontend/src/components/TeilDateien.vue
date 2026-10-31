@@ -2,7 +2,8 @@
 // Zeichnung und 3D-Modell eines Workbench-Bauteils nebeneinander. Dateien lassen sich direkt auf die Fläche ziehen oder auswählen;
 // sie werden sofort hochgeladen. Aus dem ersten gelesenen Modell entsteht automatisch das Vorschaubild des Bauteils.
 import { ref, computed, defineAsyncComponent } from 'vue';
-import { Box, FileText, Loader, UploadCloud, X, FileWarning } from '@lucide/vue';
+import { Box, FileText, Loader, UploadCloud, X, FileWarning, ScanText } from '@lucide/vue';
+import ErkennungsHinweis from './ErkennungsHinweis.vue';
 import { useAngebot } from '../stores/angebot.js';
 import { zahl } from '../lib/format.js';
 
@@ -59,6 +60,8 @@ const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b
       <span v-if="laufend.length" class="ml-auto inline-flex items-center gap-1.5 text-xs text-mute"><Loader :size="13" class="animate-spin" /> {{ laufend.join(', ') }} wird hochgeladen …</span>
     </div>
 
+    <ErkennungsHinweis :teil="teil" class="mb-4" />
+
     <div class="grid gap-4 xl:grid-cols-2">
       <!-- Zeichnung -->
       <div class="flex min-w-0 flex-col gap-2">
@@ -69,7 +72,8 @@ const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b
             <span class="text-[10px] opacity-70 tnum">{{ groesse(d.groesse) }}</span>
             <button class="opacity-60 hover:opacity-100" title="Vom Bauteil entfernen" @click="angebot.dateiEntfernen(teil, d)"><X :size="12" /></button>
           </span>
-          <button v-if="zeichnungen.length" class="ml-auto text-xs text-mute hover:text-ink" @click="auswahlZ.click()">+ PDF</button>
+          <button v-if="zeichnung" class="ml-auto inline-flex items-center gap-1 text-xs text-mute hover:text-ink" title="Angaben aus der Zeichnung erneut lesen" @click="angebot.erkennenFuer(teil, zeichnung)"><ScanText :size="13" /> Erkennen</button>
+          <button v-if="zeichnungen.length" class="text-xs text-mute hover:text-ink" @click="auswahlZ.click()">+ PDF</button>
         </div>
         <div class="h-[460px]" @dragover.prevent="ueber = 'z'" @dragleave="ueber = ''" @drop.prevent="ablegen($event, 'Zeichnung')">
           <DrawingViewer v-if="zeichnung" :key="zeichnung.url" :url="zeichnung.url" :name="zeichnung.name" />

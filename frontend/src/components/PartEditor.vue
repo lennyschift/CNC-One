@@ -58,9 +58,10 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
         <PartImage :teil="teil" :groesse="104" />
         <div class="min-w-[260px] flex-1">
           <input v-model="teil.name" class="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-mute" placeholder="Bezeichnung des Bauteils" />
-          <div class="mt-3 grid max-w-xl grid-cols-2 gap-3">
+          <div class="mt-3 grid max-w-2xl grid-cols-[1fr_1fr_90px] gap-3">
             <label class="block"><span class="label mb-1 block">Teilenummer</span><input v-model="teil.teilenummer" class="field" :disabled="bestand" placeholder="z. B. F31.683.122" /></label>
             <label class="block"><span class="label mb-1 block">Zeichnungsnummer</span><input v-model="teil.zeichnungsnr" class="field" placeholder="optional" /></label>
+            <label class="block"><span class="label mb-1 block">Revision</span><input v-model="teil.revision" class="field" placeholder="–" /></label>
           </div>
           <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
             <Toggle v-if="!bestand" v-model="teil.seriennummern" klein label="Seriennummern führen" />

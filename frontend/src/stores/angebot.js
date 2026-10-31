@@ -6,7 +6,7 @@ import { eur } from '../lib/format.js';
 import { useUi } from './ui.js';
 import { useBelege } from './belege.js';
 import { einstellung, einstellungSpeichern } from '../data/einstellungen.js';
-import { hochladen } from '../data/api.js';
+import { call, hochladen } from '../data/api.js';
 
 export function neuesTeil(name = 'Neues Bauteil') {
   return {
@@ -14,6 +14,7 @@ export function neuesTeil(name = 'Neues Bauteil') {
     name,
     teilenummer: '',
     zeichnungsnr: '',
+    revision: '',
     menge: 10,
     maschine: '',
     satzRuest: 0,
@@ -93,6 +94,9 @@ export const useAngebot = defineStore('angebot', () => {
   const speicherStand = ref('gespeichert');
   // Laufende Uploads je Workbench-Bauteil: { [teilId]: [Dateiname, …] }
   const uploads = ref({});
+  // Aus der Zeichnung erkannte Angaben je Workbench-Bauteil (nur im Browser, bis übernommen oder verworfen):
+  // { [teilId]: { stand: 'laeuft' | 'fertig' | 'fehler', datei, felder, werkstoffNr, passende, fehler } }
+  const erkennungen = ref({});
 
   let unterdrueckt = true;
   let timer = 0;
@@ -208,7 +212,7 @@ export const useAngebot = defineStore('angebot', () => {
     const t = neuesTeil(b.name || b.teilenummer);
     const m = materialien.find((x) => x.name === b.material);
     Object.assign(t, {
-      teilenummer: b.teilenummer, zeichnungsnr: b.zeichnungsnr, material: b.material,
+      teilenummer: b.teilenummer, zeichnungsnr: b.zeichnungsnr, revision: b.revision ?? '', material: b.material,
       materialPreisKg: m?.preisKg ?? 0, seriennummern: !!b.seriennummern,
       arbeitsgaenge: (b.arbeitsgaenge ?? []).map((ag) => ({ ...JSON.parse(JSON.stringify(ag)), id: uid(), anfrageId: '' })),
       // Zeichnung, Modell und Bild des Bauteils gleich mit anzeigen
@@ -291,13 +295,63 @@ export const useAngebot = defineStore('angebot', () => {
       uploads.value[teil.id] = [...(uploads.value[teil.id] ?? []), datei.name];
       try {
         const f = await hochladen(datei, { doctype: 'Angebot', docname: angebotId.value });
-        teil.dateien.push({ id: f.name, name: datei.name, art: dateiArt(datei.name), groesse: datei.size, url: f.file_url });
+        const eintrag = { id: f.name, name: datei.name, art: dateiArt(datei.name), groesse: datei.size, url: f.file_url };
+        teil.dateien.push(eintrag);
+        if (eintrag.art === 'Zeichnung') erkennenFuer(teil, eintrag);
       } catch (e) {
         ui.toast(`${datei.name}: ${e.message}`, 'warn');
       } finally {
         uploads.value[teil.id] = (uploads.value[teil.id] ?? []).filter((n) => n !== datei.name);
       }
     }));
+  }
+
+  // Schriftfeld-Angaben aus der Zeichnung lesen und vorhandene Bauteile dazu suchen. Übernommen wird erst nach Bestätigung.
+  async function erkennenFuer(teil, datei) {
+    erkennungen.value[teil.id] = { stand: 'laeuft', datei: datei.url };
+    try {
+      const [{ zeichnungLesen }, { erkennen }] = await Promise.all([import('../lib/pdf.js'), import('../lib/erkennung.js')]);
+      const r = erkennen(await zeichnungLesen(datei.url), datei.name);
+      let passende = [];
+      if (r.felder.teilenummer || r.felder.zeichnungsnr) {
+        try {
+          passende = await call('cnc_one.api.bauteil.passende', { teilenummer: r.felder.teilenummer?.wert ?? '', zeichnungsnr: r.felder.zeichnungsnr?.wert ?? '', kunde: kopf.value.kundeId });
+        } catch { /* ohne Vorschläge weiter */ }
+      }
+      erkennungen.value[teil.id] = { stand: 'fertig', datei: datei.url, ...r, passende };
+    } catch (e) {
+      erkennungen.value[teil.id] = { stand: 'fehler', datei: datei.url, fehler: e.message };
+    }
+  }
+
+  // Bestätigte Angaben übernehmen: { name, teilenummer, zeichnungsnr, revision, material: { name, preisKg }, kundeId }
+  function erkennungUebernehmen(teil, werte) {
+    for (const k of ['name', 'teilenummer', 'zeichnungsnr', 'revision']) if (werte[k] !== undefined) teil[k] = werte[k];
+    if (werte.material) { teil.material = werte.material.name; teil.materialPreisKg = werte.material.preisKg ?? teil.materialPreisKg; }
+    if (werte.kundeId && !kopf.value.kundeId) kopf.value.kundeId = werte.kundeId;
+    delete erkennungen.value[teil.id];
+    ui.toast('Angaben aus der Zeichnung übernommen', 'ok');
+  }
+
+  // Ein vorgeschlagenes Bestandsbauteil verwenden: Angaben und Arbeitsplan aus den Stammdaten, Kunde falls noch keiner gewählt
+  function bestandUebernehmen(teil, b, materialien = []) {
+    if (kopf.value.kundeId && kopf.value.kundeId !== b.kundeId) { ui.toast('Das Bauteil gehört zu einem anderen Kunden.', 'warn'); return; }
+    if (!kopf.value.kundeId) kopf.value.kundeId = b.kundeId;
+    const m = materialien.find((x) => x.name === b.material);
+    Object.assign(teil, {
+      teilenummer: b.teilenummer, name: b.name || teil.name, zeichnungsnr: b.zeichnungsnr, revision: b.revision ?? '',
+      seriennummern: !!b.seriennummern,
+    });
+    if (b.material) { teil.material = b.material; teil.materialPreisKg = m?.preisKg ?? teil.materialPreisKg; }
+    if (!teil.arbeitsgaenge?.length && b.arbeitsgaenge?.length) teil.arbeitsgaenge = b.arbeitsgaenge.map((ag) => ({ ...JSON.parse(JSON.stringify(ag)), id: uid(), anfrageId: '' }));
+    if (!teil.vorschaubild && b.vorschaubild) teil.vorschaubild = b.vorschaubild;
+    zuordnung.value = { ...zuordnung.value, [teil.id]: { bauteilId: b.id, herkunft: 'bestand', seriennummern: !!b.seriennummern } };
+    delete erkennungen.value[teil.id];
+    ui.toast(`Bestandsbauteil ${b.teilenummer} verwendet`, 'ok');
+  }
+
+  function erkennungVerwerfen(teil) {
+    delete erkennungen.value[teil.id];
   }
 
   function dateiEntfernen(teil, datei) {
@@ -327,5 +381,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, zuordnung, auswahlId, angebotId, speicherStand, uploads, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, beispieleEinfuegen };
+  return { kopf, teile, zuordnung, auswahlId, angebotId, speicherStand, uploads, erkennungen, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, erkennungUebernehmen, bestandUebernehmen, erkennungVerwerfen, beispieleEinfuegen };
 });

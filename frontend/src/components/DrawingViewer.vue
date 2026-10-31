@@ -2,13 +2,9 @@
 // Zeichnung (PDF) ansehen: scharf gerendert mit pdf.js, zoomen (Knöpfe oder Strg + Rad), verschieben mit gedrückter Maus,
 // im Textmodus Werte markieren und kopieren. Wird nur geladen, wenn eine Zeichnung da ist (pdf.js ist groß).
 import { ref, shallowRef, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
-import * as pdfjs from 'pdfjs-dist';
-// Als Vite-Worker gebündelt (.js): nginx liefert .mjs nicht als JavaScript aus
-import PdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker';
+import { pdfjs } from '../lib/pdf.js';
 import { useEventListener } from '@vueuse/core';
 import { Maximize2, Minimize2, ZoomIn, ZoomOut, MoveHorizontal, Hand, TextCursor, ExternalLink, Loader, AlertTriangle } from '@lucide/vue';
-
-pdfjs.GlobalWorkerOptions.workerPort ??= new PdfWorker();
 
 const props = defineProps({ url: { type: String, required: true }, name: { type: String, default: '' } });
 
@@ -76,7 +72,6 @@ async function laden() {
   fehler.value = '';
   abbrechen();
   ladeAufgabe?.destroy();
-  dokument.value?.destroy();
   dokument.value = null;
   try {
     ladeAufgabe = pdfjs.getDocument({ url: props.url, withCredentials: true });
@@ -138,7 +133,6 @@ onBeforeUnmount(() => {
   groesse?.disconnect();
   abbrechen();
   ladeAufgabe?.destroy();
-  dokument.value?.destroy();
 });
 </script>
 
