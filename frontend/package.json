@@ -13,9 +13,12 @@
   "dependencies": {
     "@fontsource-variable/inter": "latest",
     "@formkit/auto-animate": "latest",
-    "@vueuse/core": "latest",
     "@lucide/vue": "latest",
+    "@vueuse/core": "latest",
+    "occt-import-js": "^0.0.23",
+    "pdfjs-dist": "^6.4.299",
     "pinia": "latest",
+    "three": "^0.187.0",
     "vue": "latest",
     "vue-router": "latest"
   },

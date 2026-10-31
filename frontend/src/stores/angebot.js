@@ -6,6 +6,7 @@ import { eur } from '../lib/format.js';
 import { useUi } from './ui.js';
 import { useBelege } from './belege.js';
 import { einstellung, einstellungSpeichern } from '../data/einstellungen.js';
+import { hochladen } from '../data/api.js';
 
 export function neuesTeil(name = 'Neues Bauteil') {
   return {
@@ -32,8 +33,17 @@ export function neuesTeil(name = 'Neues Bauteil') {
     seriennummern: false,
     arbeitsgaenge: [],
     dateien: [],
+    vorschaubild: '',
   };
 }
+
+// Art einer Datei nach der Endung: STEP-Modell, Zeichnung (PDF) oder sonstige
+export function dateiArt(name) {
+  const ext = (/\.([^.]+)$/.exec(name)?.[1] ?? '').toLowerCase();
+  return ['step', 'stp'].includes(ext) ? 'STEP' : ext === 'pdf' ? 'Zeichnung' : ext.toUpperCase() || 'Datei';
+}
+
+const dateiname = (url) => decodeURIComponent(url.split('/').pop() ?? url);
 
 // Beispiel-Bauteile zum Ausprobieren (Befehl "Beispiel-Bauteile einfügen")
 function demoTeile() {
@@ -81,6 +91,8 @@ export const useAngebot = defineStore('angebot', () => {
   const zuordnung = ref({});
   // 'gespeichert' | 'offen' | 'speichert' | 'fehler'
   const speicherStand = ref('gespeichert');
+  // Laufende Uploads je Workbench-Bauteil: { [teilId]: [Dateiname, …] }
+  const uploads = ref({});
 
   let unterdrueckt = true;
   let timer = 0;
@@ -199,6 +211,12 @@ export const useAngebot = defineStore('angebot', () => {
       teilenummer: b.teilenummer, zeichnungsnr: b.zeichnungsnr, material: b.material,
       materialPreisKg: m?.preisKg ?? 0, seriennummern: !!b.seriennummern,
       arbeitsgaenge: (b.arbeitsgaenge ?? []).map((ag) => ({ ...JSON.parse(JSON.stringify(ag)), id: uid(), anfrageId: '' })),
+      // Zeichnung, Modell und Bild des Bauteils gleich mit anzeigen
+      dateien: [
+        ...(b.zeichnung ? [{ name: dateiname(b.zeichnung), art: 'Zeichnung', url: b.zeichnung }] : []),
+        ...(b.stepDatei ? [{ name: dateiname(b.stepDatei), art: 'STEP', url: b.stepDatei }] : []),
+      ],
+      vorschaubild: b.vorschaubild ?? '',
     });
     zuordnung.value = { ...zuordnung.value, [t.id]: { bauteilId: b.id, herkunft: 'bestand', seriennummern: !!b.seriennummern } };
     teile.value.push(t);
@@ -214,6 +232,7 @@ export const useAngebot = defineStore('angebot', () => {
     kopie.id = uid();
     kopie.name = `${q.name} (Kopie)`;
     kopie.dateien = [];
+    kopie.vorschaubild = '';
     // Arbeitsgänge der Kopie bekommen eigene Kennungen, sonst hängen Anfragen an beiden
     kopie.arbeitsgaenge = (kopie.arbeitsgaenge ?? []).map((a) => ({ ...a, id: uid(), anfrageId: '' }));
     const i = teile.value.findIndex((t) => t.id === id);
@@ -238,26 +257,67 @@ export const useAngebot = defineStore('angebot', () => {
     teile.value.splice(j, 0, t);
   }
 
-  // Dateien werden nach Namen gruppiert: Zeichnung.pdf + Zeichnung.step ergeben ein Bauteil.
-  function dateienHinzufuegen(files) {
-    const gruppen = new Map();
-    for (const f of files) {
-      const m = /^(.*?)(\.[^.]+)?$/.exec(f.name);
-      const basis = (m?.[1] ?? f.name).trim();
-      const ext = (m?.[2] ?? '').toLowerCase().slice(1);
-      const art = ['step', 'stp'].includes(ext) ? 'STEP' : ext === 'pdf' ? 'Zeichnung' : ext.toUpperCase() || 'Datei';
-      const schluessel = basis.toLowerCase().replace(/[\s_-]+/g, '');
-      if (!gruppen.has(schluessel)) gruppen.set(schluessel, { basis, dateien: [] });
-      gruppen.get(schluessel).dateien.push({ name: f.name, art, groesse: f.size });
+  // Dateien hinzufügen und sofort hochladen (am Angebotsentwurf; beim Anlegen des Bauteils wandern sie dorthin).
+  // Ohne Ziel werden sie nach Namen gruppiert: Zeichnung.pdf + Zeichnung.step ergeben ein Bauteil.
+  async function dateienHinzufuegen(files, zielTeil = null) {
+    const auftraege = [];
+    if (zielTeil) {
+      for (const f of files) auftraege.push({ teil: zielTeil, datei: f });
+    } else {
+      const gruppen = new Map();
+      for (const f of files) {
+        const basis = (/^(.*?)(\.[^.]+)?$/.exec(f.name)?.[1] ?? f.name).trim();
+        const schluessel = basis.toLowerCase().replace(/[\s_-]+/g, '');
+        if (!gruppen.has(schluessel)) gruppen.set(schluessel, { basis, dateien: [] });
+        gruppen.get(schluessel).dateien.push(f);
+      }
+      let neu = 0;
+      for (const g of gruppen.values()) {
+        let ziel = teile.value.find((t) => t.name.toLowerCase().replace(/[\s_-]+/g, '') === g.basis.toLowerCase().replace(/[\s_-]+/g, ''));
+        if (!ziel) {
+          // über das reaktive Array holen, sonst bemerkt das Speichern die hochgeladenen Dateien nicht
+          const id = hinzufuegen(g.basis.replace(/_/g, ' ')).id;
+          ziel = teile.value.find((t) => t.id === id);
+          neu++;
+        }
+        for (const f of g.dateien) auftraege.push({ teil: ziel, datei: f });
+      }
+      ui.toast(`${files.length} Datei${files.length === 1 ? '' : 'en'} → ${neu} neue${neu === 1 ? 's' : ''} Bauteil${neu === 1 ? '' : 'e'}`, 'ok');
     }
-    let neu = 0;
-    for (const g of gruppen.values()) {
-      const vorhanden = teile.value.find((t) => t.name.toLowerCase().replace(/[\s_-]+/g, '') === g.basis.toLowerCase().replace(/[\s_-]+/g, ''));
-      const ziel = vorhanden ?? hinzufuegen(g.basis.replace(/_/g, ' '));
-      if (!vorhanden) neu++;
-      ziel.dateien.push(...g.dateien);
+    // Dateien hängen am Angebot: der Entwurf muss gespeichert sein
+    if (!angebotId.value) await speichern();
+    if (!angebotId.value) { ui.toast('Das Angebot ließ sich nicht speichern, die Dateien wurden nicht hochgeladen.', 'warn'); return; }
+    await Promise.all(auftraege.map(async ({ teil, datei }) => {
+      uploads.value[teil.id] = [...(uploads.value[teil.id] ?? []), datei.name];
+      try {
+        const f = await hochladen(datei, { doctype: 'Angebot', docname: angebotId.value });
+        teil.dateien.push({ id: f.name, name: datei.name, art: dateiArt(datei.name), groesse: datei.size, url: f.file_url });
+      } catch (e) {
+        ui.toast(`${datei.name}: ${e.message}`, 'warn');
+      } finally {
+        uploads.value[teil.id] = (uploads.value[teil.id] ?? []).filter((n) => n !== datei.name);
+      }
+    }));
+  }
+
+  function dateiEntfernen(teil, datei) {
+    const i = teil.dateien.indexOf(datei);
+    if (i >= 0) teil.dateien.splice(i, 1);
+  }
+
+  // Vorschaubild des Bauteils aus dem 3D-Modell (PNG) hochladen und setzen
+  async function vorschaubildSetzen(teil, blob, melden = false) {
+    if (!blob) return;
+    if (!angebotId.value) await speichern();
+    if (!angebotId.value) return;
+    try {
+      const name = `vorschau-${(teil.teilenummer || teil.id).replace(/[^\w.-]+/g, '_')}.png`;
+      const f = await hochladen(blob, { doctype: 'Angebot', docname: angebotId.value, name });
+      teil.vorschaubild = f.file_url;
+      if (melden) ui.toast('Vorschaubild übernommen', 'ok');
+    } catch (e) {
+      ui.toast(`Vorschaubild: ${e.message}`, 'warn');
     }
-    ui.toast(`${files.length} Datei${files.length === 1 ? '' : 'en'} → ${neu} neue${neu === 1 ? 's' : ''} Bauteil${neu === 1 ? '' : 'e'}`, 'ok');
   }
 
   function beispieleEinfuegen() {
@@ -267,5 +327,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, zuordnung, auswahlId, angebotId, speicherStand, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, beispieleEinfuegen };
+  return { kopf, teile, zuordnung, auswahlId, angebotId, speicherStand, uploads, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, beispieleEinfuegen };
 });

@@ -20,6 +20,8 @@ useEventListener(window, 'dragleave', (e) => {
   if (!zaehler) aktiv.value = false;
 });
 useEventListener(window, 'dragover', (e) => { if (hatDateien(e)) e.preventDefault(); });
+// Vor dem Ziel: auch wenn eine Fläche (z. B. die Zeichnungsansicht) den Drop selbst übernimmt, verschwindet die Anzeige
+useEventListener(window, 'drop', () => { zaehler = 0; aktiv.value = false; }, { capture: true });
 useEventListener(window, 'drop', (e) => {
   if (!hatDateien(e)) return;
   e.preventDefault();

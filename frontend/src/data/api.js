@@ -46,6 +46,32 @@ export async function call(method, args = {}) {
   return data.message;
 }
 
+// Lädt eine Datei als private Frappe-Datei hoch und hängt sie an ein Dokument. Liefert { name, file_url, file_name, file_size }.
+export async function hochladen(datei, { doctype, docname, name = datei.name }) {
+  const daten = new FormData();
+  daten.append('file', datei, name);
+  daten.append('is_private', '1');
+  daten.append('doctype', doctype);
+  daten.append('docname', docname);
+  let r;
+  try {
+    r = await fetch('/api/method/upload_file', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Frappe-CSRF-Token': csrf() },
+      body: daten,
+    });
+  } catch {
+    throw new ApiFehler('Der Server ist nicht erreichbar.', 0, 'netz');
+  }
+  let data = {};
+  try { data = await r.json(); } catch { /* keine JSON-Antwort */ }
+  if (r.status === 401) { zumLogin(); throw new ApiFehler('Die Sitzung ist abgelaufen.', r.status, 'sitzung'); }
+  if (r.status === 413) throw new ApiFehler(`„${name}“ ist zu groß zum Hochladen.`, r.status, 'groesse');
+  if (!r.ok) throw new ApiFehler(textAus(data), r.status, data.exc_type || 'fehler');
+  return data.message;
+}
+
 export async function abmelden() {
   try { await fetch('/api/method/logout', { method: 'POST', credentials: 'same-origin', headers: { 'X-Frappe-CSRF-Token': csrf() } }); } catch { /* egal */ }
   zumLogin();

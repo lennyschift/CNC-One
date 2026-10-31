@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { Cog, Clock, Layers, Receipt, TrendingDown, FileBox, ListChecks, Workflow, Database, Hash, Info } from '@lucide/vue';
+import { Cog, Clock, Layers, Receipt, TrendingDown, ListChecks, Workflow, Database, Hash, Info } from '@lucide/vue';
 import NumField from './NumField.vue';
 import Toggle from './Toggle.vue';
 import TierTable from './TierTable.vue';
@@ -8,9 +8,10 @@ import PriceChart from './PriceChart.vue';
 import AnimatedNumber from './AnimatedNumber.vue';
 import PartImage from './PartImage.vue';
 import ArbeitsplanEditor from './ArbeitsplanEditor.vue';
+import TeilDateien from './TeilDateien.vue';
 import { useAngebot } from '../stores/angebot.js';
 import { repo } from '../data/repo.js';
-import { eur, zahl } from '../lib/format.js';
+import { eur } from '../lib/format.js';
 import { ruestKosten, stueckKosten, fremdProStueck, hatPlan, materialProStueck } from '../lib/calc.js';
 
 const props = defineProps({ teil: { type: Object, required: true }, ergebnis: { type: Object, required: true } });
@@ -86,6 +87,8 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
         </div>
       </div>
     </section>
+
+    <TeilDateien :teil="teil" />
 
     <div class="grid gap-4 xl:grid-cols-2">
       <!-- Menge & Maschine -->
@@ -187,9 +190,8 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
       </div>
     </section>
 
-    <div class="grid gap-4 xl:grid-cols-2">
-      <!-- Vorschau -->
-      <section class="card p-5">
+    <!-- Vorschau -->
+    <section class="card p-5">
         <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><ListChecks :size="16" class="text-accent" /> So erscheint es im Angebot</h3>
         <table class="w-full text-sm">
           <tbody>
@@ -212,22 +214,5 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
           </tbody>
         </table>
       </section>
-
-      <!-- Dateien -->
-      <section class="card p-5">
-        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><FileBox :size="16" class="text-accent" /> Dateien</h3>
-        <ul v-if="teil.dateien.length" class="space-y-1.5">
-          <li v-for="(d, i) in teil.dateien" :key="i" class="flex items-center gap-2.5 rounded-xl bg-surface2 px-3 py-2 text-sm">
-            <span class="rounded-md bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent">{{ d.art }}</span>
-            <span class="flex-1 truncate">{{ d.name }}</span>
-            <span class="text-xs text-mute tnum">{{ groesse(d.groesse) }}</span>
-          </li>
-        </ul>
-        <p v-else class="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-mute">
-          Keine Dateien. STEP- oder PDF-Dateien einfach irgendwo ins Fenster ziehen.<br />
-          <span class="text-xs">(3D-Ansicht und automatische Messung folgen im nächsten Schritt)</span>
-        </p>
-      </section>
-    </div>
   </div>
 </template>
