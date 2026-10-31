@@ -1,5 +1,7 @@
 """Bauteile (Stammdaten) und ihr Arbeitsplan."""
 
+import re
+
 import frappe
 from frappe import _
 
@@ -13,6 +15,7 @@ def bauteil_ui(d):
 		"teilenummer": d.teilenummer,
 		"name": d.bezeichnung or "",
 		"zeichnungsnr": d.zeichnungsnr or "",
+		"revision": d.revision or "",
 		"material": d.material or "",
 		"arbeitsgaenge": [arbeitsgang_ui(r) for r in d.arbeitsplan],
 		"seriennummern": bool(d.seriennummern),
@@ -79,6 +82,7 @@ def _angaben_setzen(doc, teil):
 	"""Bezeichnung, Zeichnung, Werkstoff und Seriennummern-Kennzeichen aus der Workbench ins Bauteil übernehmen."""
 	doc.bezeichnung = (teil.get("name") or "").strip()
 	doc.zeichnungsnr = (teil.get("zeichnungsnr") or "").strip()
+	doc.revision = (teil.get("revision") or "").strip()
 	doc.material = _material(teil.get("material"))
 	doc.seriennummern = 1 if teil.get("seriennummern") else 0
 	_dateien_setzen(doc, teil)
@@ -188,3 +192,28 @@ def plan_speichern(kunde, teilenummer, arbeitsgaenge, name="", zeichnungsnr="", 
 	if not doc:
 		frappe.throw(_("Für den Arbeitsplan braucht das Bauteil einen Kunden und eine Teilenummer."))
 	return bauteil_ui(doc)
+
+
+def _vergleich(wert):
+	"""Nummern ohne Leer- und Trennzeichen vergleichen: "ZN 3003-01" = "zn3003.01"."""
+	return re.sub(r"[\s\-_./]+", "", (wert or "").lower())
+
+
+@frappe.whitelist(methods=["POST"])
+def passende(teilenummer="", zeichnungsnr="", kunde=""):
+	"""Vorhandene Bauteile zu einer aus der Zeichnung erkannten Teilenummer oder Zeichnungsnummer (höchstens 5).
+	Treffer über die Teilenummer und Bauteile des gewählten Kunden kommen zuerst."""
+	nur_cnc()
+	t, z = _vergleich(teilenummer), _vergleich(zeichnungsnr)
+	if not t and not z:
+		return []
+	treffer = []
+	for b in frappe.get_all("Bauteil", fields=["name", "kunde", "teilenummer", "zeichnungsnr"], limit_page_length=0):
+		grund = "teilenummer" if t and _vergleich(b.teilenummer) == t else "zeichnungsnr" if z and _vergleich(b.zeichnungsnr) == z else None
+		if grund:
+			treffer.append((grund != "teilenummer", b.kunde != kunde, b.name, grund))
+	out = []
+	for _a, _b, name, grund in sorted(treffer)[:5]:
+		d = frappe.get_doc("Bauteil", name)
+		out.append({**bauteil_ui(d), "grund": grund, "kundeName": frappe.db.get_value("Kunde", d.kunde, "kundenname") or "", "status": d.status})
+	return out

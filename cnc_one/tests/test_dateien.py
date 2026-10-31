@@ -91,3 +91,34 @@ class TestBauteilDateien(IntegrationTestCase):
 		a, (_s, _p, bild) = self.mit_dateien(self.entwurf())
 		self.assertEqual(bauteil.vorschau(a["positionen"][0]["bauteilId"]), bild)
 		self.assertEqual(bauteil.vorschau(None), "")
+
+
+class TestBauteilErkennung(IntegrationTestCase):
+	"""Vorhandene Bauteile zu den aus der Zeichnung erkannten Nummern finden; Revision aus der Workbench."""
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.k1 = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Erkennung Eins"}).insert().name
+		self.k2 = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Erkennung Zwei"}).insert().name
+		self.b1 = frappe.get_doc({"doctype": "Bauteil", "kunde": self.k1, "teilenummer": "ZZ-E-100", "zeichnungsnr": "ZN 4711-01"}).insert().name
+		self.b2 = frappe.get_doc({"doctype": "Bauteil", "kunde": self.k2, "teilenummer": "zz e 100"}).insert().name
+		self.b3 = frappe.get_doc({"doctype": "Bauteil", "kunde": self.k2, "teilenummer": "ZZ-E-300", "zeichnungsnr": "ZN4711.01"}).insert().name
+
+	def tearDown(self):
+		frappe.db.rollback()
+
+	def test_teilenummer_ohne_trennzeichen_und_eigener_kunde_zuerst(self):
+		r = bauteil.passende(teilenummer="ZZ E-100", kunde=self.k2)
+		self.assertEqual([(x["id"], x["grund"]) for x in r], [(self.b2, "teilenummer"), (self.b1, "teilenummer")])
+		self.assertEqual(r[1]["kundeName"], "ZZ Erkennung Eins")
+
+	def test_zeichnungsnummer_nach_der_teilenummer(self):
+		r = bauteil.passende(teilenummer="ZZ-E-100", zeichnungsnr="zn-4711-01", kunde=self.k1)
+		self.assertEqual([(x["id"], x["grund"]) for x in r], [(self.b1, "teilenummer"), (self.b2, "teilenummer"), (self.b3, "zeichnungsnr")])
+		self.assertEqual(bauteil.passende(), [])
+
+	def test_revision_kommt_ins_neue_bauteil(self):
+		a = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.k1}, "teile": [teil("t1", "Hülse", "ZZ-E-900", revision="A2")]})
+		b = a["positionen"][0]["bauteilId"]
+		self.assertEqual(frappe.db.get_value("Bauteil", b, "revision"), "A2")
+		self.assertEqual(bauteil.bauteil_ui(frappe.get_doc("Bauteil", b))["revision"], "A2")
