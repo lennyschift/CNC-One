@@ -5,6 +5,7 @@ import StammListe from '../components/StammListe.vue';
 const felder = [
   { key: 'preisKg', label: 'Preis je Kilogramm', typ: 'euro', suffix: '€/kg' },
   { key: 'dichte', label: 'Dichte', typ: 'zahl', suffix: 'g/cm³', decimals: 2 },
+  { key: 'schreibweisen', label: 'Schreibweisen auf Zeichnungen (eine je Zeile, z. B. X5CrNi18-10)', typ: 'text-lang' },
 ];
 </script>
 

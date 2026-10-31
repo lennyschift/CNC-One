@@ -6,7 +6,14 @@ import { pdfjs } from '../lib/pdf.js';
 import { useEventListener } from '@vueuse/core';
 import { Maximize2, Minimize2, ZoomIn, ZoomOut, MoveHorizontal, Hand, TextCursor, ExternalLink, Loader, AlertTriangle } from '@lucide/vue';
 
-const props = defineProps({ url: { type: String, required: true }, name: { type: String, default: '' } });
+const props = defineProps({
+  url: { type: String, required: true },
+  name: { type: String, default: '' },
+  markierung: { type: Object, default: null }, // { x, y, b, h } auf Seite 1, 0 bis 1
+  anlernen: { type: Boolean, default: false }, // Klick auf Seite 1 meldet die Stelle (Wert anlernen)
+  fokus: { type: Object, default: null }, // { lage } auf Seite 1: nah heranzoomen und mittig zeigen
+});
+const emit = defineEmits(['punkt']);
 
 const flaeche = ref(null);
 const seitenEl = ref([]);
@@ -106,7 +113,7 @@ useEventListener(flaeche, 'wheel', (e) => {
 // Verschieben mit gedrückter Maus (Handmodus)
 let ziehen = null;
 function runter(e) {
-  if (modus.value !== 'hand' || e.button !== 0) return;
+  if (props.anlernen || modus.value !== 'hand' || e.button !== 0) return;
   ziehen = { x: e.clientX, y: e.clientY, l: flaeche.value.scrollLeft, t: flaeche.value.scrollTop };
   flaeche.value.setPointerCapture(e.pointerId);
 }
@@ -116,6 +123,29 @@ function bewegen(e) {
   flaeche.value.scrollTop = ziehen.t - (e.clientY - ziehen.y);
 }
 function hoch() { ziehen = null; }
+
+// Beim Anlernen: Stelle des Klicks auf Seite 1 als Anteil der Seite melden
+function klick(e, n) {
+  if (!props.anlernen || n !== 1) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  emit('punkt', { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height });
+}
+
+// Zur Stelle zoomen: so nah, dass der Wert gut ein Drittel der Ansicht breit ist, und ihn mittig zeigen.
+// Gescrollt wird nur in der Ansicht selbst, die Workbench drumherum bleibt stehen.
+watch(() => props.fokus, async (f) => {
+  const el = flaeche.value;
+  const seite = seitenEl.value[0];
+  if (!f?.lage || !el || !seite || !dokument.value) return;
+  const breiteBeiZoom1 = seite.offsetWidth / zoom.value;
+  zoom.value = Math.min(6, Math.max(1.5, (el.clientWidth * 0.35) / Math.max(f.lage.b * breiteBeiZoom1, 1)));
+  clearTimeout(zoomTimer);
+  await nextTick();
+  clearTimeout(zoomTimer);
+  await rendern();
+  el.scrollLeft = seite.offsetLeft + (f.lage.x + f.lage.b / 2) * seite.offsetWidth - el.clientWidth / 2;
+  el.scrollTop = seite.offsetTop + (f.lage.y + f.lage.h / 2) * seite.offsetHeight - el.clientHeight / 2;
+});
 
 useEventListener(window, 'keydown', (e) => { if (e.key === 'Escape' && vollbild.value) vollbild.value = false; });
 let groesse = null;
@@ -156,12 +186,16 @@ onBeforeUnmount(() => {
         <div
           ref="flaeche"
           class="relative min-h-0 flex-1 overflow-auto p-4"
-          :class="[modus === 'hand' ? 'cursor-grab active:cursor-grabbing select-none' : '', `modus-${modus}`]"
+          :class="[anlernen ? 'modus-anlernen cursor-crosshair select-none' : modus === 'hand' ? 'cursor-grab active:cursor-grabbing select-none' : '', anlernen ? '' : `modus-${modus}`]"
           @pointerdown="runter" @pointermove="bewegen" @pointerup="hoch" @pointercancel="hoch"
         >
-          <div v-for="n in seiten" :key="n" :ref="(el) => { if (el) seitenEl[n - 1] = el; }" class="seite relative mx-auto mb-4 bg-white shadow-md">
+          <div v-for="n in seiten" :key="n" :ref="(el) => { if (el) seitenEl[n - 1] = el; }" class="seite relative mx-auto mb-4 bg-white shadow-md" @click="klick($event, n)">
             <canvas class="block" />
             <div class="textLayer" />
+            <div
+              v-if="n === 1 && markierung" class="markierung pointer-events-none absolute rounded-sm"
+              :style="{ left: `${(markierung.x - 0.004) * 100}%`, top: `${(markierung.y - 0.004) * 100}%`, width: `${(markierung.b + 0.008) * 100}%`, height: `${(markierung.h + 0.008) * 100}%` }"
+            />
           </div>
           <div v-if="stand === 'laedt'" class="absolute inset-0 grid place-items-center">
             <div class="flex items-center gap-2 rounded-xl bg-surface/85 px-3.5 py-2 text-sm text-mute shadow-sm"><Loader :size="15" class="animate-spin" /> Zeichnung wird geladen …</div>
@@ -181,6 +215,10 @@ onBeforeUnmount(() => {
 .knopf { display: grid; place-items: center; height: 1.85rem; min-width: 1.85rem; padding: 0 0.45rem; border-radius: 0.6rem; font-size: 0.72rem; color: var(--mute); }
 .knopf:hover { background: var(--surface-2); color: var(--ink); }
 .modus-hand :deep(.textLayer) { pointer-events: none; }
+.modus-anlernen :deep(.textLayer span) { cursor: crosshair; border-radius: 2px; }
+.modus-anlernen :deep(.textLayer span:hover) { background: color-mix(in srgb, var(--accent) 22%, transparent); outline: 1px solid var(--accent); }
+.markierung { outline: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); animation: markieren 1.4s ease-out 2; }
+@keyframes markieren { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
 
 /* Textebene von pdf.js (Auszug aus pdf_viewer.css): unsichtbarer Text über dem Bild, damit er sich markieren lässt */
 :deep(.textLayer) {

@@ -23,6 +23,13 @@ export const benutzer = () => daten.benutzer;
 export const repo = {
   kunden: { async liste() { return daten.kunden; } },
   maschinen: { async liste() { return daten.maschinen; } },
-  materialien: { async liste() { return daten.materialien; } },
+  materialien: {
+    async liste() { return daten.materialien; },
+    // Neues oder geändertes Rohmaterial (z. B. mit neuer Schreibweise) eintragen
+    merken(m) {
+      const i = daten.materialien.findIndex((x) => x.name === m.name);
+      daten.materialien = i >= 0 ? daten.materialien.map((x, j) => (j === i ? { ...x, ...m } : x)) : [...daten.materialien, m].sort((a, b) => a.name.localeCompare(b.name));
+    },
+  },
   lieferanten: { async liste() { return daten.lieferanten; } },
 };

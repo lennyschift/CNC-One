@@ -7,6 +7,7 @@ import { useUi } from './ui.js';
 import { useBelege } from './belege.js';
 import { einstellung, einstellungSpeichern } from '../data/einstellungen.js';
 import { call, hochladen } from '../data/api.js';
+import { repo } from '../data/repo.js';
 
 export function neuesTeil(name = 'Neues Bauteil') {
   return {
@@ -95,13 +96,19 @@ export const useAngebot = defineStore('angebot', () => {
   // Laufende Uploads je Workbench-Bauteil: { [teilId]: [Dateiname, …] }
   const uploads = ref({});
   // Aus der Zeichnung erkannte Angaben je Workbench-Bauteil (nur im Browser, bis übernommen oder verworfen):
-  // { [teilId]: { stand: 'laeuft' | 'fertig' | 'fehler', datei, felder, werkstoffNr, passende, fehler } }
+  // { [teilId]: { stand: 'laeuft' | 'fertig' | 'fehler', datei, seite, felder, werkstoffNr, passende, vorlage, gelernt, fehler } }
   const erkennungen = ref({});
+  // Anlernen: welches Feld gerade per Klick in der Zeichnung gesucht wird { teilId, feld, label }; Markierung in der Zeichnung { teilId, lage }
+  const anlernen = ref(null);
+  const markierung = ref(null);
+  // Stelle, an die die Zeichnungsansicht heranzoomt (Fadenkreuz in der Erkennung) { teilId, lage, n }
+  const fokus = ref(null);
 
   let unterdrueckt = true;
   let timer = 0;
   let laeuft = false;
   let nochmal = false;
+  let laufend = Promise.resolve();
 
   const ergebnisse = computed(() => Object.fromEntries(teile.value.map((t) => [t.id, berechne(t)])));
   const netto = computed(() => summe(Object.values(ergebnisse.value)));
@@ -133,9 +140,16 @@ export const useAngebot = defineStore('angebot', () => {
     nextTick().then(() => { unterdrueckt = false; });
   }
 
-  async function speichern() {
+  // Speichert den Entwurf. Läuft schon ein Speichern, wird danach noch einmal gespeichert; der Aufrufer wartet auf das
+  // laufende (wichtig beim Hochladen: die Dateien brauchen die Angebotsnummer).
+  function speichern() {
     clearTimeout(timer);
-    if (laeuft) { nochmal = true; return; }
+    if (laeuft) { nochmal = true; return laufend; }
+    laufend = speichernJetzt();
+    return laufend;
+  }
+
+  async function speichernJetzt() {
     if (!angebotId.value && !teile.value.length && !kopf.value.kundeId) { speicherStand.value = 'gespeichert'; return; }
     laeuft = true;
     speicherStand.value = 'speichert';
@@ -171,6 +185,23 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   watch([kopf, teile], planeSpeichern, { deep: true });
+  // Kunde erst nach dem Ablegen gewählt: offene Erkennungen mit der Vorlage dieses Kunden neu lesen,
+  // ohne Vorlage zumindest ein schon vorhandenes Bauteil dieses Kunden verwenden
+  watch(() => kopf.value.kundeId, async (kunde, vorher) => {
+    if (!kunde || kunde === vorher || unterdrueckt) return;
+    const offen = teile.value.filter((t) => erkennungen.value[t.id]?.stand === 'fertig' && erkennungen.value[t.id].vorlage?.kundeId !== kunde);
+    if (!offen.length) return;
+    const mitVorlage = !!(await vorlageHolen(kunde));
+    for (const t of offen) {
+      const e = erkennungen.value[t.id];
+      const datei = t.dateien.find((d) => d.url === e?.datei);
+      if (mitVorlage && datei) erkennenFuer(t, datei);
+      else if (e) {
+        const automatisch = await bestandAutomatisch(t, e.passende);
+        if (automatisch) erkennungen.value[t.id] = { ...erkennungen.value[t.id], automatisch };
+      }
+    }
+  });
   watch([angebotId, auswahlId], () => {
     einstellungSpeichern('workbenchAngebot', angebotId.value ?? '');
     einstellungSpeichern('workbenchAuswahl', auswahlId.value ?? '');
@@ -307,34 +338,112 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   // Schriftfeld-Angaben aus der Zeichnung lesen und vorhandene Bauteile dazu suchen. Übernommen wird erst nach Bestätigung.
+  async function vorlageHolen(kunde) {
+    try {
+      const v = await call('cnc_one.api.zeichnung.vorlage', { kunde });
+      return Object.keys(v?.felder ?? {}).length ? v : null;
+    } catch { return null; }
+  }
+
   async function erkennenFuer(teil, datei) {
     erkennungen.value[teil.id] = { stand: 'laeuft', datei: datei.url };
     try {
-      const [{ zeichnungLesen }, { erkennen }] = await Promise.all([import('../lib/pdf.js'), import('../lib/erkennung.js')]);
-      const r = erkennen(await zeichnungLesen(datei.url), datei.name);
+      const [{ zeichnungLesen }, { erkennen, kundeFinden }] = await Promise.all([import('../lib/pdf.js'), import('../lib/erkennung.js')]);
+      const seite = await zeichnungLesen(datei.url);
+      // Angelernte Regeln des Kunden gehen vor. Ist noch kein Kunde gewählt, zählt der Kunde aus dem Schriftfeld.
+      let kundeId = kopf.value.kundeId;
+      let vorlage = kundeId ? await vorlageHolen(kundeId) : null;
+      let r = erkennen(seite, datei.name, vorlage);
+      if (!kundeId && r.felder.kunde) {
+        const k = kundeFinden(r.felder.kunde.wert, await repo.kunden.liste());
+        vorlage = k ? await vorlageHolen(k.id) : null;
+        if (vorlage) { kundeId = k.id; r = erkennen(seite, datei.name, vorlage); }
+      }
+      const kunden = vorlage ? await repo.kunden.liste() : [];
+      const vorlageInfo = vorlage ? { kundeId, kundeName: kunden.find((k) => k.id === kundeId)?.name ?? kundeId, anzahl: Object.values(vorlage.felder).flat().length } : null;
       let passende = [];
       if (r.felder.teilenummer || r.felder.zeichnungsnr) {
         try {
           passende = await call('cnc_one.api.bauteil.passende', { teilenummer: r.felder.teilenummer?.wert ?? '', zeichnungsnr: r.felder.zeichnungsnr?.wert ?? '', kunde: kopf.value.kundeId });
         } catch { /* ohne Vorschläge weiter */ }
       }
-      erkennungen.value[teil.id] = { stand: 'fertig', datei: datei.url, ...r, passende };
+      const automatisch = await bestandAutomatisch(teil, passende);
+      erkennungen.value[teil.id] = { stand: 'fertig', datei: datei.url, seite, ...r, passende, vorlage: vorlageInfo, vorlageFelder: vorlage?.felder ?? null, gelernt: {}, automatisch };
     } catch (e) {
       erkennungen.value[teil.id] = { stand: 'fehler', datei: datei.url, fehler: e.message };
     }
   }
 
-  // Bestätigte Angaben übernehmen: { name, teilenummer, zeichnungsnr, revision, material: { name, preisKg }, kundeId }
-  function erkennungUebernehmen(teil, werte) {
+  // Klick in die Zeichnung beim Anlernen: Textstück an der Stelle suchen, als Wert setzen und die Lernregel vormerken
+  async function anlernPunkt(teil, x, y) {
+    const e = erkennungen.value[teil.id];
+    const feld = anlernen.value?.teilId === teil.id ? anlernen.value.feld : null;
+    if (!feld || !e?.seite) return;
+    const { elementBei, lernregel, regelnAus } = await import('../lib/erkennung.js');
+    const el = elementBei(e.seite, x, y);
+    if (!el) { ui.toast('Dort steht kein lesbarer Text. Bitte genau auf den Wert klicken.', 'warn'); return; }
+    const regel = lernregel(e.seite, el);
+    erkennungen.value[teil.id] = {
+      ...e,
+      felder: { ...e.felder, [feld]: { wert: regel.wert, sicherheit: 'hoch', quelle: 'Angelernt', lage: regel.lage } },
+      gelernt: { ...e.gelernt, [feld]: regelnAus(regel) },
+    };
+    anlernen.value = null;
+    markierung.value = { teilId: teil.id, lage: regel.lage };
+  }
+
+  // Bestätigte Angaben übernehmen: { name, teilenummer, zeichnungsnr, revision, material: { name, preisKg }, kundeId }.
+  // `lernen` sind die angelernten oder korrigierten Angaben { feld: { regeln, wert } }. Sie werden mit den bisherigen Regeln
+  // des Kunden zusammengeführt (neue vorne, auf dieser Zeichnung widerlegte fallen weg) und beim Kunden gespeichert.
+  async function erkennungUebernehmen(teil, werte, lernen = {}) {
+    const e = erkennungen.value[teil.id];
     for (const k of ['name', 'teilenummer', 'zeichnungsnr', 'revision']) if (werte[k] !== undefined) teil[k] = werte[k];
     if (werte.material) { teil.material = werte.material.name; teil.materialPreisKg = werte.material.preisKg ?? teil.materialPreisKg; }
     if (werte.kundeId && !kopf.value.kundeId) kopf.value.kundeId = werte.kundeId;
     delete erkennungen.value[teil.id];
-    ui.toast('Angaben aus der Zeichnung übernommen', 'ok');
+    markierung.value = null;
+    const anzahl = Object.keys(lernen).length;
+    const kunde = kopf.value.kundeId;
+    if (!anzahl) { ui.toast('Angaben aus der Zeichnung übernommen', 'ok'); return; }
+    if (!kunde) { ui.toast('Übernommen. Ohne Kunde ließ sich die Stelle nicht merken.', 'warn'); return; }
+    try {
+      const { regelnZusammenfuehren } = await import('../lib/erkennung.js');
+      const alte = e?.vorlage?.kundeId === kunde ? (e.vorlageFelder ?? {}) : ((await vorlageHolen(kunde))?.felder ?? {});
+      const felder = Object.fromEntries(Object.entries(lernen).map(([feld, { regeln, wert }]) => [feld, regelnZusammenfuehren(alte[feld], regeln, e?.seite, feld, wert)]));
+      await call('cnc_one.api.zeichnung.lernen', { kunde, felder });
+      ui.toast(`Übernommen und für den Kunden gemerkt: ${anzahl} Angabe${anzahl === 1 ? '' : 'n'}`, 'ok');
+    } catch (err) {
+      ui.toast(`Übernommen, aber nicht gemerkt: ${err.message}`, 'warn');
+    }
+  }
+
+  // Angelernte Regeln des Kunden löschen und die Zeichnung neu erkennen
+  async function vorlageVergessen(teil) {
+    const e = erkennungen.value[teil.id];
+    if (!e?.vorlage) return;
+    try {
+      await call('cnc_one.api.zeichnung.vergessen', { kunde: e.vorlage.kundeId });
+      ui.toast('Angelernte Regeln des Kunden gelöscht');
+      const datei = teil.dateien.find((d) => d.url === e.datei);
+      if (datei) erkennenFuer(teil, datei);
+    } catch (err) {
+      ui.toast(err.message, 'warn');
+    }
   }
 
   // Ein vorgeschlagenes Bestandsbauteil verwenden: Angaben und Arbeitsplan aus den Stammdaten, Kunde falls noch keiner gewählt
-  function bestandUebernehmen(teil, b, materialien = []) {
+  // Gibt es das Bauteil beim gewählten Kunden schon (gleiche Teilenummer, sonst gleiche Zeichnungsnummer), wird es auf jeden
+  // Fall verwendet. Liefert die Bauteil-Nummer oder ''. Die Maske bleibt offen, z. B. für einen Hinweis auf eine neue Revision.
+  async function bestandAutomatisch(teil, passende) {
+    const kunde = kopf.value.kundeId;
+    const eigene = (passende ?? []).filter((x) => x.kundeId === kunde && x.status !== 'Gesperrt');
+    const b = eigene.find((x) => x.grund === 'teilenummer') ?? eigene[0];
+    if (!kunde || !b) return '';
+    if (zuordnung.value[teil.id]?.bauteilId !== b.id) bestandUebernehmen(teil, b, await repo.materialien.liste(), { automatisch: true });
+    return b.id;
+  }
+
+  function bestandUebernehmen(teil, b, materialien = [], { automatisch = false } = {}) {
     if (kopf.value.kundeId && kopf.value.kundeId !== b.kundeId) { ui.toast('Das Bauteil gehört zu einem anderen Kunden.', 'warn'); return; }
     if (!kopf.value.kundeId) kopf.value.kundeId = b.kundeId;
     const m = materialien.find((x) => x.name === b.material);
@@ -346,12 +455,40 @@ export const useAngebot = defineStore('angebot', () => {
     if (!teil.arbeitsgaenge?.length && b.arbeitsgaenge?.length) teil.arbeitsgaenge = b.arbeitsgaenge.map((ag) => ({ ...JSON.parse(JSON.stringify(ag)), id: uid(), anfrageId: '' }));
     if (!teil.vorschaubild && b.vorschaubild) teil.vorschaubild = b.vorschaubild;
     zuordnung.value = { ...zuordnung.value, [teil.id]: { bauteilId: b.id, herkunft: 'bestand', seriennummern: !!b.seriennummern } };
+    if (automatisch) {
+      ui.toast(`${b.teilenummer} gibt es bei diesem Kunden schon (${b.id}), das Bauteil wird verwendet`, 'ok');
+      return;
+    }
     delete erkennungen.value[teil.id];
     ui.toast(`Bestandsbauteil ${b.teilenummer} verwendet`, 'ok');
   }
 
+  // Rohmaterial zu einem Werkstoff von der Zeichnung anlegen (Preis je kg später in den Stammdaten)
+  async function rohmaterialAnlegen(name, schreibweise) {
+    try {
+      const m = await call('cnc_one.api.zeichnung.rohmaterial_anlegen', { name, schreibweise });
+      repo.materialien.merken(m);
+      ui.toast(`Rohmaterial „${m.name}“ angelegt. Den Preis je kg bitte in den Stammdaten nachtragen.`, 'ok');
+      return m;
+    } catch (e) {
+      ui.toast(e.message, 'warn');
+      return null;
+    }
+  }
+
+  // Merkt sich am Rohmaterial, wie es auf Zeichnungen geschrieben wird; danach passt die Zuordnung bei allen Kunden von selbst
+  async function schreibweiseMerken(material, text) {
+    try {
+      repo.materialien.merken(await call('cnc_one.api.zeichnung.schreibweise_merken', { material, text }));
+    } catch (e) {
+      ui.toast(`Schreibweise nicht gemerkt: ${e.message}`, 'warn');
+    }
+  }
+
   function erkennungVerwerfen(teil) {
     delete erkennungen.value[teil.id];
+    if (anlernen.value?.teilId === teil.id) anlernen.value = null;
+    if (markierung.value?.teilId === teil.id) markierung.value = null;
   }
 
   function dateiEntfernen(teil, datei) {
@@ -381,5 +518,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, zuordnung, auswahlId, angebotId, speicherStand, uploads, erkennungen, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, erkennungUebernehmen, bestandUebernehmen, erkennungVerwerfen, beispieleEinfuegen };
+  return { kopf, teile, zuordnung, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
 });

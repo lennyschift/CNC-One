@@ -76,7 +76,13 @@ const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b
           <button v-if="zeichnungen.length" class="text-xs text-mute hover:text-ink" @click="auswahlZ.click()">+ PDF</button>
         </div>
         <div class="h-[460px]" @dragover.prevent="ueber = 'z'" @dragleave="ueber = ''" @drop.prevent="ablegen($event, 'Zeichnung')">
-          <DrawingViewer v-if="zeichnung" :key="zeichnung.url" :url="zeichnung.url" :name="zeichnung.name" />
+          <DrawingViewer
+            v-if="zeichnung" :key="zeichnung.url" :url="zeichnung.url" :name="zeichnung.name"
+            :markierung="angebot.markierung?.teilId === teil.id ? angebot.markierung.lage : null"
+            :fokus="angebot.fokus?.teilId === teil.id ? angebot.fokus : null"
+            :anlernen="angebot.anlernen?.teilId === teil.id"
+            @punkt="(p) => angebot.anlernPunkt(teil, p.x, p.y)"
+          />
           <button v-else class="leer" :class="ueber === 'z' ? 'leer-aktiv' : ''" @click="auswahlZ.click()">
             <FileText :size="30" :stroke-width="1.4" />
             <span class="mt-2 text-sm font-medium text-ink">PDF-Zeichnung hierher ziehen</span>
