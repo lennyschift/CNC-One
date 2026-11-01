@@ -10,6 +10,7 @@
   "teilenummer",
   "bezeichnung",
   "zeichnungsnr",
+  "revision",
   "material",
   "menge",
   "netto",
@@ -55,6 +56,12 @@
    "fieldname": "zeichnungsnr",
    "fieldtype": "Data",
    "label": "Zeichnungsnummer",
+   "read_only": 1
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Data",
+   "label": "Revision",
    "read_only": 1
   },
   {

@@ -45,7 +45,7 @@ def fb_ui(d):
 		"kundeName": d.kunde_name or "",
 		"teil": {
 			"name": d.bezeichnung or "", "teilenummer": d.teilenummer or "", "zeichnungsnr": d.zeichnungsnr or "",
-			"material": d.material or "", "vorschaubild": bauteil_api.vorschau(d.bauteil),
+			"material": d.material or "", "bauteilId": d.bauteil or "", **bauteil_api.dateien_fuer(d.bauteil, d.revision),
 		},
 		"menge": d.menge,
 		"termin": datum(d.termin),
@@ -104,7 +104,7 @@ def starten(auftrag):
 		fb.update({
 			"auftrag": auf.name, "auftragsposition_key": pos.position_key, "bauteil": pos.bauteil or None,
 			"kunde": auf.kunde, "kunde_name": auf.kunde_name, "teilenummer": pos.teilenummer,
-			"bezeichnung": pos.bezeichnung, "zeichnungsnr": pos.zeichnungsnr, "material": pos.material,
+			"bezeichnung": pos.bezeichnung, "zeichnungsnr": pos.zeichnungsnr, "revision": pos.revision or "", "material": pos.material,
 			"menge": pos.menge, "termin": pos.liefertermin, "prioritaet": "Normal", "status": "Offen",
 			"roh_werkstoff": pos.material or "",
 			"serien_von": pos.serien_von or None, "serien_bis": pos.serien_bis or None, "serien_stellen": pos.serien_stellen or 4,

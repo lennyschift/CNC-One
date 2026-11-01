@@ -10,6 +10,7 @@
   "teilenummer",
   "bezeichnung",
   "zeichnungsnr",
+  "revision",
   "material",
   "menge",
   "einzelpreis",
@@ -60,6 +61,13 @@
    "fieldtype": "Data",
    "label": "Zeichnungsnummer",
    "read_only": 1
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Data",
+   "label": "Revision",
+   "read_only": 1,
+   "description": "Revision der Zeichnung, die bestellt wurde"
   },
   {
    "fieldname": "material",

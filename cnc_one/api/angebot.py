@@ -20,6 +20,14 @@ def _json(wert):
 	return json.loads(wert) if isinstance(wert, str) else wert
 
 
+def _revisionen(bauteil):
+	"""Aktuelle Revision des Bauteils und alle bekannten (neueste zuerst), für den Hinweis in der Workbench."""
+	if not bauteil:
+		return {"bauteilRevision": "", "bauteilRevisionen": []}
+	namen = frappe.get_all("Bauteil Revision", filters={"parent": bauteil, "parenttype": "Bauteil"}, pluck="revision", order_by="idx desc")
+	return {"bauteilRevision": frappe.db.get_value("Bauteil", bauteil, "revision") or "", "bauteilRevisionen": list(dict.fromkeys(r for r in namen if r))}
+
+
 def angebot_ui(d):
 	"""Das Angebot in der Form, die die Oberfläche erwartet."""
 	kunde = frappe.get_doc("Kunde", d.kunde) if d.kunde else None
@@ -42,6 +50,7 @@ def angebot_ui(d):
 				"key": z.position_key, "teil": _json(z.kalkulation), "ergebnis": _json(z.ergebnis),
 				"bauteilId": z.bauteil or "", "herkunft": ("neu" if z.bauteil_neu else "bestand") if z.bauteil else "",
 				"seriennummern": bool(z.bauteil and frappe.db.get_value("Bauteil", z.bauteil, "seriennummern")),
+				**_revisionen(z.bauteil),
 			}
 			for z in d.positionen
 		],
@@ -97,6 +106,12 @@ def entwurf_speichern(angebot):
 			behalten.add(b.name)
 
 	doc.save() if not doc.is_new() else doc.insert()
+	# Revision und Dateien am Bauteil ablegen; die Position merkt sich die Revision (auch die aktuelle, wenn keine angegeben ist)
+	for z in doc.positionen:
+		if z.bauteil:
+			rev = bauteil_api.revision_uebernehmen(z.bauteil, json.loads(z.kalkulation or "{}"), doc.name)
+			if rev != (z.revision or ""):
+				z.db_set("revision", rev, update_modified=False)
 	# Bauteile, die dieses Angebot neu angelegt hatte und die nicht mehr vorkommen, wieder entfernen
 	for name, neu in alt.values():
 		if neu and name not in behalten:

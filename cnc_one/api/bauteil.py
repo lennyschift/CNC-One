@@ -4,6 +4,7 @@ import re
 
 import frappe
 from frappe import _
+from frappe.utils import now_datetime
 
 from cnc_one.api.stamm import arbeitsgang_ui, arbeitsgang_zeile, nur_cnc
 
@@ -24,12 +25,44 @@ def bauteil_ui(d):
 		"vorschaubild": d.vorschaubild or "",
 		"stepDatei": d.step_datei or "",
 		"zeichnung": d.zeichnung or "",
+		"revisionen": revisionen_ui(d),
 	}
+
+
+def revisionen_ui(d):
+	"""Revisionen mit ihren Dateien, neueste zuerst. Ältere Fassungen derselben Revision sind gekennzeichnet."""
+	gesehen = set()
+	out = []
+	for z in reversed(d.get("revisionen") or []):
+		schluessel = _rev(z.revision)
+		out.append({
+			"revision": z.revision or "", "zeichnung": z.zeichnung or "", "stepDatei": z.step_datei or "",
+			"vorschaubild": z.vorschaubild or "", "angebot": z.angebot or "", "datum": str(z.datum or ""),
+			"aktuell": schluessel == _rev(d.revision) and schluessel not in gesehen, "aeltereFassung": schluessel in gesehen,
+		})
+		gesehen.add(schluessel)
+	return out
 
 
 def vorschau(name):
 	"""Vorschaubild eines Bauteils (url) oder leer."""
 	return (frappe.db.get_value("Bauteil", name, "vorschaubild") or "") if name else ""
+
+
+def dateien_fuer(name, revision=""):
+	"""Zeichnung, Modell und Bild eines Bauteils in einer bestimmten Revision (z. B. der bestellten), sonst der aktuellen.
+	Liefert { revision, zeichnung, stepDatei, vorschaubild, aktuelleRevision }."""
+	if not name:
+		return {"revision": revision or "", "zeichnung": "", "stepDatei": "", "vorschaubild": "", "aktuelleRevision": ""}
+	b = frappe.db.get_value("Bauteil", name, ["revision", "zeichnung", "step_datei", "vorschaubild"], as_dict=True) or frappe._dict()
+	quelle = b
+	if revision and _rev(revision) != _rev(b.revision):
+		zeilen = frappe.get_all("Bauteil Revision", filters={"parent": name, "parenttype": "Bauteil"}, fields=["revision", "zeichnung", "step_datei", "vorschaubild"], order_by="idx desc")
+		quelle = next((z for z in zeilen if _rev(z.revision) == _rev(revision)), b)
+	return {
+		"revision": revision or b.revision or "", "zeichnung": quelle.zeichnung or "", "stepDatei": quelle.step_datei or "",
+		"vorschaubild": quelle.vorschaubild or b.vorschaubild or "", "aktuelleRevision": b.revision or "",
+	}
 
 
 def alle_ui():
@@ -79,52 +112,122 @@ def _material(name):
 
 
 def _angaben_setzen(doc, teil):
-	"""Bezeichnung, Zeichnung, Werkstoff und Seriennummern-Kennzeichen aus der Workbench ins Bauteil übernehmen."""
+	"""Bezeichnung, Zeichnung, Werkstoff und Seriennummern-Kennzeichen aus der Workbench ins Bauteil übernehmen.
+	Revision und Dateien kommen über `revision_uebernehmen`, nachdem das Angebot gespeichert ist."""
 	doc.bezeichnung = (teil.get("name") or "").strip()
 	doc.zeichnungsnr = (teil.get("zeichnungsnr") or "").strip()
-	doc.revision = (teil.get("revision") or "").strip()
 	doc.material = _material(teil.get("material"))
 	doc.seriennummern = 1 if teil.get("seriennummern") else 0
-	_dateien_setzen(doc, teil)
+
+
+DATEIFELDER = ("zeichnung", "step_datei", "vorschaubild")
 
 
 def dateien_aus_teil(teil):
-	"""STEP-Modell, Zeichnung und Vorschaubild eines Workbench-Bauteils (hochgeladene Dateien): { feld: url }."""
-	erste = {}
+	"""STEP-Modell, Zeichnung und Vorschaubild eines Workbench-Bauteils (hochgeladene Dateien): { feld: url }.
+	Liegen mehrere Zeichnungen oder Modelle vor, gilt die zuletzt hinzugefügte."""
+	neueste = {}
 	for d in teil.get("dateien") or []:
 		url = d.get("url") or ""
 		if url and d.get("art") in ("STEP", "Zeichnung"):
-			erste.setdefault("step_datei" if d["art"] == "STEP" else "zeichnung", url)
+			neueste["step_datei" if d["art"] == "STEP" else "zeichnung"] = url
 	if teil.get("vorschaubild"):
-		erste["vorschaubild"] = teil["vorschaubild"]
-	return erste
+		neueste["vorschaubild"] = teil["vorschaubild"]
+	return neueste
 
 
-def _dateien_setzen(doc, teil, nur_leere=False):
-	"""Übernimmt die Dateien ins Bauteil. Die am Angebot hochgeladene Datei wird vom Angebot gelöst, Frappe hängt sie beim
-	Speichern dann an das Bauteil (ohne Kopie). So bleibt sie erhalten, wenn das Angebot gelöscht wird, und alle mit
-	Leserecht am Bauteil sehen sie."""
-	geaendert = False
-	for feld, url in dateien_aus_teil(teil).items():
-		if doc.get(feld) != url and not (nur_leere and doc.get(feld)):
-			_vom_angebot_loesen(url)
-			doc.set(feld, url)
-			geaendert = True
-	return geaendert
+def _rev(wert):
+	return (wert or "").strip().lower()
 
 
-def _vom_angebot_loesen(url):
-	name = frappe.db.get_value("File", {"file_url": url, "attached_to_doctype": "Angebot"}, "name")
+def _an_bauteil_haengen(url, bauteil, feld):
+	"""Die Datei gehört ab jetzt zum Bauteil (statt zum Angebot oder zu niemandem). So bleibt sie erhalten, wenn das Angebot
+	gelöscht wird, alle mit Leserecht am Bauteil sehen sie, und Frappe legt beim Speichern keine Kopie an."""
+	name = frappe.db.get_value("File", {"file_url": url, "attached_to_doctype": "Angebot"}, "name") or frappe.db.get_value(
+		"File", {"file_url": url, "attached_to_doctype": ["is", "not set"]}, "name"
+	)
 	if name:
-		frappe.db.set_value("File", name, {"attached_to_doctype": None, "attached_to_name": None, "attached_to_field": None}, update_modified=False)
+		frappe.db.set_value("File", name, {"attached_to_doctype": "Bauteil", "attached_to_name": bauteil, "attached_to_field": feld}, update_modified=False)
+
+
+def revision_verwendet(bauteil, revision, ausser_angebot=None):
+	"""Wird diese Revision des Bauteils in Aufträgen, der Fertigung oder (anderen) Angeboten gebraucht?"""
+	r = _rev(revision)
+	for dt in ("Auftragsposition", "Fertigungsbauteil"):
+		if any(_rev(x) == r for x in frappe.get_all(dt, filters={"bauteil": bauteil}, pluck="revision")):
+			return True
+	return any(p.parent != ausser_angebot and _rev(p.revision) == r for p in frappe.get_all("Angebotsposition", filters={"bauteil": bauteil}, fields=["parent", "revision"]))
+
+
+def revision_uebernehmen(bauteil, teil, angebot):
+	"""Legt Revision und Dateien eines Workbench-Bauteils am Bauteil ab und liefert die Revision der Position.
+
+	- Neue Revision: neue Zeile, sie ist ab jetzt die aktuelle. Ältere Revisionen bleiben mit ihren Dateien erhalten.
+	- Bekannte Revision mit anderer Datei: neue Zeile darunter (die neuere Datei gilt, die ältere bleibt sichtbar).
+	- Hat dieses Angebot die Zeile selbst angelegt und braucht sie sonst niemand, wird sie angepasst statt eine weitere
+	  anzulegen (Tippen in der Workbench, Datei getauscht). Zeilen dieses Angebots, die niemand mehr braucht, fallen weg.
+	"""
+	doc = frappe.get_doc("Bauteil", bauteil)
+	rev = (teil.get("revision") or "").strip() or (doc.revision or "")
+	dateien = dateien_aus_teil(teil)
+	vorher = [(z.revision, *(z.get(f) for f in DATEIFELDER), z.angebot) for z in doc.revisionen] + [doc.revision, *(doc.get(f) for f in DATEIFELDER)]
+
+	# Zeilen dieses Angebots aus früherem Speichern, die keine Position mehr braucht (z. B. vertippte Revision)
+	weg = [z for z in doc.revisionen if z.angebot == angebot and _rev(z.revision) != _rev(rev) and not revision_verwendet(bauteil, z.revision)]
+	for z in weg:
+		doc.remove(z)
+
+	z = next((x for x in reversed(doc.revisionen) if _rev(x.revision) == _rev(rev)), None)
+	gewuenscht = {f: (z.get(f) if z else "") or "" for f in DATEIFELDER}
+	gewuenscht.update(dateien)
+	if z is None:
+		if rev or dateien:
+			doc.append("revisionen", {"revision": rev, **gewuenscht, "angebot": angebot, "datum": now_datetime()})
+			doc.revision = rev
+	elif any((z.get(f) or "") != gewuenscht[f] for f in DATEIFELDER):
+		if z.angebot == angebot and not revision_verwendet(bauteil, rev, ausser_angebot=angebot):
+			z.update(gewuenscht)
+		else:
+			doc.append("revisionen", {"revision": rev, **gewuenscht, "angebot": angebot, "datum": now_datetime()})
+	if weg and not any(_rev(x.revision) == _rev(doc.revision) for x in doc.revisionen):
+		doc.revision = doc.revisionen[-1].revision if doc.revisionen else ""
+
+	# Die Felder am Bauteil zeigen immer die neueste Fassung der aktuellen Revision
+	aktuell = next((x for x in reversed(doc.revisionen) if _rev(x.revision) == _rev(doc.revision)), None)
+	if aktuell:
+		for f in DATEIFELDER:
+			doc.set(f, aktuell.get(f) or "")
+	nachher = [(x.revision, *(x.get(f) for f in DATEIFELDER), x.angebot) for x in doc.revisionen] + [doc.revision, *(doc.get(f) for f in DATEIFELDER)]
+	if nachher != vorher:
+		for x in doc.revisionen:
+			for f in DATEIFELDER:
+				if x.get(f):
+					_an_bauteil_haengen(x.get(f), bauteil, f)
+		doc.save()
+	return rev
+
+
+def revision_setzen(doc, revision):
+	"""Revision in den Stammdaten von Hand ändern: eine vorhandene Revision wird wieder die aktuelle, eine neue bekommt eine
+	eigene Zeile (ohne Dateien, die kommen mit der nächsten Zeichnung)."""
+	rev = (revision or "").strip()
+	if _rev(rev) == _rev(doc.revision) or not rev:
+		doc.revision = rev
+		return
+	z = next((x for x in reversed(doc.get("revisionen") or []) if _rev(x.revision) == _rev(rev)), None)
+	if z is None and rev:
+		z = doc.append("revisionen", {"revision": rev, "datum": now_datetime()})
+	doc.revision = rev
+	for f in DATEIFELDER:
+		doc.set(f, (z.get(f) if z else "") or "")
 
 
 def fuer_position(kunde, teil, alt=None):
 	"""Das Bauteil zu einem Workbench-Bauteil: wiederfinden oder neu anlegen, nie doppelt.
 
 	`alt` ist (Bauteil, neu) dieser Position aus dem letzten Speichern. Ein Bauteil, das dieses Angebot neu angelegt hat,
-	folgt den Änderungen in der Workbench (auch einer geänderten Teilenummer). Ein Bestandsbauteil bleibt unverändert.
-	Liefert (Dokument oder None, neu).
+	folgt den Änderungen in der Workbench (auch einer geänderten Teilenummer). Bei einem Bestandsbauteil bleiben die Angaben
+	unverändert, nur Revision und Dateien kommen hinzu (`revision_uebernehmen`). Liefert (Dokument oder None, neu).
 	"""
 	nr = (teil.get("teilenummer") or "").strip()
 	if not kunde or not nr:
@@ -136,8 +239,6 @@ def fuer_position(kunde, teil, alt=None):
 		neu = bool(alt_neu and vorhanden == alt_name)
 		if neu:
 			_angaben_setzen(doc, teil)
-			doc.save()
-		elif _dateien_setzen(doc, teil, nur_leere=True):
 			doc.save()
 		return doc, neu
 	if alt_neu and alt_name and frappe.db.get_value("Bauteil", alt_name, "kunde") == kunde and not _anderweitig_verwendet(alt_name):

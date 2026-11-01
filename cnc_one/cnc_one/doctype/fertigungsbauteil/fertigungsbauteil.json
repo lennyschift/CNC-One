@@ -12,6 +12,7 @@
   "teilenummer",
   "bezeichnung",
   "zeichnungsnr",
+  "revision",
   "material",
   "sb_plan",
   "menge",
@@ -88,6 +89,12 @@
    "fieldname": "zeichnungsnr",
    "fieldtype": "Data",
    "label": "Zeichnungsnummer"
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Data",
+   "label": "Revision",
+   "read_only": 1
   },
   {
    "fieldname": "material",

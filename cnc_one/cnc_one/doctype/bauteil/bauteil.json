@@ -19,6 +19,7 @@
   "vorschaubild",
   "step_datei",
   "zeichnung",
+  "revisionen",
   "sb_plan",
   "arbeitsplan"
  ],
@@ -114,6 +115,13 @@
    "fieldname": "zeichnung",
    "fieldtype": "Attach",
    "label": "Zeichnung (PDF)"
+  },
+  {
+   "fieldname": "revisionen",
+   "fieldtype": "Table",
+   "label": "Revisionen und Dateien",
+   "options": "Bauteil Revision",
+   "description": "Jede Revision mit ihren Dateien. Eine neuere Datei derselben Revision steht darunter, die ältere bleibt sichtbar."
   },
   {
    "fieldname": "sb_plan",

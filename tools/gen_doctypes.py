@@ -147,6 +147,14 @@ DOCTYPES = [
 ]
 
 DOCTYPES += [
+    dict(name="Bauteil Revision", istable=1, fields=[
+        Data("revision", "Revision", in_list_view=1),
+        F("zeichnung", "Attach", "Zeichnung (PDF)", in_list_view=1),
+        F("step_datei", "Attach", "STEP-Modell", in_list_view=1),
+        F("vorschaubild", "Attach Image", "Vorschaubild"),
+        Data("angebot", "Übernommen mit Angebot", read_only=1, in_list_view=1),
+        F("datum", "Datetime", "Übernommen am", read_only=1),
+    ]),
     dict(name="Bauteil", autoname="BT-.#####", title="bezeichnung", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung")), icon="package", fields=[
         Link("kunde", "Kunde", "Kunde", reqd=1, in_list_view=1, in_standard_filter=1),
         Data("teilenummer", "Teilenummer", reqd=1, in_list_view=1, in_standard_filter=1),
@@ -163,6 +171,7 @@ DOCTYPES += [
         F("vorschaubild", "Attach Image", "Vorschaubild", description="entsteht aus dem STEP-Modell"),
         F("step_datei", "Attach", "STEP-Modell"),
         F("zeichnung", "Attach", "Zeichnung (PDF)"),
+        Table("revisionen", "Bauteil Revision", "Revisionen und Dateien", description="Jede Revision mit ihren Dateien. Eine neuere Datei derselben Revision steht darunter, die ältere bleibt sichtbar."),
         Section("sb_plan", "Arbeitsplan"),
         Table("arbeitsplan", "Arbeitsgang Plan", "Arbeitsgänge"),
     ]),
@@ -173,6 +182,7 @@ DOCTYPES += [
         Data("teilenummer", "Teilenummer", read_only=1, in_list_view=1),
         Data("bezeichnung", "Bezeichnung", read_only=1, in_list_view=1),
         Data("zeichnungsnr", "Zeichnungsnummer", read_only=1),
+        Data("revision", "Revision", read_only=1),
         Data("material", "Werkstoff", read_only=1),
         Int("menge", "Menge", read_only=1, in_list_view=1),
         Money("netto", "Netto", read_only=1, in_list_view=1),
@@ -204,6 +214,7 @@ DOCTYPES += [
         Data("teilenummer", "Teilenummer", read_only=1, in_list_view=1),
         Data("bezeichnung", "Bezeichnung", read_only=1, in_list_view=1),
         Data("zeichnungsnr", "Zeichnungsnummer", read_only=1),
+        Data("revision", "Revision", read_only=1, description="Revision der Zeichnung, die bestellt wurde"),
         Data("material", "Werkstoff", read_only=1),
         Int("menge", "Bestellte Menge", in_list_view=1),
         Money("einzelpreis", "Stückpreis", in_list_view=1),
@@ -274,6 +285,7 @@ DOCTYPES += [
         Data("teilenummer", "Teilenummer", in_list_view=1),
         Data("bezeichnung", "Bezeichnung", in_list_view=1),
         Data("zeichnungsnr", "Zeichnungsnummer"),
+        Data("revision", "Revision", read_only=1),
         Data("material", "Werkstoff"),
         Section("sb_plan", "Plan"),
         Int("menge", "Sollmenge", in_list_view=1),

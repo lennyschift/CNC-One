@@ -48,6 +48,7 @@ class Angebot(Document):
 			z.bezeichnung = k.get("name") or ""
 			z.teilenummer = k.get("teilenummer") or ""
 			z.zeichnungsnr = k.get("zeichnungsnr") or ""
+			z.revision = (k.get("revision") or "").strip()
 			z.material = k.get("material") or ""
 			ergebnisse.append(e)
 		self.netto = summe(ergebnisse)

@@ -122,7 +122,7 @@ def bauteil_setzen(doc, d):
 	doc.teilenummer = _text(d.get("teilenummer"))
 	doc.bezeichnung = _text(d.get("name"))
 	doc.zeichnungsnr = _text(d.get("zeichnungsnr"))
-	doc.revision = _text(d.get("revision"))
+	bauteil_api.revision_setzen(doc, _text(d.get("revision")))
 	material = _text(d.get("material"))
 	doc.material = material if material and frappe.db.exists("Material", material) else None
 	doc.status = d.get("status") if d.get("status") in ("Aktiv", "Gesperrt") else "Aktiv"
