@@ -1,17 +1,34 @@
 <script setup>
 // Zeichnung und 3D-Modell eines Workbench-Bauteils nebeneinander. Dateien lassen sich direkt auf die Fläche ziehen oder auswählen;
 // sie werden sofort hochgeladen. Aus dem ersten gelesenen Modell entsteht automatisch das Vorschaubild des Bauteils.
-import { ref, computed, defineAsyncComponent } from 'vue';
+import { ref, computed, defineAsyncComponent, onMounted } from 'vue';
 import { Box, FileText, Loader, UploadCloud, X, FileWarning, ScanText } from '@lucide/vue';
 import ErkennungsHinweis from './ErkennungsHinweis.vue';
 import { useAngebot } from '../stores/angebot.js';
+import { useUi } from '../stores/ui.js';
+import { repo } from '../data/repo.js';
 import { zahl } from '../lib/format.js';
+import { dichteSchaetzen } from '../lib/erkennung.js';
 
 const ModelViewer = defineAsyncComponent(() => import('./ModelViewer.vue'));
 const DrawingViewer = defineAsyncComponent(() => import('./DrawingViewer.vue'));
 
 const props = defineProps({ teil: { type: Object, required: true } });
 const angebot = useAngebot();
+const ui = useUi();
+
+// Dichte des gewählten Rohmaterials (kg/dm³) für das Gewicht des Rohteils
+const materialien = ref([]);
+onMounted(async () => { materialien.value = await repo.materialien.liste(); });
+// Dichte des gewählten Rohmaterials; ist keine gepflegt, ein Richtwert aus dem Werkstoff (als geschätzt gekennzeichnet)
+const gepflegteDichte = computed(() => materialien.value.find((m) => m.name === props.teil.material)?.dichte ?? 0);
+const dichte = computed(() => gepflegteDichte.value || dichteSchaetzen(props.teil.material));
+const dichteGeschaetzt = computed(() => !gepflegteDichte.value && !!dichte.value);
+const aufmass = computed({ get: () => props.teil.aufmass ?? 0, set: (v) => { props.teil.aufmass = v; } });
+function gewichtUebernehmen(kg) {
+  props.teil.gewichtKg = kg;
+  ui.toast(`Rohteilgewicht ${zahl(kg, 3)} kg übernommen`, 'ok');
+}
 
 const hochgeladen = (art) => computed(() => props.teil.dateien.filter((d) => d.art === art && d.url));
 const zeichnungen = hochgeladen('Zeichnung');
@@ -104,7 +121,10 @@ const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b
           <button v-if="modelle.length" class="ml-auto text-xs text-mute hover:text-ink" @click="auswahlM.click()">+ STEP</button>
         </div>
         <div class="h-[460px]" @dragover.prevent="ueber = 'm'" @dragleave="ueber = ''" @drop.prevent="ablegen($event, 'STEP')">
-          <ModelViewer v-if="modell" :key="modell.url" :url="modell.url" :name="modell.name" @geladen="modellGeladen" @vorschau="vorschauUebernehmen" />
+          <ModelViewer
+            v-if="modell" :key="modell.url" v-model:aufmass="aufmass" :url="modell.url" :name="modell.name" :dichte="dichte" :dichte-geschaetzt="dichteGeschaetzt"
+            @geladen="modellGeladen" @vorschau="vorschauUebernehmen" @gewicht="gewichtUebernehmen"
+          />
           <button v-else class="leer" :class="ueber === 'm' ? 'leer-aktiv' : ''" @click="auswahlM.click()">
             <UploadCloud :size="30" :stroke-width="1.4" />
             <span class="mt-2 text-sm font-medium text-ink">STEP-Modell hierher ziehen</span>

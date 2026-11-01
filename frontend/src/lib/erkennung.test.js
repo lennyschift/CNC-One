@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { erkennen, werkstoffNummer, materialFinden, ausDateiname, elementBei, lernregel, kundeFinden, elementMitWert, regelnAus, regelnZusammenfuehren, rohmaterialName } from './erkennung.js';
+import { erkennen, werkstoffNummer, materialFinden, ausDateiname, elementBei, lernregel, kundeFinden, elementMitWert, regelnAus, regelnZusammenfuehren, rohmaterialName, dichteSchaetzen } from './erkennung.js';
 import zeichnungen from './testdaten/zeichnungen.json';
 
 // Werte je Feld (ohne Lage), für übersichtliche Vergleiche
@@ -225,5 +225,17 @@ describe('Werkstoff und Rohmaterial', () => {
     expect(rohmaterialName('16MnCr5')).toBe('1.7131 16MnCr5');
     expect(rohmaterialName('1.2343  vergütet')).toBe('1.2343 vergütet');
     expect(rohmaterialName('Sonderlegierung')).toBe('Sonderlegierung');
+  });
+});
+
+describe('Dichte schätzen', () => {
+  it('aus Werkstoffnummer oder Bezeichnung', () => {
+    expect(dichteSchaetzen('1.4404 Edelstahl')).toBe(7.9);
+    expect(dichteSchaetzen('1.0037 Baustahl S235')).toBe(7.85);
+    expect(dichteSchaetzen('EN AW-7075 Aluminium')).toBe(2.7);
+    expect(dichteSchaetzen('CuZn39Pb3 Messing')).toBe(8.5);
+    expect(dichteSchaetzen('POM-C Kunststoff')).toBe(1.41);
+    expect(dichteSchaetzen('Ti6Al4V')).toBe(4.43);
+    expect(dichteSchaetzen('Holz')).toBe(0);
   });
 });

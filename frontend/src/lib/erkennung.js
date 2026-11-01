@@ -388,3 +388,18 @@ export function erkennen(seite, dateiname = '', vorlage = null) {
   if (!felder.bezeichnung && datei.bezeichnung) felder.bezeichnung = ergebnis(datei.bezeichnung, 'niedrig', 'Dateiname');
   return { felder, werkstoffNr: werkstoffNummer(felder.werkstoff?.wert) };
 }
+
+// Richtwert der Dichte (kg/dm³) aus einer Werkstoffangabe, wenn am Rohmaterial keine gepflegt ist; 0 = unbekannt
+export function dichteSchaetzen(werkstoff) {
+  const t = String(werkstoff ?? '').toLowerCase();
+  const nr = werkstoffNummer(werkstoff);
+  const tabelle = { POM: 1.41, PEEK: 1.31, PA6: 1.14, PTFE: 2.2, 'PE-HD': 0.95 };
+  if (tabelle[nr]) return tabelle[nr];
+  if (nr.startsWith('3.7') || t.includes('titan')) return 4.43;
+  if (nr.startsWith('1.4') || t.includes('edelstahl') || t.includes('rostfrei')) return 7.9;
+  if (nr.startsWith('1.') || t.includes('stahl')) return 7.85;
+  if (nr.startsWith('EN AW') || nr.startsWith('3.') || /\balu/.test(t)) return 2.7;
+  if (nr.startsWith('CW') || nr.startsWith('2.0') || t.includes('messing') || t.includes('kupfer') || t.includes('bronze')) return 8.5;
+  if (nr.startsWith('2.4') || t.includes('inconel')) return 8.3;
+  return 0;
+}

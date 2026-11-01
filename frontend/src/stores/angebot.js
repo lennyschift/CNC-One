@@ -25,6 +25,7 @@ export function neuesTeil(name = 'Neues Bauteil') {
     material: '',
     materialPreisKg: 0,
     gewichtKg: 0,
+    aufmass: 0,
     pauschalMaterial: 0,
     pauschalAlsZeile: false,
     messkosten: 0,

@@ -17,6 +17,7 @@ self.onmessage = async (e) => {
       position: Float32Array.from(m.attributes.position.array),
       normal: m.attributes.normal ? Float32Array.from(m.attributes.normal.array) : null,
       index: Uint32Array.from(m.index.array),
+      flaechen: (m.brep_faces ?? []).map((f) => [f.first, f.last]), // CAD-Flächen als Bereiche von Dreiecken
     }));
     const transfer = netze.flatMap((n) => [n.position.buffer, n.index.buffer, ...(n.normal ? [n.normal.buffer] : [])]);
     self.postMessage({ id, netze }, transfer);
