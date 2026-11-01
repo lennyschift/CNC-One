@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, Search, Workflow, Hash } from '@lucide/vue';
+import { Plus, Search, Workflow, Hash, FileText, Box, History } from '@lucide/vue';
 import Toggle from '../components/Toggle.vue';
 import NumField from '../components/NumField.vue';
 import SerienFeld from '../components/SerienFeld.vue';
@@ -35,6 +35,7 @@ const kundenMitBauteil = computed(() => kunden.value.filter((k) => liste.value.s
 
 const leer = () => ({ id: '', kundeId: kundeFilter.value, teilenummer: '', name: '', zeichnungsnr: '', revision: '', material: '', status: 'Aktiv', seriennummern: false, serienStellen: 4, letzteSeriennummer: 0, arbeitsgaenge: [] });
 const b = ref(null);
+const revisionsNamen = computed(() => [...new Set((b.value?.revisionen ?? []).map((r) => r.revision).filter(Boolean))]);
 const speichert = ref(false);
 const neu = computed(() => !b.value?.id);
 const darf = computed(() => store.darf('bauteil'));
@@ -82,7 +83,9 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
           <label class="block"><span class="label mb-1 block">Teilenummer</span><input v-model="b.teilenummer" class="field" autofocus /></label>
           <label class="block"><span class="label mb-1 block">Bezeichnung</span><input v-model="b.name" class="field" /></label>
           <label class="block"><span class="label mb-1 block">Zeichnungsnummer</span><input v-model="b.zeichnungsnr" class="field" /></label>
-          <label class="block"><span class="label mb-1 block">Revision</span><input v-model="b.revision" class="field" placeholder="z. B. B" /></label>
+          <label class="block"><span class="label mb-1 block">Revision</span><input v-model="b.revision" class="field" placeholder="z. B. B" list="bauteil-revisionen" />
+            <datalist id="bauteil-revisionen"><option v-for="r in revisionsNamen" :key="r" :value="r" /></datalist>
+          </label>
           <label class="block"><span class="label mb-1 block">Rohmaterial</span>
             <select v-model="b.material" class="field"><option value="">– keiner –</option><option v-for="m in materialien" :key="m.name" :value="m.name">{{ m.name }}</option></select>
           </label>
@@ -94,6 +97,27 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
           </div>
         </div>
       </div>
+      <section v-if="b.revisionen?.length">
+        <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold"><History :size="15" class="text-accent" /> Revisionen und Dateien</h3>
+        <div class="divide-y divide-line rounded-xl border border-line">
+          <div v-for="(r, i) in b.revisionen" :key="i" class="flex flex-wrap items-center gap-3 px-3 py-2 text-sm" :class="r.aeltereFassung ? 'opacity-60' : ''">
+            <PartImage :teil="b" :bild="r.vorschaubild" :groesse="36" />
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-medium">Rev. {{ r.revision || '–' }}</span>
+                <span v-if="r.aktuell" class="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">aktuell</span>
+                <span v-else-if="r.aeltereFassung" class="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-mute">ältere Fassung</span>
+              </div>
+              <div class="text-xs text-mute">
+                <template v-if="r.datum">{{ new Date(r.datum.replace(' ', 'T')).toLocaleDateString('de-DE') }}</template><template v-if="r.angebot"> · mit Angebot {{ r.angebot }}</template>
+              </div>
+            </div>
+            <a v-if="r.zeichnung" :href="r.zeichnung" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs text-accent hover:underline"><FileText :size="13" /> Zeichnung</a>
+            <a v-if="r.stepDatei" :href="r.stepDatei" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs text-accent hover:underline"><Box :size="13" /> 3D-Modell</a>
+          </div>
+        </div>
+        <p class="mt-1.5 text-xs text-mute">Neue Revisionen und Dateien kommen mit der Zeichnung aus der Workbench. Eine hier gewählte Revision wird wieder die aktuelle.</p>
+      </section>
       <section>
         <h3 class="mb-2 text-sm font-semibold">Arbeitsplan</h3>
         <ArbeitsplanEditor :arbeitsgaenge="b.arbeitsgaenge" :kunde-id="b.kundeId" :teilenummer="b.teilenummer" ohne-speichern />

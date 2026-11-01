@@ -182,7 +182,7 @@ const titel = { hoch: 'sicher erkannt', mittel: 'wahrscheinlich', niedrig: 'nur 
           <div class="min-w-0 flex-1 text-sm">
             <div class="truncate font-medium">{{ b.name || b.teilenummer }} <span class="text-xs font-normal text-mute tnum">{{ b.id }}</span></div>
             <div class="truncate text-xs text-mute">{{ b.teilenummer }}<template v-if="b.zeichnungsnr"> · {{ b.zeichnungsnr }}</template><template v-if="b.revision"> · Rev. {{ b.revision }}</template> · {{ b.kundeName }} · gleiche {{ b.grund === 'teilenummer' ? 'Teilenummer' : 'Zeichnungsnummer' }}</div>
-            <div v-if="andereRevision(b)" class="mt-0.5 flex items-center gap-1 text-xs text-warn"><AlertTriangle :size="12" /> Die Zeichnung hat Revision {{ andereRevision(b) }}, in den Stammdaten steht {{ b.revision }}.</div>
+            <div v-if="andereRevision(b)" class="mt-0.5 flex items-center gap-1 text-xs text-warn"><AlertTriangle :size="12" class="shrink-0" /> Die Zeichnung hat Revision {{ andereRevision(b) }}, in den Stammdaten steht {{ b.revision }}. Mit „übernehmen“ wird {{ andereRevision(b) }} am Bauteil die aktuelle Revision, {{ b.revision }} bleibt mit ihren Dateien erhalten.</div>
           </div>
           <span v-if="angebot.zuordnung[teil.id]?.bauteilId === b.id" class="inline-flex items-center gap-1 text-xs text-ok"><Check :size="13" /> verknüpft</span>
           <span v-else-if="fremd(b)" class="text-xs text-mute">anderer Kunde</span>

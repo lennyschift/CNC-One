@@ -20,6 +20,7 @@ const props = defineProps({
   dichte: { type: Number, default: 0 }, // kg/dm³ des gewählten Rohmaterials (0 = unbekannt)
   dichteGeschaetzt: { type: Boolean, default: false }, // Richtwert, am Rohmaterial ist keine Dichte gepflegt
   aufmass: { type: Number, default: 0 }, // mm je Seite für das Rohteil
+  nurAnsehen: { type: Boolean, default: false }, // z. B. in der Fertigung: nichts ans Bauteil übernehmen
 });
 const emit = defineEmits(['geladen', 'vorschau', 'gewicht', 'update:aufmass']);
 
@@ -212,13 +213,16 @@ function messungZeichnen() {
 const messErgebnis = computed(() => (messung.value.length === 2 ? abstand(messung.value[0].punkt, messung.value[1].punkt) : null));
 
 // ---- Rohteil
-const rohteilListe = computed(() => (kennwerte.value ? rohteile(netzeAktuell, props.aufmass) : null));
+// Aufmaß auch ohne v-model änderbar (nur zum Ansehen)
+const aufmassWert = ref(props.aufmass);
+watch(() => props.aufmass, (v) => { aufmassWert.value = v; });
+const rohteilListe = computed(() => (kennwerte.value ? rohteile(netzeAktuell, aufmassWert.value) : null));
 const rohteil = computed(() => {
   if (!rohteilListe.value) return null;
   const w = rohteilWahl.value;
-  if (w === 'Quader') return quader(netzeAktuell, props.aufmass);
-  if (ACHSEN[w]) return { ...rundmaterial(netzeAktuell, ACHSEN[w], props.aufmass), achsName: w };
-  if (w === 'Fläche' && eigeneAchse.value) return { ...rundmaterial(netzeAktuell, eigeneAchse.value, props.aufmass), achsName: 'Fläche' };
+  if (w === 'Quader') return quader(netzeAktuell, aufmassWert.value);
+  if (ACHSEN[w]) return { ...rundmaterial(netzeAktuell, ACHSEN[w], aufmassWert.value), achsName: w };
+  if (w === 'Fläche' && eigeneAchse.value) return { ...rundmaterial(netzeAktuell, eigeneAchse.value, aufmassWert.value), achsName: 'Fläche' };
   return rohteilListe.value.vorschlag;
 });
 const rohteilText = (r) => (r.art === 'Quader' ? `Quader ${mm(r.x)} × ${mm(r.y)} × ${mm(r.z)}` : `Rund ⌀${mm(r.durchmesser)} × ${mm(r.laenge)}`);
@@ -240,7 +244,10 @@ function achseAusFlaeche() {
   rohteilWahl.value = 'Fläche';
   rohteilAn.value = true;
 }
-const aufmassText = computed({ get: () => String(props.aufmass ?? 0).replace('.', ','), set: (v) => emit('update:aufmass', Math.max(0, Number(String(v).replace(',', '.')) || 0)) });
+const aufmassText = computed({
+  get: () => String(aufmassWert.value ?? 0).replace('.', ','),
+  set: (v) => { aufmassWert.value = Math.max(0, Number(String(v).replace(',', '.')) || 0); emit('update:aufmass', aufmassWert.value); },
+});
 
 // ---- Schnitt und Röntgen
 function darstellungAnwenden() {
@@ -343,7 +350,7 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
           <button class="knopf" :class="roentgen ? 'aktiv' : ''" title="Röntgen: Außenhaut durchsichtig, Bohrungen und Innenkonturen sichtbar" @click="roentgen = !roentgen"><ScanEye :size="15" /></button>
         </div>
         <div class="werkzeug right-3 top-3">
-          <button v-if="stand === 'bereit'" class="knopf" title="Aktuelle Ansicht als Vorschaubild des Bauteils übernehmen" @click="alsVorschau"><ImagePlus :size="15" /></button>
+          <button v-if="stand === 'bereit' && !nurAnsehen" class="knopf" title="Aktuelle Ansicht als Vorschaubild des Bauteils übernehmen" @click="alsVorschau"><ImagePlus :size="15" /></button>
           <a class="knopf" :href="url" :download="name || true" title="STEP-Datei herunterladen"><Download :size="15" /></a>
           <button class="knopf" :title="vollbild ? 'Vollbild verlassen (Esc)' : 'Vollbild'" @click="vollbild = !vollbild"><Minimize2 v-if="vollbild" :size="15" /><Maximize2 v-else :size="15" /></button>
         </div>
@@ -404,7 +411,7 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
             <dt class="text-mute">Fertigteil</dt><dd class="text-right">{{ cm3(kennwerte.volumen) }}<template v-if="dichte"> · {{ kg(fertigGewicht) }}</template></dd>
             <dt class="text-mute">Rohteil</dt><dd class="text-right">{{ cm3(rohteil.volumen) }}<template v-if="dichte"> · {{ kg(rohGewicht) }}</template></dd>
           </dl>
-          <button v-if="dichte" class="btn mt-2 w-full justify-center !py-1 text-xs" @click="emit('gewicht', Math.round(rohGewicht * 1000) / 1000)"><Check :size="13" /> Rohteilgewicht übernehmen</button>
+          <button v-if="dichte && !nurAnsehen" class="btn mt-2 w-full justify-center !py-1 text-xs" @click="emit('gewicht', Math.round(rohGewicht * 1000) / 1000)"><Check :size="13" /> Rohteilgewicht übernehmen</button>
           <p v-if="dichte && dichteGeschaetzt" class="mt-1 text-[10px] text-mute">Dichte geschätzt ({{ zahl(dichte, 2) }} kg/dm³), bitte am Rohmaterial in den Stammdaten pflegen.</p>
           <p v-else-if="!dichte" class="mt-1.5 text-[11px] text-mute">Für das Gewicht ein Rohmaterial mit Dichte wählen.</p>
         </div>

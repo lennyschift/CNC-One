@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { ArrowLeft, Hash, Cog, Truck, ChevronUp, ChevronDown, Trash2, Plus, Layers, NotebookPen, History, Send, PackageCheck, Save, Workflow, X } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
+import BauteilDateienAnsicht from '../components/BauteilDateienAnsicht.vue';
 import NumField from '../components/NumField.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import { repo } from '../data/repo.js';
@@ -76,7 +77,7 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
           <div class="flex items-center gap-3"><span class="text-sm text-mute tnum">{{ fb.id }}</span><StatusBadge :status="fb.status" /></div>
           <h2 class="mt-1 text-2xl font-semibold tracking-tight">{{ fb.teil.name }}</h2>
           <p class="mt-0.5 text-sm text-mute">
-            {{ fb.teil.teilenummer || 'ohne Teilenummer' }}<template v-if="fb.teil.zeichnungsnr"> · Zeichnung {{ fb.teil.zeichnungsnr }}</template><template v-if="fb.teil.material"> · {{ fb.teil.material }}</template>
+            {{ fb.teil.teilenummer || 'ohne Teilenummer' }}<template v-if="fb.teil.zeichnungsnr"> · Zeichnung {{ fb.teil.zeichnungsnr }}</template><template v-if="fb.teil.revision"> · Rev. {{ fb.teil.revision }}</template><template v-if="fb.teil.material"> · {{ fb.teil.material }}</template>
           </p>
           <p v-if="fb.serienVon" class="mt-1 inline-flex items-center gap-1.5 rounded-full bg-surface2 px-3 py-1 text-sm"><Hash :size="14" class="text-accent" /> Seriennummern <span class="font-semibold tnum">{{ bereichText(fb.serienVon, fb.serienBis, fb.serienStellen) }}</span></p>
           <p class="mt-1 text-sm">Auftrag <RouterLink :to="`/auftraege/${fb.auftragId}`" class="text-accent hover:underline tnum">{{ fb.auftragId }}</RouterLink> · {{ fb.kundeName }}</p>
@@ -108,6 +109,8 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
         </div>
       </div>
     </section>
+
+    <BauteilDateienAnsicht v-if="fb.teil.bauteilId" :teil="fb.teil" />
 
     <div class="grid items-start gap-4 xl:grid-cols-[1fr_380px]">
       <!-- Arbeitsgänge -->

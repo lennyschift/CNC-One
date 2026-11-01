@@ -124,7 +124,9 @@ export const useAngebot = defineStore('angebot', () => {
 
   function zuordnungAus(positionen) {
     const m = {};
-    for (const p of positionen) if (p.bauteilId) m[p.key] = { bauteilId: p.bauteilId, herkunft: p.herkunft, seriennummern: !!p.seriennummern };
+    for (const p of positionen) {
+      if (p.bauteilId) m[p.key] = { bauteilId: p.bauteilId, herkunft: p.herkunft, seriennummern: !!p.seriennummern, revision: p.bauteilRevision ?? '', revisionen: p.bauteilRevisionen ?? [] };
+    }
     zuordnung.value = m;
   }
 
@@ -239,6 +241,9 @@ export const useAngebot = defineStore('angebot', () => {
     return t;
   }
 
+  // Aktuelle und bekannte Revisionen eines Bauteils aus den Stammdaten (für den Hinweis im Bauteil)
+  const revisionenVon = (b) => ({ revision: b.revision ?? '', revisionen: [...new Set((b.revisionen ?? []).map((r) => r.revision).filter(Boolean))] });
+
   // Bestandsbauteil aus den Stammdaten ins Angebot übernehmen (Angaben und Arbeitsplan, ohne Kalkulationswerte)
   function ausBauteilHinzufuegen(b, materialien = []) {
     const t = neuesTeil(b.name || b.teilenummer);
@@ -254,7 +259,7 @@ export const useAngebot = defineStore('angebot', () => {
       ],
       vorschaubild: b.vorschaubild ?? '',
     });
-    zuordnung.value = { ...zuordnung.value, [t.id]: { bauteilId: b.id, herkunft: 'bestand', seriennummern: !!b.seriennummern } };
+    zuordnung.value = { ...zuordnung.value, [t.id]: { bauteilId: b.id, herkunft: 'bestand', seriennummern: !!b.seriennummern, ...revisionenVon(b) } };
     teile.value.push(t);
     auswahlId.value = t.id;
     ui.toast(`Bestandsbauteil ${b.teilenummer} übernommen`, 'ok');
@@ -330,6 +335,8 @@ export const useAngebot = defineStore('angebot', () => {
         const eintrag = { id: f.name, name: datei.name, art: dateiArt(datei.name), groesse: datei.size, url: f.file_url };
         teil.dateien.push(eintrag);
         if (eintrag.art === 'Zeichnung') erkennenFuer(teil, eintrag);
+        // neues Modell, neues Bild: das bisherige (z. B. vom Bestandsbauteil) entsteht beim Laden neu
+        if (eintrag.art === 'STEP') teil.vorschaubild = '';
       } catch (e) {
         ui.toast(`${datei.name}: ${e.message}`, 'warn');
       } finally {
@@ -455,7 +462,7 @@ export const useAngebot = defineStore('angebot', () => {
     if (b.material) { teil.material = b.material; teil.materialPreisKg = m?.preisKg ?? teil.materialPreisKg; }
     if (!teil.arbeitsgaenge?.length && b.arbeitsgaenge?.length) teil.arbeitsgaenge = b.arbeitsgaenge.map((ag) => ({ ...JSON.parse(JSON.stringify(ag)), id: uid(), anfrageId: '' }));
     if (!teil.vorschaubild && b.vorschaubild) teil.vorschaubild = b.vorschaubild;
-    zuordnung.value = { ...zuordnung.value, [teil.id]: { bauteilId: b.id, herkunft: 'bestand', seriennummern: !!b.seriennummern } };
+    zuordnung.value = { ...zuordnung.value, [teil.id]: { bauteilId: b.id, herkunft: 'bestand', seriennummern: !!b.seriennummern, ...revisionenVon(b) } };
     if (automatisch) {
       ui.toast(`${b.teilenummer} gibt es bei diesem Kunden schon (${b.id}), das Bauteil wird verwendet`, 'ok');
       return;

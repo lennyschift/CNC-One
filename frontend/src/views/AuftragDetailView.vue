@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory, Truck, Receipt } from '@lucide/vue';
+import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory, Truck, Receipt, FileText } from '@lucide/vue';
 import { useRouter } from 'vue-router';
 import LieferscheinDialog from '../components/LieferscheinDialog.vue';
 import RechnungDialog from '../components/RechnungDialog.vue';
@@ -74,11 +74,13 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
         <PartImage :teil="p.teil" :groesse="64" />
         <div class="min-w-0 flex-1">
           <div class="flex items-baseline justify-between gap-4">
-            <div><span class="mr-2 text-mute">{{ i + 1 }}</span><span class="font-medium">{{ p.teil.name }}</span><span v-if="p.teil.teilenummer" class="ml-2 text-xs text-mute">{{ p.teil.teilenummer }}</span></div>
+            <div><span class="mr-2 text-mute">{{ i + 1 }}</span><span class="font-medium">{{ p.teil.name }}</span><span v-if="p.teil.teilenummer" class="ml-2 text-xs text-mute">{{ p.teil.teilenummer }}</span><span v-if="p.teil.revision" class="ml-1.5 text-xs text-mute">Rev. {{ p.teil.revision }}</span></div>
             <div class="text-sm tnum">{{ p.menge }} Stk × {{ eur(p.einzelpreis) }} = <span class="font-semibold">{{ eur(p.einzelpreis * p.menge) }}</span></div>
           </div>
           <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-mute">
             <span v-if="p.teil.material">{{ p.teil.material }}</span>
+            <a v-if="p.teil.zeichnung" :href="p.teil.zeichnung" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-accent hover:underline"><FileText :size="12" /> Zeichnung</a>
+            <span v-if="p.teil.revision && p.teil.aktuelleRevision && p.teil.revision.toLowerCase() !== p.teil.aktuelleRevision.toLowerCase()" class="text-warn">am Bauteil inzwischen Rev. {{ p.teil.aktuelleRevision }}</span>
             <span v-if="p.staffelMenge">Staffel {{ p.staffelMenge }} Stk</span>
             <span class="inline-flex items-center gap-1" :class="p.geliefert >= p.menge ? 'text-ok' : p.geliefert ? 'text-warn' : ''"><Truck :size="12" /> geliefert {{ p.geliefert }} / {{ p.menge }}</span>
             <span v-if="p.gefertigt || fbZu(p.key)">gefertigt {{ p.gefertigt }}</span>

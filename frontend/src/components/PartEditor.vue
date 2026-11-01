@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { Cog, Clock, Layers, Receipt, TrendingDown, ListChecks, Workflow, Database, Hash, Info } from '@lucide/vue';
+import { Cog, Clock, Layers, Receipt, TrendingDown, ListChecks, Workflow, Database, Hash, Info, History } from '@lucide/vue';
 import NumField from './NumField.vue';
 import Toggle from './Toggle.vue';
 import TierTable from './TierTable.vue';
@@ -22,6 +22,18 @@ const angebot = useAngebot();
 const ausPlan = computed(() => hatPlan(props.teil));
 const zuordnung = computed(() => angebot.zuordnung[props.teil.id] ?? null);
 const bestand = computed(() => zuordnung.value?.herkunft === 'bestand');
+// Revision dieses Angebots im Vergleich zum Bauteil: neue Revision, ältere oder die aktuelle (mit früheren)
+const revisionHinweis = computed(() => {
+  const z = zuordnung.value;
+  const r = (props.teil.revision ?? '').trim();
+  if (!z?.bauteilId) return null;
+  const gleich = (a, b) => (a ?? '').toLowerCase() === (b ?? '').toLowerCase();
+  const bekannt = z.revisionen ?? [];
+  const frueher = bekannt.filter((x) => !gleich(x, z.revision));
+  if (!r || gleich(r, z.revision)) return frueher.length ? { text: `Revision ${z.revision || r} ist am Bauteil aktuell, frühere: ${frueher.join(', ')}` } : null;
+  if (bekannt.some((x) => gleich(x, r))) return { warn: true, text: `Am Bauteil ist Revision ${z.revision} aktuell, dieses Angebot gilt für die ältere Revision ${r}.` };
+  return { text: `Neue Revision ${r}: wird beim Speichern am Bauteil abgelegt und ist dann die aktuelle${z.revision ? `, Revision ${z.revision} bleibt mit ihren Dateien erhalten` : ''}.` };
+});
 
 const maschinen = ref([]);
 const materialien = ref([]);
@@ -63,6 +75,7 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
             <label class="block"><span class="label mb-1 block">Zeichnungsnummer</span><input v-model="teil.zeichnungsnr" class="field" placeholder="optional" /></label>
             <label class="block"><span class="label mb-1 block">Revision</span><input v-model="teil.revision" class="field" placeholder="–" /></label>
           </div>
+          <p v-if="revisionHinweis" class="mt-2 flex max-w-2xl items-start gap-1.5 text-xs" :class="revisionHinweis.warn ? 'text-warn' : 'text-mute'"><History :size="13" class="mt-0.5 shrink-0" /> {{ revisionHinweis.text }}</p>
           <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
             <Toggle v-if="!bestand" v-model="teil.seriennummern" klein label="Seriennummern führen" />
             <span v-else class="inline-flex items-center gap-1.5 text-xs text-mute"><Hash :size="13" /> Seriennummern: {{ teil.seriennummern ? 'ja' : 'nein' }} <span class="opacity-70">(in den Stammdaten ändern)</span></span>
