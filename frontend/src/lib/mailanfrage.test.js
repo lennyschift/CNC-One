@@ -1,25 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gruppieren, mengenAusText, mengenAusTabellen } from './mailanfrage.js';
-
-describe('Mengen aus einer Tabelle in der Mail', () => {
-  const tabelle = [
-    ['Nr.', 'Partnumber', 'Description', '', 'MOD Date', 'Quantity', 'Delivery date'],
-    ['1', 'ZZ-00011-00-X-003', 'PLATE', 'MOUNT_RAIL', '26.06.2026', '2', '20.11.2026'],
-    ['2', 'ZZ-00011-90-1-001', 'PLATE', 'MOUNT_SUPPORT', '26.06.2026', '10/25', '20.11.2026'],
-    ['', 'TEST', 'schraube', '', '', '', ''],
-  ];
-
-  it('Teilenummer aus dem Dateinamen, Menge aus der Spalte Quantity (Datum zählt nicht)', () => {
-    expect(mengenAusTabellen([tabelle], 'ZZ-00011-00-X-003')).toEqual([2]);
-    expect(mengenAusTabellen([tabelle], 'ZZ-00011-90-1-001_PLATE')).toEqual([10, 25]);
-    expect(mengenAusTabellen([tabelle], 'ZZ-99999')).toEqual([]);
-  });
-
-  it('deutsche Überschriften, Tabelle ohne Mengenspalte zählt nicht', () => {
-    expect(mengenAusTabellen([[['Teilenummer', 'Bezeichnung', 'Menge'], ['4711-22', 'Welle', '1.000 Stk']]], '4711-22')).toEqual([1000]);
-    expect(mengenAusTabellen([[['Name', 'Telefon'], ['4711-22', '0711']]], '4711-22')).toEqual([]);
-  });
-});
+import { gruppieren, mengenAusText } from './mailanfrage.js';
 
 describe('Bauteile aus den Anhängen einer Mail', () => {
   it('Zeichnung und Modell mit gleichem Namen ergeben ein Bauteil', () => {

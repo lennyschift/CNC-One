@@ -9,6 +9,7 @@ import { useAngebot } from '../stores/angebot.js';
 import StatusBadge from '../components/StatusBadge.vue';
 import CustomerCombobox from '../components/CustomerCombobox.vue';
 import MailHtml from '../components/MailHtml.vue';
+import TabelleDialog from '../components/TabelleDialog.vue';
 import { useMail } from '../stores/mail.js';
 import { benutzer } from '../data/repo.js';
 import { zahl } from '../lib/format.js';
@@ -59,14 +60,22 @@ async function zuordnen() {
 }
 
 // ---- In die Workbench: Angebotsentwurf mit Kunde, Bauteile aus Zeichnungen und Modellen, Mengen aus dem Mailtext
+// Steht eine Tabelle in der Mail, werden Menge und Liefertermin vorher in der Tabellen-Maske bestätigt.
 const uebernimmt = ref(false);
-async function inWorkbench() {
+const tabelleOffen = ref(false);
+function inWorkbench() {
+  if (!d.value.angebotId && d.value.tabellen?.length) { tabelleOffen.value = true; return; }
+  uebernehmen();
+}
+async function uebernehmen({ zeilen = [], spalten = null } = {}) {
+  tabelleOffen.value = false;
   uebernimmt.value = true;
+  if (spalten) await mail.tabellenvorlageLernen(d.value.id, spalten);
   const r = await mail.angebotAnlegen(d.value.id);
   uebernimmt.value = false;
   if (!r) return;
   if (r.angebot.status !== 'Entwurf') { router.push(`/angebote/${r.angebot.id}`); return; }
-  await draft.ausMailAnfrage(r);
+  await draft.ausMailAnfrage({ ...r, zeilen });
   router.push('/workbench');
 }
 
@@ -137,6 +146,7 @@ const kurzZeit = (iso) => {
       <!-- Mail -->
       <div v-if="id && !d" class="card p-6 text-sm text-mute">Wird geladen …</div>
       <div v-else-if="d" class="space-y-4">
+        <TabelleDialog v-if="tabelleOffen" :anfrage="d" @schliessen="tabelleOffen = false" @uebernehmen="uebernehmen" />
         <section class="card p-5">
           <RouterLink to="/posteingang" class="mb-2 inline-block text-xs text-mute hover:text-ink lg:hidden">← Alle Anfragen</RouterLink>
           <div class="flex flex-wrap items-start gap-3">

@@ -110,6 +110,7 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
         <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Cog :size="16" class="text-accent" /> Menge und Maschine</h3>
         <div class="grid grid-cols-2 gap-3">
           <NumField v-model="teil.menge" label="Stückzahl" unit="Stk" :decimals="0" :min="1" />
+          <label class="block"><span class="label mb-1 block">Liefertermin</span><input v-model="teil.liefertermin" type="date" class="field" /></label>
           <template v-if="!ausPlan">
             <label class="block">
               <span class="label mb-1 block">Maschine</span>

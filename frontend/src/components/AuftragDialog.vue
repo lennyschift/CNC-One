@@ -28,7 +28,7 @@ const zustand = reactive(props.angebot.positionen.map((p) => {
   const opt = optionen(p.teil, p.ergebnis);
   // Arbeitsplan: am Bauteil gespeichert hat Vorrang, sonst der aus dem Angebot, sonst leer
   const plan = stamm.planFuer(kundeId, p.teil.teilenummer) ?? JSON.parse(JSON.stringify(p.teil.arbeitsgaenge ?? []));
-  return { key: p.key, aktiv: (bestellt.value[p.key] ?? 0) === 0, optId: opt[0].id, menge: opt[0].menge, termin: '', serienStart: '', kostenAus: {}, plan, planSpeichern: true, planOffen: false };
+  return { key: p.key, aktiv: (bestellt.value[p.key] ?? 0) === 0, optId: opt[0].id, menge: opt[0].menge, termin: p.teil.liefertermin ?? '', serienStart: '', kostenAus: {}, plan, planSpeichern: true, planOffen: false };
 }));
 
 // Seriennummern: Stammdaten des Bauteils (Kennzeichen und letzte vergebene Nummer) frisch holen

@@ -67,7 +67,7 @@ const mwst = computed(() => a.netto * 0.19);
           <CustomerCombobox v-model="a.kopf.kundeId" />
           <label class="block"><span class="label mb-1 block">Anfrage-Nr. des Kunden</span><input v-model="a.kopf.anfrageNr" class="field" placeholder="z. B. RFQ-2026-118" /></label>
           <NumField v-model="a.kopf.gueltigWochen" label="Gültig" unit="Wo." :decimals="0" :min="1" />
-          <label class="block"><span class="label mb-1 block">Lieferzeit</span><input v-model="a.kopf.lieferzeit" class="field" /></label>
+          <label class="block"><span class="label mb-1 block">Lieferzeit</span><input v-model="a.kopf.lieferzeit" class="field" :disabled="!!a.fruehesterTermin" :title="a.fruehesterTermin ? 'Frühester Liefertermin der Bauteile' : ''" /></label>
 
           <Transition name="fade">
             <div v-if="kunde" class="grid gap-3 text-sm md:col-span-4 md:grid-cols-3">

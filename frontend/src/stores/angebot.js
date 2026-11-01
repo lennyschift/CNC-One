@@ -37,6 +37,7 @@ export function neuesTeil(name = 'Neues Bauteil') {
     arbeitsgaenge: [],
     dateien: [],
     vorschaubild: '',
+    liefertermin: '',
   };
 }
 
@@ -115,6 +116,11 @@ export const useAngebot = defineStore('angebot', () => {
 
   const ergebnisse = computed(() => Object.fromEntries(teile.value.map((t) => [t.id, berechne(t)])));
   const netto = computed(() => summe(Object.values(ergebnisse.value)));
+  // Haben Bauteile einen Liefertermin, ist der früheste davon die Lieferzeit des Angebots (rechnet der Server genauso)
+  const fruehesterTermin = computed(() => teile.value.map((t) => t.liefertermin).filter(Boolean).sort()[0] ?? '');
+  watch(fruehesterTermin, (iso) => {
+    if (iso) kopf.value.lieferzeit = new Date(`${iso}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  });
   const auswahl = computed(() => teile.value.find((t) => t.id === auswahlId.value) ?? null);
 
   async function ruhig(fn) {
@@ -352,20 +358,21 @@ export const useAngebot = defineStore('angebot', () => {
 
   // Angebot aus einer Mail-Anfrage (cnc_one.api.mail.angebot_anlegen): Entwurf laden, je Zeichnung/Modell-Paar ein Bauteil
   // mit den schon hochgeladenen Dateien, Mengen aus dem Mailtext (mehrere = Staffel), danach die Zeichnungen erkennen.
-  async function ausMailAnfrage({ angebot, dateien = [], text = '', tabellen = [] }) {
+  async function ausMailAnfrage({ angebot, dateien = [], text = '', zeilen = [] }) {
     if (speicherStand.value === 'offen') await speichern();
     belege.einsetzen(angebot);
     ausAngebot(angebot);
     if (!dateien.length) return;
-    const { gruppieren, mengenAusText, mengenAusTabellen } = await import('../lib/mailanfrage.js');
+    const [{ gruppieren, mengenAusText }, { passtZu }] = await Promise.all([import('../lib/mailanfrage.js'), import('../lib/mailtabelle.js')]);
     const gruppen = gruppieren(dateien);
     for (const g of gruppen) {
       const id = hinzufuegen(g.basis.replace(/_/g, ' ')).id;
       const t = teile.value.find((x) => x.id === id);
       t.dateien = g.dateien.map((d) => ({ id: d.id, name: d.name, art: d.art, groesse: d.groesse, url: d.url }));
-      // zuerst eine Tabelle in der Mail (Teilenummer + Menge), sonst der Text
-      const ausTabelle = mengenAusTabellen(tabellen, g.basis);
-      const mengen = ausTabelle.length ? ausTabelle : mengenAusText(text, g.basis, { einziges: gruppen.length === 1 });
+      // bestätigte Zeile der Tabelle (Menge, Liefertermin), sonst Mengen aus dem Text
+      const zeile = zeilen.find((z) => g.dateien.some((d) => (z.datei ? d.name === z.datei : passtZu(z.teilenummer, d.name))));
+      if (zeile?.liefertermin) t.liefertermin = zeile.liefertermin;
+      const mengen = zeile?.menge?.length ? zeile.menge : mengenAusText(text, g.basis, { einziges: gruppen.length === 1 });
       if (mengen.length) t.menge = mengen[0];
       if (mengen.length > 1) t.staffel = { aktiv: true, stufen: mengen.map((menge) => ({ menge, extra: 0 })) };
     }
@@ -559,5 +566,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, zuordnung, mailAnfrage, ausMailAnfrage, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
+  return { kopf, teile, zuordnung, fruehesterTermin, mailAnfrage, ausMailAnfrage, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
 });

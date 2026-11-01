@@ -99,5 +99,10 @@ export const useMail = defineStore('mail', () => {
     }
   }
 
-  return { liste, anzahl, geladen, ruft, details, laden, zaehlen, abrufen, detail, kundeZuordnen, keineAnfrage, angebotAnlegen };
+  // Spalten der Anfrage-Tabelle für Kontakt und Kunde merken
+  async function tabellenvorlageLernen(id, spalten) {
+    try { await call('cnc_one.api.mail.tabellenvorlage_lernen', { id, spalten }); } catch (e) { ui.toast(`Spalten nicht gemerkt: ${e.message}`, 'warn'); }
+  }
+
+  return { liste, anzahl, geladen, ruft, details, laden, zaehlen, abrufen, detail, kundeZuordnen, keineAnfrage, angebotAnlegen, tabellenvorlageLernen };
 });

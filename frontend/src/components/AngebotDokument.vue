@@ -59,6 +59,7 @@ const mwst = computed(() => props.angebot.netto * 0.19);
             <template v-if="p.teil.teilenummer">Teilenummer {{ p.teil.teilenummer }}</template>
             <template v-if="p.teil.zeichnungsnr"> · Zeichnung {{ p.teil.zeichnungsnr }}</template>
             <template v-if="p.teil.material"> · {{ p.teil.material }}</template>
+            <template v-if="p.teil.liefertermin"> · Liefertermin {{ de(new Date(`${p.teil.liefertermin}T00:00:00`)) }}</template>
           </div>
 
           <table v-if="p.teil.staffel.aktiv" class="mt-2 w-full max-w-sm text-[12px]">
