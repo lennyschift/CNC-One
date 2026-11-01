@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Angebot {{ a.id }}</title>
+<meta name="author" content="{{ f.firmenname }}">
+<style>
+  @page { size: A4; margin: 15mm 15mm 20mm 15mm;
+    @bottom-center { content: "Seite " counter(page) " von " counter(pages); font-family: "DejaVu Sans"; font-size: 7pt; color: #888; } }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", sans-serif; font-size: 8.4pt; line-height: 1.45; color: #1c1c1c; margin: 0; }
+  .kopf { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.6pt solid #d4242a; padding-bottom: 4mm; }
+  .firma { font-size: 16pt; font-weight: bold; letter-spacing: 0.5pt; color: #d4242a; text-transform: uppercase; }
+  .unterzeile { font-size: 6.5pt; letter-spacing: 2pt; text-transform: uppercase; color: #777; }
+  .adresse-rechts { text-align: right; font-size: 7.5pt; color: #666; }
+  .block { display: flex; justify-content: space-between; margin-top: 9mm; gap: 12mm; }
+  .block > div { flex: 1; }
+  .label { font-size: 6.5pt; letter-spacing: 1pt; text-transform: uppercase; color: #999; margin-bottom: 1mm; }
+  .meta { width: 68mm; flex: none; border-collapse: collapse; }
+  .meta td { border: 0; padding: 0.3mm 0; }
+  .meta .k { color: #777; padding-right: 4mm; }
+  .meta .v { text-align: right; white-space: nowrap; }
+  h1 { font-size: 13pt; margin: 9mm 0 2mm; }
+  .einleitung { color: #555; margin-bottom: 4mm; }
+  .pos { display: flex; gap: 4mm; padding: 3mm 0; border-top: 0.4pt solid #e2e2e2; break-inside: avoid; }
+  .nr { color: #999; width: 7mm; flex: none; }
+  .bild { width: 17mm; height: 17mm; flex: none; border: 0.4pt solid #e2e2e2; border-radius: 1.5mm; object-fit: contain; }
+  .inhalt { flex: 1; }
+  .zeile { display: flex; justify-content: space-between; gap: 6mm; }
+  .name { font-weight: bold; }
+  .preis { white-space: nowrap; text-align: right; }
+  .klein { font-size: 7.6pt; color: #666; }
+  .kosten { display: flex; justify-content: space-between; padding-left: 4mm; color: #555; font-size: 7.8pt; margin-top: 0.6mm; }
+  table.staffel { border-collapse: collapse; margin-top: 1.5mm; width: 80mm; font-size: 7.8pt; }
+  table.staffel th { text-align: left; font-weight: normal; color: #999; font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.6pt; border-bottom: 0.5pt solid #ccc; padding: 0.6mm 0; }
+  table.staffel td { padding: 0.6mm 0; border-bottom: 0.3pt solid #eee; }
+  table.staffel .r { text-align: right; }
+  .summen { display: flex; justify-content: flex-end; margin-top: 3mm; border-top: 1.2pt solid #333; padding-top: 2mm; break-inside: avoid; }
+  .summen table { width: 75mm; border-collapse: collapse; }
+  .summen td { padding: 0.6mm 0; }
+  .summen .r { text-align: right; white-space: nowrap; }
+  .summen .gesamt td { border-top: 0.6pt solid #888; padding-top: 1.6mm; font-weight: bold; font-size: 10pt; }
+  .schluss { margin-top: 8mm; color: #444; break-inside: avoid; }
+  .fuss { margin-top: 10mm; border-top: 0.6pt solid #bbb; padding-top: 2mm; display: flex; gap: 8mm; font-size: 6.6pt; color: #777; line-height: 1.5; break-inside: avoid; }
+  .fuss > div { flex: 1; }
+</style>
+</head>
+<body>
+<div class="kopf">
+  <div><div class="firma">{{ f.firmenname }}</div><div class="unterzeile">CNC-Fertigung</div></div>
+  <div class="adresse-rechts">
+    {% for z in f.adresse %}<div>{{ z }}</div>{% endfor %}
+    {% if f.telefon %}<div>Tel. {{ f.telefon }}</div>{% endif %}
+    {% if f.email %}<div>{{ f.email }}</div>{% endif %}
+  </div>
+</div>
+
+<div class="block">
+  <div>
+    <div class="label">Kunde</div>
+    <div style="font-weight:bold">{{ a.kopf.kundeName }}</div>
+    {% for z in kunde.adresse %}<div>{{ z }}</div>{% endfor %}
+    {% if zu_haenden %}<div class="klein" style="margin-top:1mm">z. Hd. {{ zu_haenden }}</div>{% endif %}
+  </div>
+  <table class="meta">
+    <tr><td class="k">Angebot</td><td class="v"><strong>{{ a.id }}</strong></td></tr>
+    <tr><td class="k">Datum</td><td class="v">{{ de(datum) }}</td></tr>
+    <tr><td class="k">Gültig bis</td><td class="v">{{ de(gueltig_bis) }}</td></tr>
+    {% if a.kopf.anfrageNr %}<tr><td class="k">Ihre Anfrage</td><td class="v">{{ a.kopf.anfrageNr }}</td></tr>{% endif %}
+    {% if kunde.lieferantennr %}<tr><td class="k">Lieferanten-Nr.</td><td class="v">{{ kunde.lieferantennr }}</td></tr>{% endif %}
+  </table>
+</div>
+
+<h1>Angebot</h1>
+<div class="einleitung">Vielen Dank für Ihre Anfrage. Gerne bieten wir Ihnen wie folgt an:</div>
+
+{% for p in a.positionen %}
+<div class="pos">
+  <div class="nr">{{ loop.index }}</div>
+  {% if p.bild %}<img class="bild" src="{{ p.bild }}">{% endif %}
+  <div class="inhalt">
+    <div class="zeile">
+      <div class="name">{{ p.teil.name }}</div>
+      {% if not p.teil.staffel.aktiv and p.ergebnis.zeilen %}
+      <div class="preis">{{ p.ergebnis.menge }} Stk × {{ eur(p.ergebnis.zeilen[0].einzel) }} = <strong>{{ eur(p.ergebnis.zeilen[0].betrag) }}</strong></div>
+      {% endif %}
+    </div>
+    {% if p.angaben %}<div class="klein">{{ p.angaben }}</div>{% endif %}
+    {% if p.teil.staffel.aktiv %}
+    <table class="staffel">
+      <tr><th>Menge</th><th class="r">Stückpreis</th><th class="r">Gesamt</th></tr>
+      {% for s in p.ergebnis.stufen %}<tr><td>{{ s.menge }} Stk</td><td class="r">{{ eur(s.stueckpreis) }}</td><td class="r">{{ eur(s.gesamt) }}</td></tr>{% endfor %}
+    </table>
+    {% endif %}
+    {% for z in p.ergebnis.zeilen if z.typ == 'kosten' %}
+    <div class="kosten"><span>↳ {{ z.label }}</span><span>{{ eur(z.betrag) }}</span></div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<div class="summen"><table>
+  <tr><td>Summe netto{% if staffel %} (kleinste Staffel){% endif %}</td><td class="r"><strong>{{ eur(a.netto) }}</strong></td></tr>
+  <tr><td>zzgl. 19 % MwSt.</td><td class="r">{{ eur(mwst) }}</td></tr>
+  <tr class="gesamt"><td>Gesamt</td><td class="r">{{ eur(a.netto + mwst) }}</td></tr>
+</table></div>
+
+<div class="schluss">
+  <p>Lieferzeit: {{ a.kopf.lieferzeit or 'nach Absprache' }}. Das Angebot ist {{ a.kopf.gueltigWochen }} Wochen gültig. Alle Preise netto zuzüglich gesetzlicher Mehrwertsteuer.</p>
+  <p style="margin-top:3mm">Mit freundlichen Grüßen<br>{{ f.firmenname }}</p>
+</div>
+
+<div class="fuss">
+  <div><strong>{{ f.firmenname }}{% if f.rechtsform %} {{ f.rechtsform }}{% endif %}</strong>{% for z in f.adresse %}<br>{{ z }}{% endfor %}</div>
+  <div>{% if f.steuernummer %}Steuernummer {{ f.steuernummer }}<br>{% endif %}{% if f.ustId %}USt-IdNr. {{ f.ustId }}<br>{% endif %}{% if f.handelsregister %}{{ f.handelsregister }}<br>{% endif %}{% if f.geschaeftsfuehrer %}Geschäftsführer: {{ f.geschaeftsfuehrer }}{% endif %}</div>
+  <div>{% for b in f.banken %}{{ b.bezeichnung }}: {{ b.iban }}{% if b.bic %} · {{ b.bic }}{% endif %}<br>{% endfor %}</div>
+</div>
+</body>
+</html>

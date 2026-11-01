@@ -192,3 +192,97 @@ class TestMailAnfragen(IntegrationTestCase):
 		self.assertEqual(mail_api.anfrage_nummer("RFQ 2026-118 shafts"), "2026-118")
 		self.assertEqual(mail_api.anfrage_nummer("AW: Preisanfrage #A-77."), "A-77")
 		self.assertEqual(mail_api.anfrage_nummer("Anfrage ZZ Flansch"), "")
+
+
+class FakeSmtp:
+	"""SMTP-Server im Speicher: merkt sich Anmeldung und verschickte Mails."""
+
+	gesendet = []
+
+	def __init__(self, server, port, **kw):
+		self.server, self.port = server, port
+		self.anmeldung = None
+
+	def login(self, benutzer, passwort):
+		self.anmeldung = (benutzer, passwort)
+
+	def send_message(self, msg, from_addr=None, to_addrs=None):
+		FakeSmtp.gesendet.append({"msg": msg, "von": from_addr, "an": to_addrs, "anmeldung": self.anmeldung, "server": (self.server, self.port)})
+
+	def quit(self):
+		pass
+
+
+class TestAngebotPerMail(IntegrationTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Antwortkunde", "kontakte": [{"anrede": "Herr", "nachname": "Einkauf", "email": "einkauf@zz-kunde.de"}]}).insert().name
+		s = frappe.get_single("Mail Einstellungen")
+		s.update({"benutzer": "info@zz-cnc.de", "absender_name": "ZZ CNC", "imap_server": "zz.invalid", "smtp_server": "smtp.zz.invalid", "smtp_port": 465, "verschluesselung": "SSL/TLS", "stichwoerter": "Anfrage", "gesendet_ordner": "Gesendete Objekte", "antwort_vorlage": None})
+		s.passwort = "zz-geheim"
+		s.save()
+		FakeSmtp.gesendet = []
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		for name in frappe.get_all("File", filters={"attached_to_doctype": ["in", ["Mail Anfrage", "Angebot"]]}, fields=["name", "file_name"]):
+			if name.file_name.startswith(("zz-", "Angebot ANG-")) and frappe.db.get_value("File", name.name, "creation") and frappe.db.exists("File", name.name):
+				frappe.delete_doc("File", name.name, ignore_permissions=True, force=True)
+		frappe.db.rollback()
+
+	def angebot_aus_mail(self):
+		from cnc_one.api import angebot
+		from cnc_one.tests.test_angebot import teil
+
+		d = mail.verarbeiten(zz_mail(betreff="Anfrage Nr. 77: Flansch", mid="<zz-a1@zz-kunde.de>", anhaenge=[("zz-f.pdf", leeres_pdf("zz-f"))]))
+		r = mail_api.angebot_anlegen(d.name)
+		a = angebot.entwurf_speichern({"id": r["angebot"]["id"], "kopf": {"kundeId": self.kunde, "anfrageNr": "77"}, "teile": [teil("t1", "Flansch", "ZZ-AM-1")]})
+		return d, a
+
+	def test_angebot_als_pdf(self):
+		from cnc_one.api import angebot
+
+		_d, a = self.angebot_aus_mail()
+		r = angebot.pdf(a["id"])
+		self.assertEqual(r["name"], f"Angebot {a['id']}.pdf")
+		inhalt = frappe.get_doc("File", {"file_url": r["url"]}).get_content()
+		self.assertTrue(inhalt.startswith(b"%PDF"))
+		angebot.pdf(a["id"])  # Entwurf: neu erzeugt, nicht doppelt
+		self.assertEqual(frappe.db.count("File", {"attached_to_name": a["id"], "file_name": r["name"]}), 1)
+
+	def test_vorschlag_ist_antwort_auf_die_anfrage(self):
+		_d, a = self.angebot_aus_mail()
+		v = mail_api.antwort_vorschlag(a["id"])
+		self.assertEqual((v["an"], v["cc"], v["betreff"], v["bereit"]), ("einkauf@zz-kunde.de", "erika@zz-kunde.de", "AW: Anfrage Nr. 77: Flansch", True))
+		self.assertTrue(v["text"].startswith("Sehr geehrter Herr Einkauf,\n\nvielen Dank für Ihre Anfrage 77. Anbei erhalten Sie unser Angebot " + a["id"]))
+		self.assertIn("schrieb Max Mustermann <einkauf@zz-kunde.de>:\n> Bitte um Angebot für 10 Stück.", v["text"])
+		self.assertEqual(mail_api.antwort_betreff("RE: Anfrage"), "RE: Anfrage")
+
+	def test_senden_im_verlauf_mit_kopie_in_gesendet(self):
+		_d, a = self.angebot_aus_mail()
+		v = mail_api.antwort_vorschlag(a["id"])
+		abgelegt = []
+		with patch.object(mail.smtplib, "SMTP_SSL", FakeSmtp), patch.object(mail, "gesendet_ablegen", side_effect=lambda s, m: abgelegt.append(m) or ""):
+			r = mail_api.angebot_senden(a["id"], v["an"], v["cc"], v["betreff"], v["text"])
+		self.assertEqual((r["angebot"]["status"], r["hinweis"]), ("Gesendet", ""))
+		g = FakeSmtp.gesendet[0]
+		msg = g["msg"]
+		self.assertEqual((g["server"], g["anmeldung"], g["an"]), (("smtp.zz.invalid", 465), ("info@zz-cnc.de", "zz-geheim"), ["einkauf@zz-kunde.de", "erika@zz-kunde.de"]))
+		self.assertEqual((msg["In-Reply-To"], msg["References"], msg["Subject"], msg["From"]), ("<zz-a1@zz-kunde.de>", "<zz-a1@zz-kunde.de>", "AW: Anfrage Nr. 77: Flansch", "ZZ CNC <info@zz-cnc.de>"))
+		self.assertEqual([x.get_filename() for x in msg.iter_attachments()], [f"Angebot {a['id']}.pdf"])
+		self.assertIs(abgelegt[0], msg)
+		m = frappe.get_doc("Mail Anfrage", r["mailAnfrage"])
+		self.assertEqual((m.status, m.nachrichten[-1].richtung, m.nachrichten[-1].message_id), ("Beantwortet", "Ausgang", msg["Message-ID"]))
+		# Der Kunde antwortet auf unsere Mail: kommt in denselben Verlauf
+		antwort = mail.verarbeiten(zz_mail(betreff="AW: AW: Anfrage Nr. 77", mid="<zz-a2@zz-kunde.de>", antwort_auf=msg["Message-ID"], text="Wir bestellen."))
+		self.assertEqual(antwort.name, m.name)
+		self.assertEqual(frappe.db.get_value("Mail Anfrage", m.name, "neue_antwort"), 1)
+
+	def test_senden_prueft_empfaenger_und_zugang(self):
+		_d, a = self.angebot_aus_mail()
+		with self.assertRaises(frappe.ValidationError):
+			mail_api.angebot_senden(a["id"], "kein-empfaenger", "", "Betreff", "Text")
+		frappe.db.set_single_value("Mail Einstellungen", "smtp_server", "")
+		with self.assertRaises(frappe.ValidationError):
+			mail_api.angebot_senden(a["id"], "einkauf@zz-kunde.de", "", "Betreff", "Text")
+		self.assertEqual(frappe.db.get_value("Angebot", a["id"], "status"), "Entwurf")

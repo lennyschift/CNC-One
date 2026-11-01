@@ -19,6 +19,9 @@
   "abholen_ab",
   "postfach_ordner",
   "gesendet_ordner",
+  "sb_antwort",
+  "antwort_vorlage",
+  "sb_stand",
   "letzter_abruf",
   "letzter_fehler"
  ],
@@ -111,6 +114,22 @@
    "fieldtype": "Data",
    "label": "Ordner für gesendete Mails",
    "default": "Gesendete Objekte"
+  },
+  {
+   "fieldname": "sb_antwort",
+   "fieldtype": "Section Break",
+   "label": "Antwort mit Angebot"
+  },
+  {
+   "fieldname": "antwort_vorlage",
+   "fieldtype": "Text",
+   "label": "Text der Antwort",
+   "description": "Platzhalter: {anrede}, {angebot}, {anfrage}, {absender}, {firma}. Leer = Standardtext"
+  },
+  {
+   "fieldname": "sb_stand",
+   "fieldtype": "Section Break",
+   "label": "Stand"
   },
   {
    "fieldname": "letzter_abruf",

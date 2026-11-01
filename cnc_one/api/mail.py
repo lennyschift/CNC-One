@@ -2,11 +2,12 @@
 
 import json
 import re
+from email.utils import getaddresses
 
 import frappe
 from frappe import _
 
-from cnc_one.api.stamm import nur_cnc
+from cnc_one.api.stamm import kunde_ui, nur_cnc
 from cnc_one.logic import mail
 
 MAIL_PFLEGE = ("CNC Admin", "System Manager")
@@ -215,6 +216,7 @@ FELDER = {
 	"aktiv": "aktiv", "benutzer": "benutzer", "absenderName": "absender_name", "verschluesselung": "verschluesselung",
 	"imapServer": "imap_server", "imapPort": "imap_port", "smtpServer": "smtp_server", "smtpPort": "smtp_port",
 	"stichwoerter": "stichwoerter", "abholenAb": "abholen_ab", "postfachOrdner": "postfach_ordner", "gesendetOrdner": "gesendet_ordner",
+	"antwortVorlage": "antwort_vorlage",
 }
 
 
@@ -223,7 +225,7 @@ def einstellungen_ui(s=None):
 	out = {ui: s.get(feld) for ui, feld in FELDER.items()}
 	out.update(
 		aktiv=bool(s.aktiv), abholenAb=str(s.abholen_ab or ""), passwortGesetzt=bool(s.get_password("passwort", raise_exception=False)),
-		letzterAbruf=_iso(s.letzter_abruf), letzterFehler=s.letzter_fehler or "",
+		letzterAbruf=_iso(s.letzter_abruf), letzterFehler=s.letzter_fehler or "", antwortVorlage=s.antwort_vorlage or STANDARD_VORLAGE,
 	)
 	return out
 
@@ -279,3 +281,155 @@ def verbindung_testen():
 		except Exception:
 			pass
 	return {"ok": True, "passend": passend}
+
+
+# ----------------------------------------------------------------- Angebot per Mail
+STANDARD_VORLAGE = (
+	"{anrede},\n\nvielen Dank für Ihre Anfrage{anfrage}. Anbei erhalten Sie unser Angebot {angebot}.\n\n"
+	"Für Rückfragen stehen wir Ihnen gerne zur Verfügung.\n\nMit freundlichen Grüßen\n{absender}"
+)
+
+
+class _Platzhalter(dict):
+	def __missing__(self, key):
+		return "{" + key + "}"
+
+
+def _adressliste(*werte):
+	return [a.lower() for w in werte if w for _n, a in getaddresses([w]) if "@" in a]
+
+
+def antwort_betreff(betreff):
+	"""AW: vor den Betreff, außer er beginnt schon mit AW:/RE:."""
+	betreff = (betreff or "").strip()
+	return betreff if re.match(r"^\s*(aw|re|antw)\s*:", betreff, re.I) else f"AW: {betreff}"
+
+
+def _anrede(kunde, adresse):
+	k = next((x for x in frappe.get_doc("Kunde", kunde).kontakte if (x.email or "").lower() == adresse), None) if kunde and adresse else None
+	if k and k.anrede in ("Herr", "Frau") and k.nachname:
+		return f"Sehr geehrte{'r' if k.anrede == 'Herr' else ''} {k.anrede} {k.nachname}"
+	return "Sehr geehrte Damen und Herren"
+
+
+def _letzte_eingang(d):
+	eingang = [n for n in d.nachrichten if n.richtung == "Eingang" and n.message_id]
+	return max(eingang, key=lambda n: (n.datum or d.datum, n.idx)) if eingang else None
+
+
+def _zitat(n):
+	from frappe.utils import format_datetime
+
+	text = (n.text or "").strip()[:4000]
+	kopf = f"Am {format_datetime(n.datum, 'dd.MM.yyyy HH:mm')} schrieb {n.von_name or n.von_email} <{n.von_email}>:"
+	return "\n\n\n" + kopf + "\n" + "\n".join("> " + z for z in text.splitlines())
+
+
+def _empfaenger_aus_angebot(a, s):
+	"""(Mail-Anfrage oder None, letzte Mail des Kunden oder None, an, cc) für ein Angebot."""
+	m = frappe.get_all("Mail Anfrage", filters={"angebot": a.name}, pluck="name", limit=1)
+	d = frappe.get_doc("Mail Anfrage", m[0]) if m else None
+	letzte = _letzte_eingang(d) if d else None
+	if letzte:
+		eigene = (s.benutzer or "").lower()
+		an = letzte.von_email
+		cc = [x for x in dict.fromkeys(_adressliste(letzte.an, letzte.cc)) if x not in (eigene, an)]
+		return d, letzte, an, ", ".join(cc)
+	kontakt = (kunde_ui(frappe.get_doc("Kunde", a.kunde)).get("kontakt") or {}) if a.kunde else {}
+	return d, None, kontakt.get("email", ""), ""
+
+
+@frappe.whitelist(methods=["POST"])
+def antwort_vorschlag(angebot):
+	"""Vorschlag für die Mail mit dem Angebot: an den Absender der Anfrage (als Antwort im Verlauf), sonst an den Kontakt
+	des Kunden. Text aus der Vorlage, darunter die zitierte Anfrage."""
+	nur_cnc()
+	a = frappe.get_doc("Angebot", angebot)
+	a.check_permission("read")
+	s = mail.einstellungen()
+	d, letzte, an, cc = _empfaenger_aus_angebot(a, s)
+	from cnc_one.api.firma import firma_ui
+
+	firma = firma_ui().get("firmenname", "")
+	werte = _Platzhalter(
+		anrede=_anrede(a.kunde, an), angebot=a.name, anfrage=f" {a.anfrage_nr}" if a.anfrage_nr else "",
+		absender=s.absender_name or firma, firma=firma,
+	)
+	text = (s.antwort_vorlage or STANDARD_VORLAGE).format_map(werte)
+	if letzte:
+		betreff = antwort_betreff(letzte.betreff or d.betreff)
+		text += _zitat(letzte)
+	else:
+		betreff = f"Angebot {a.name}" + (f" zu Ihrer Anfrage {a.anfrage_nr}" if a.anfrage_nr else "")
+	bereit = bool(s.smtp_server and s.benutzer and s.get_password("passwort", raise_exception=False))
+	return {
+		"an": an, "cc": cc, "betreff": betreff, "text": text, "anhang": f"Angebot {a.name}.pdf", "mailAnfrage": d.name if d else "",
+		"antwortAuf": {"vonName": letzte.von_name or letzte.von_email, "datum": _iso(letzte.datum)} if letzte else None,
+		"bereit": bereit, "absender": s.benutzer or "",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def angebot_senden(angebot, an, cc="", betreff="", text=""):
+	"""Schickt das Angebot als PDF per Mail, bei einer Mail-Anfrage als Antwort im selben Verlauf (In-Reply-To/References).
+	Danach: Kopie in „Gesendet“, Nachricht im Verlauf der Anfrage, Anfrage beantwortet, Angebot gesendet."""
+	nur_cnc()
+	from email.message import EmailMessage
+	from email.utils import formataddr, formatdate, make_msgid
+
+	from frappe.utils import now_datetime, validate_email_address
+
+	from cnc_one.api import angebot as angebot_api
+	from cnc_one.api.firma import firma_ui
+
+	a = frappe.get_doc("Angebot", angebot)
+	a.check_permission("write")
+	if a.status == "Abgelehnt":
+		frappe.throw(_("Ein abgelehntes Angebot wird nicht verschickt."))
+	if not a.kunde or not a.positionen:
+		frappe.throw(_("Das Angebot braucht einen Kunden und mindestens ein Bauteil."))
+	an_liste, cc_liste = _adressliste(an), _adressliste(cc)
+	if not an_liste:
+		frappe.throw(_("Bitte einen Empfänger eintragen."))
+	for x in an_liste + cc_liste:
+		validate_email_address(x, throw=True)
+	if not (betreff or "").strip():
+		frappe.throw(_("Bitte einen Betreff eintragen."))
+
+	s = mail.einstellungen()
+	d, letzte, _an, _cc = _empfaenger_aus_angebot(a, s)
+	datei = angebot_api.pdf_ablegen(a)
+	inhalt = datei.get_content()
+
+	msg = EmailMessage()
+	msg["From"] = formataddr((s.absender_name or firma_ui().get("firmenname", ""), s.benutzer or ""))
+	msg["To"] = ", ".join(an_liste)
+	if cc_liste:
+		msg["Cc"] = ", ".join(cc_liste)
+	msg["Subject"] = betreff.strip()
+	msg["Date"] = formatdate(localtime=True)
+	msg["Message-ID"] = make_msgid(domain=(s.benutzer or "cnc-one.local").rsplit("@", 1)[-1])
+	referenzen = ""
+	if letzte:
+		msg["In-Reply-To"] = letzte.message_id
+		referenzen = " ".join(x for x in ((letzte.referenzen or "").strip(), letzte.message_id) if x)
+		msg["References"] = referenzen
+	msg.set_content(text or "")
+	msg.add_attachment(inhalt, maintype="application", subtype="pdf", filename=datei.file_name)
+
+	mail.smtp_senden(s, msg, an_liste + cc_liste)
+	hinweis = mail.gesendet_ablegen(s, msg)
+
+	if d:
+		d.append("nachrichten", {
+			"richtung": "Ausgang", "datum": now_datetime(), "von_email": (s.benutzer or "").lower(), "von_name": s.absender_name or "",
+			"an": msg["To"], "cc": msg["Cc"] or "", "betreff": msg["Subject"], "message_id": msg["Message-ID"],
+			"in_reply_to": letzte.message_id if letzte else "", "referenzen": referenzen, "text": text or "",
+			"anhaenge": json.dumps([{"name": datei.file_name, "url": datei.file_url, "groesse": len(inhalt)}], ensure_ascii=False),
+		})
+		d.status = "Beantwortet"
+		d.neue_antwort = 0
+		d.save()
+	if a.status == "Entwurf":
+		angebot_api.senden(a.name)
+	return {"angebot": angebot_api.angebot_ui(frappe.get_doc("Angebot", a.name)), "hinweis": hinweis, "mailAnfrage": d.name if d else ""}

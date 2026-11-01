@@ -11,7 +11,9 @@ import hashlib
 import imaplib
 import json
 import re
+import smtplib
 import ssl
+import time
 from email.policy import default as POLICY
 from email.utils import getaddresses, parsedate_to_datetime
 from zoneinfo import ZoneInfo
@@ -134,6 +136,50 @@ def laden(m, uid):
 		if isinstance(teil, tuple):
 			return teil[1]
 	return None
+
+
+def smtp_senden(s, msg, empfaenger):
+	"""Verschickt die Mail über den SMTP-Server des Postfachs."""
+	if not (s.smtp_server and s.benutzer):
+		frappe.throw(_("Bitte zuerst den SMTP-Server und den Benutzer des Postfachs eintragen."))
+	passwort = s.get_password("passwort", raise_exception=False)
+	if not passwort:
+		frappe.throw(_("Bitte zuerst das Passwort des Postfachs eintragen."))
+	port = int(s.smtp_port or (465 if s.verschluesselung == "SSL/TLS" else 587))
+	if s.verschluesselung == "SSL/TLS":
+		k = smtplib.SMTP_SSL(s.smtp_server, port, context=_ssl(), timeout=30)
+	else:
+		k = smtplib.SMTP(s.smtp_server, port, timeout=30)
+		if s.verschluesselung == "STARTTLS":
+			k.starttls(context=_ssl())
+	try:
+		k.login(s.benutzer, passwort)
+		k.send_message(msg, from_addr=s.benutzer, to_addrs=empfaenger)
+	finally:
+		try:
+			k.quit()
+		except Exception:
+			pass
+
+
+def gesendet_ablegen(s, msg):
+	"""Legt eine Kopie in den Gesendet-Ordner (gelesen). Liefert "" oder einen Hinweis; verschickt ist die Mail so oder so."""
+	ordner = s.gesendet_ordner or "Sent"
+	try:
+		m = imap_verbinden(s)
+		try:
+			typ, daten = m.append(ordnername(ordner), r"(\Seen)", imaplib.Time2Internaldate(time.time()), msg.as_bytes())
+		finally:
+			try:
+				m.logout()
+			except Exception:
+				pass
+		if typ != "OK":
+			return _("Die Kopie liegt nicht im Ordner „{0}“: {1}").format(ordner, (daten[0] or b"").decode(errors="replace")[:200])
+	except Exception as e:
+		frappe.clear_messages()
+		return _("Die Kopie liegt nicht im Ordner „{0}“: {1}").format(ordner, str(e)[:200])
+	return ""
 
 
 # ----------------------------------------------------------------- Abholen
