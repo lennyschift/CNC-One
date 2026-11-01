@@ -8,6 +8,7 @@ import { Inbox, RefreshCw, Paperclip, FileText, Box, Table2, File, Building2, Us
 import { useAngebot } from '../stores/angebot.js';
 import StatusBadge from '../components/StatusBadge.vue';
 import CustomerCombobox from '../components/CustomerCombobox.vue';
+import MailHtml from '../components/MailHtml.vue';
 import { useMail } from '../stores/mail.js';
 import { benutzer } from '../data/repo.js';
 import { zahl } from '../lib/format.js';
@@ -82,8 +83,10 @@ const vorschau = ref(null);
 const ICON = { Zeichnung: FileText, STEP: Box, Tabelle: Table2, Datei: File };
 const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)} KB`);
 const ansehbar = (a) => a.art === 'Zeichnung' || a.art === 'STEP';
+// Je Nachricht: HTML (wie im Mailprogramm) oder reiner Text
+const alsText = ref({});
 // Beim Wechsel der Anfrage: laden, Vorschau und Rückfrage zurücksetzen
-watch(id, (neu) => { if (neu) mail.detail(neu); vorschau.value = null; bestaetigen.value = false; }, { immediate: true });
+watch(id, (neu) => { if (neu) mail.detail(neu); vorschau.value = null; bestaetigen.value = false; alsText.value = {}; }, { immediate: true });
 const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 const kurzZeit = (iso) => {
   if (!iso) return '';
@@ -189,7 +192,14 @@ const kurzZeit = (iso) => {
             <span class="ml-auto text-xs text-mute tnum">{{ zeit(n.datum) }}</span>
           </div>
           <p v-if="i > 0 && n.betreff !== d.betreff" class="mb-2 text-xs text-mute">Betreff: {{ n.betreff }}</p>
-          <div class="max-h-[420px] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed">{{ n.text || '(kein Text)' }}</div>
+          <template v-if="n.html && !alsText[i]">
+            <MailHtml :html="n.html" />
+            <button class="mt-1 text-[11px] text-mute hover:text-ink" @click="alsText[i] = true">Als Text anzeigen</button>
+          </template>
+          <template v-else>
+            <div class="max-h-[420px] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed">{{ n.text || '(kein Text)' }}</div>
+            <button v-if="n.html" class="mt-1 text-[11px] text-mute hover:text-ink" @click="alsText[i] = false">Wie im Mailprogramm anzeigen</button>
+          </template>
           <div v-if="n.anhaenge.length" class="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
             <span class="mr-1 inline-flex items-center gap-1 text-xs text-mute"><Paperclip :size="13" /> {{ n.anhaenge.length }}</span>
             <component

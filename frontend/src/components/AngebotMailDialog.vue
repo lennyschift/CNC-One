@@ -5,6 +5,8 @@ import { ref, onMounted } from 'vue';
 import { X, Send, FileText, Reply, AlertTriangle, Loader } from '@lucide/vue';
 import { call } from '../data/api.js';
 import PdfVorschauDialog from './PdfVorschauDialog.vue';
+import MailHtml from './MailHtml.vue';
+import Toggle from './Toggle.vue';
 import { benutzer } from '../data/repo.js';
 import { useBelege } from '../stores/belege.js';
 import { useMail } from '../stores/mail.js';
@@ -19,6 +21,7 @@ const mail = useMail();
 const v = ref(null);
 const sendet = ref(false);
 const pdf = ref(null);
+const zitieren = ref(true);
 const istAdmin = (benutzer()?.rollen ?? []).some((x) => ['CNC Admin', 'System Manager'].includes(x));
 
 onMounted(async () => {
@@ -32,7 +35,7 @@ async function pdfAnsehen() {
 async function senden() {
   sendet.value = true;
   try {
-    const r = await call('cnc_one.api.mail.angebot_senden', { angebot: props.angebot.id, an: v.value.an, cc: v.value.cc, betreff: v.value.betreff, text: v.value.text });
+    const r = await call('cnc_one.api.mail.angebot_senden', { angebot: props.angebot.id, an: v.value.an, cc: v.value.cc, betreff: v.value.betreff, text: v.value.text, zitieren: zitieren.value ? 1 : 0 });
     belege.einsetzen(r.angebot);
     if (r.mailAnfrage) mail.zaehlen();
     ui.toast(`Angebot an ${v.value.an} geschickt`, 'ok');
@@ -70,7 +73,17 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
             <label class="block"><span class="label mb-1 block">An</span><input v-model="v.an" class="field" placeholder="kunde@firma.de" /></label>
             <label class="block"><span class="label mb-1 block">CC</span><input v-model="v.cc" class="field" placeholder="mehrere mit Komma trennen" /></label>
             <label class="block"><span class="label mb-1 block">Betreff</span><input v-model="v.betreff" class="field" /></label>
-            <label class="block"><span class="label mb-1 block">Text</span><textarea v-model="v.text" rows="12" class="field font-[inherit] leading-relaxed" /></label>
+            <label class="block"><span class="label mb-1 block">Text</span><textarea v-model="v.text" rows="9" class="field font-[inherit] leading-relaxed" /></label>
+            <div v-if="v.zitat" class="rounded-xl border border-line p-3">
+              <Toggle v-model="zitieren" klein label="Anfrage darunter zitieren" />
+              <div v-if="zitieren" class="mt-2">
+                <p class="mb-1 text-xs text-mute">{{ v.zitat.kopf }}</p>
+                <div class="max-h-64 overflow-auto border-l-2 border-line pl-3">
+                  <MailHtml v-if="v.zitat.html" :html="v.zitat.html" />
+                  <div v-else class="whitespace-pre-wrap text-sm text-mute">{{ v.zitat.text }}</div>
+                </div>
+              </div>
+            </div>
             <button class="inline-flex items-center gap-1.5 rounded-lg bg-surface2 px-3 py-1.5 text-sm hover:bg-accent-soft hover:text-accent" title="PDF ansehen" @click="pdfAnsehen"><FileText :size="15" /> {{ v.anhang }}</button>
           </div>
 

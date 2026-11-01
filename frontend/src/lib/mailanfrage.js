@@ -28,6 +28,30 @@ function merkmale(name) {
   return [...new Set([schluessel(name), schluessel(teile[0] ?? '')])].filter((k) => k.length >= 4);
 }
 
+// Spalten einer Anfrage-Tabelle an der Überschrift erkennen (deutsch und englisch)
+const SPALTE_TEIL = /part\s*-?\s*(no|nr|number|num)|partnumber|teile\s*-?\s*(nr|nummer)|sach\s*-?\s*(nr|nummer)|artikel|article|item\s*no|zeichnungs\s*-?\s*(nr|nummer)|drawing/i;
+const SPALTE_MENGE = /^(menge|anzahl|stückzahl|stueckzahl|stk\.?|qty|quantity|pcs|pieces|amount\s*\(pcs\))/i;
+
+// Mengen zu einem Bauteil aus Tabellen der Mail (Zeilen mit Zellentexten, vom Server gelesen): Zeile, deren Teilenummer
+// zum Bauteil passt, Wert der Mengenspalte. Mehrere Werte (z. B. "10/25/50") = Staffel. [] wenn keine Tabelle passt.
+export function mengenAusTabellen(tabellen, name) {
+  const m = merkmale(name);
+  for (const t of tabellen ?? []) {
+    const kopf = t.findIndex((z) => z.some((c) => SPALTE_MENGE.test(c.trim())) && z.some((c) => SPALTE_TEIL.test(c)));
+    if (kopf < 0) continue;
+    const iMenge = t[kopf].findIndex((c) => SPALTE_MENGE.test(c.trim()));
+    const iTeil = t[kopf].findIndex((c) => SPALTE_TEIL.test(c));
+    for (const z of t.slice(kopf + 1)) {
+      const nr = schluessel(z[iTeil] ?? '');
+      if (nr.length >= 4 && m.some((k) => k.includes(nr) || nr.includes(k))) {
+        const werte = zahlen(z[iMenge] ?? '');
+        if (werte.length) return [...new Set(werte)].sort((a, b) => a - b);
+      }
+    }
+  }
+  return [];
+}
+
 // Mengen zu einem Bauteil aus dem Mailtext, aufsteigend (mehrere = Staffel). Gesucht wird in den Zeilen, die das
 // Bauteil nennen; nennt keine Zeile ein Bauteil und gibt es nur eines, zählt der ganze Text.
 export function mengenAusText(text, name, { einziges = false } = {}) {

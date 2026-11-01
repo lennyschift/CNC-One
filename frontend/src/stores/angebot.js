@@ -352,18 +352,20 @@ export const useAngebot = defineStore('angebot', () => {
 
   // Angebot aus einer Mail-Anfrage (cnc_one.api.mail.angebot_anlegen): Entwurf laden, je Zeichnung/Modell-Paar ein Bauteil
   // mit den schon hochgeladenen Dateien, Mengen aus dem Mailtext (mehrere = Staffel), danach die Zeichnungen erkennen.
-  async function ausMailAnfrage({ angebot, dateien = [], text = '' }) {
+  async function ausMailAnfrage({ angebot, dateien = [], text = '', tabellen = [] }) {
     if (speicherStand.value === 'offen') await speichern();
     belege.einsetzen(angebot);
     ausAngebot(angebot);
     if (!dateien.length) return;
-    const { gruppieren, mengenAusText } = await import('../lib/mailanfrage.js');
+    const { gruppieren, mengenAusText, mengenAusTabellen } = await import('../lib/mailanfrage.js');
     const gruppen = gruppieren(dateien);
     for (const g of gruppen) {
       const id = hinzufuegen(g.basis.replace(/_/g, ' ')).id;
       const t = teile.value.find((x) => x.id === id);
       t.dateien = g.dateien.map((d) => ({ id: d.id, name: d.name, art: d.art, groesse: d.groesse, url: d.url }));
-      const mengen = mengenAusText(text, g.basis, { einziges: gruppen.length === 1 });
+      // zuerst eine Tabelle in der Mail (Teilenummer + Menge), sonst der Text
+      const ausTabelle = mengenAusTabellen(tabellen, g.basis);
+      const mengen = ausTabelle.length ? ausTabelle : mengenAusText(text, g.basis, { einziges: gruppen.length === 1 });
       if (mengen.length) t.menge = mengen[0];
       if (mengen.length > 1) t.staffel = { aktiv: true, stufen: mengen.map((menge) => ({ menge, extra: 0 })) };
     }
