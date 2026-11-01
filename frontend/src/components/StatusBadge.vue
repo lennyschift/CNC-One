@@ -4,6 +4,9 @@ import { computed } from 'vue';
 const props = defineProps({ status: { type: String, required: true } });
 const farbe = computed(() => ({
   Entwurf: 'var(--mute)',
+  Neu: 'var(--accent)',
+  'In Bearbeitung': 'var(--warn)',
+  Beantwortet: 'var(--ok)',
   Gesendet: 'var(--warn)',
   'Teilweise bestellt': 'var(--ok)',
   Bestellt: 'var(--ok)',

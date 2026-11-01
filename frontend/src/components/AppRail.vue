@@ -1,6 +1,7 @@
 <script setup>
-import { ref, watch } from 'vue';
-import { Calculator, FileText, ClipboardList, Factory, Truck, Receipt, Database, Send, Warehouse } from '@lucide/vue';
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { Calculator, FileText, ClipboardList, Factory, Truck, Receipt, Database, Send, Warehouse, Inbox } from '@lucide/vue';
+import { useMail } from '../stores/mail.js';
 import { onClickOutside } from '@vueuse/core';
 import { useRoute } from 'vue-router';
 import { STAMM_PUNKTE } from '../data/stammNav.js';
@@ -11,7 +12,13 @@ const stammOffen = ref(false);
 const stammWurzel = ref(null);
 onClickOutside(stammWurzel, () => { stammOffen.value = false; });
 watch(() => route.path, () => { stammOffen.value = false; });
+// Offene Anfragen aus dem Postfach als Zahl am Posteingang, alle 2 Minuten aktualisiert
+const mail = useMail();
+let takt = null;
+onMounted(() => { mail.zaehlen(); takt = setInterval(() => mail.zaehlen(), 120000); });
+onBeforeUnmount(() => clearInterval(takt));
 const punkte = [
+  { id: 'posteingang', label: 'Posteingang: Anfragen', icon: Inbox, to: '/posteingang', zahl: () => mail.anzahl },
   { id: 'workbench', label: 'Workbench', icon: Calculator, to: '/workbench' },
   { id: 'angebote', label: 'Angebote', icon: FileText, to: '/angebote' },
   { id: 'auftraege', label: 'Aufträge', icon: ClipboardList, to: '/auftraege' },
@@ -35,6 +42,7 @@ const punkte = [
         :title="p.label"
       >
         <component :is="p.icon" :size="20" :stroke-width="1.8" />
+        <span v-if="p.zahl && p.zahl()" class="absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white tnum">{{ p.zahl() > 99 ? '99+' : p.zahl() }}</span>
         <span v-if="route.meta.bereich === p.id" class="absolute -left-[13px] h-5 w-1 rounded-r-full bg-accent" />
         <span class="pointer-events-none absolute left-full z-20 ml-3 whitespace-nowrap rounded-lg bg-ink px-2 py-1 text-xs text-bg opacity-0 transition group-hover:opacity-100">{{ p.label }}</span>
       </RouterLink>
