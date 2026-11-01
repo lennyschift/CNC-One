@@ -108,6 +108,12 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
         <p class="mt-2 text-xs text-mute">Groß- und Kleinschreibung ist egal, „Anfrage“ findet auch „Preisanfrage“. Antworten des Kunden im selben Verlauf kommen zur bestehenden Anfrage.</p>
       </section>
 
+      <section class="card p-5">
+        <h2 class="mb-3 text-sm font-semibold">Antwort mit Angebot</h2>
+        <label class="block"><span class="label mb-1 block">Text der Mail</span><textarea v-model="e.antwortVorlage" rows="8" class="field leading-relaxed" /></label>
+        <p class="mt-2 text-xs text-mute">Platzhalter: <code>{anrede}</code> (z. B. „Sehr geehrter Herr Muster“ aus dem Kontakt), <code>{angebot}</code>, <code>{anfrage}</code> (Anfrage-Nr. des Kunden), <code>{absender}</code>, <code>{firma}</code>. Unter dem Text steht die zitierte Anfrage; vor dem Senden lässt sich alles ändern.</p>
+      </section>
+
       <section class="card flex flex-wrap items-center gap-3 p-5">
         <div class="text-sm">
           <div>Letzter Abruf: <span class="tnum">{{ zeit(e.letzterAbruf) }}</span></div>

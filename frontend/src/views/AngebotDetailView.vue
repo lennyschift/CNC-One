@@ -1,7 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft } from '@lucide/vue';
+import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, FileText, Inbox } from '@lucide/vue';
+import AngebotMailDialog from '../components/AngebotMailDialog.vue';
+import { call } from '../data/api.js';
+import PdfVorschauDialog from '../components/PdfVorschauDialog.vue';
+import { useUi } from '../stores/ui.js';
 import AngebotDokument from '../components/AngebotDokument.vue';
 import AuftragDialog from '../components/AuftragDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
@@ -15,6 +19,13 @@ const route = useRoute();
 const router = useRouter();
 const b = useBelege();
 const draft = useAngebot();
+const ui = useUi();
+const mailDialog = ref(false);
+const pdf = ref(null);
+// Das PDF, wie es verschickt wird (auf dem Server erzeugt)
+async function pdfAnsehen() {
+  try { pdf.value = await call('cnc_one.api.angebot.pdf', { id: angebot.value.id }); } catch (e) { ui.toast(e.message, 'warn'); }
+}
 
 const angebot = computed(() => b.angebot(route.params.id));
 const status = computed(() => (angebot.value ? b.statusVon(angebot.value) : ''));
@@ -48,16 +59,22 @@ function angelegt(auftrag) {
       <section class="card p-5">
         <div class="flex items-center justify-between"><h2 class="font-semibold tnum">{{ angebot.id }}</h2><StatusBadge :status="status" /></div>
         <div class="mt-5"><WorkflowSteps :stand="stand" :schritte="['Angebot', 'Auftrag']" /></div>
+        <RouterLink v-if="angebot.mailAnfrage" :to="`/posteingang/${angebot.mailAnfrage.id}`" class="mt-4 flex items-center gap-2 rounded-xl bg-surface2 px-3 py-2 text-xs hover:text-accent">
+          <Inbox :size="14" class="shrink-0 text-accent" /><span class="truncate">Anfrage per Mail von {{ angebot.mailAnfrage.vonName || angebot.mailAnfrage.vonEmail }}</span>
+        </RouterLink>
 
         <div class="mt-5 space-y-2">
           <template v-if="angebot.status === 'Entwurf'">
-            <button class="btn btn-primary w-full justify-center" @click="b.angebotSenden(angebot.id)"><Send :size="16" /> Als gesendet markieren</button>
+            <button class="btn btn-primary w-full justify-center" @click="mailDialog = true"><Mail :size="16" /> Per Mail senden</button>
+            <button class="btn w-full justify-center" @click="b.angebotSenden(angebot.id)"><Send :size="16" /> Als gesendet markieren</button>
             <button class="btn w-full justify-center" @click="bearbeiten"><Pencil :size="16" /> In Workbench bearbeiten</button>
           </template>
           <template v-else-if="angebot.status === 'Gesendet'">
             <button class="btn btn-primary w-full justify-center" @click="dialog = true"><ShoppingCart :size="16" /> In Auftrag übernehmen</button>
+            <button class="btn w-full justify-center" @click="mailDialog = true"><Mail :size="16" /> Erneut per Mail senden</button>
           </template>
-          <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken / als PDF speichern</button>
+          <button class="btn w-full justify-center" @click="pdfAnsehen"><FileText :size="16" /> PDF ansehen</button>
+          <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken</button>
           <button v-if="angebot.status === 'Gesendet'" class="btn w-full justify-center !text-mute" @click="b.angebotAblehnen(angebot.id)"><XCircle :size="16" /> Als abgelehnt markieren</button>
           <button v-if="angebot.status === 'Entwurf'" class="btn w-full justify-center !text-mute" @click="loeschen"><Trash2 :size="16" /> Entwurf löschen</button>
         </div>
@@ -83,6 +100,8 @@ function angelegt(auftrag) {
       <AngebotAnfragen :ziel="{ angebotId: angebot.id }" variante="karte" />
     </aside>
 
+    <PdfVorschauDialog v-if="pdf" :url="pdf.url" :name="pdf.name" @schliessen="pdf = null" />
+    <AngebotMailDialog v-if="mailDialog" :angebot="angebot" @schliessen="mailDialog = false" @gesendet="mailDialog = false" />
     <AuftragDialog v-if="dialog" :angebot="angebot" @schliessen="dialog = false" @angelegt="angelegt" />
   </div>
 
