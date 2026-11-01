@@ -1,6 +1,7 @@
 """Mail-Anbindung: Anfragen aus dem gemeinsamen Postfach, Kunde und Kontakt zuordnen, Einstellungen."""
 
 import json
+import re
 
 import frappe
 from frappe import _
@@ -133,6 +134,60 @@ def kunde_zuordnen(id, kunde="", neuer_kunde="", kontakt=None):
 	d.kunde = k.name
 	d.save()
 	return anfrage_ui(d)
+
+
+def anfrage_nummer(betreff):
+	"""Anfrage-Nr. des Kunden aus dem Betreff, z. B. "Anfrage Nr. 4711-B" oder "RFQ 2026-118" (muss eine Ziffer enthalten)."""
+	t = re.search(r"(?:anfrage|rfq|inquiry|request)\s*(?:-?nr\.?|-?nummer|no\.?|#)?\s*[:#]?\s*([A-Z0-9][\w\-/.]*\d[\w\-/.]*)", betreff or "", re.I)
+	return t.group(1).rstrip(".") if t else ""
+
+
+def _dateien_ans_angebot(d, angebot):
+	"""Zeichnungen und Modelle der Anfrage ans Angebot hängen: je Datei ein eigener Dateieintrag, der auf dieselbe Datei
+	auf der Platte zeigt (gleicher Prüfwert, so löscht keiner der beiden Einträge die Datei des anderen). Die Einträge
+	wandern später ans Bauteil, die Mail behält ihre."""
+	out = []
+	for n in d.nachrichten:
+		if n.richtung != "Eingang":
+			continue
+		for a in json.loads(n.anhaenge) if isinstance(n.anhaenge, str) and n.anhaenge else n.anhaenge or []:
+			if _art(a.get("name")) not in ("Zeichnung", "STEP"):
+				continue
+			quelle = frappe.db.get_value("File", {"file_url": a["url"], "attached_to_doctype": "Mail Anfrage", "attached_to_name": d.name}, "name")
+			if not quelle:
+				continue
+			f = frappe.get_doc("File", quelle).create_attachment_copy("Angebot", angebot, ignore_permissions=True)
+			out.append({"id": f.name, "name": a["name"], "art": _art(a["name"]), "groesse": a.get("groesse") or 0, "url": f.file_url})
+	return out
+
+
+@frappe.whitelist(methods=["POST"])
+def angebot_anlegen(id):
+	"""Angebotsentwurf aus der Anfrage: Kunde, Anfrage-Nr. aus dem Betreff, Zeichnungen und Modelle am Angebot.
+	Die Bauteile legt die Workbench daraus an (Erkennung der Zeichnung, Mengen aus dem Mailtext).
+	Gibt es schon ein Angebot zu dieser Anfrage, wird es geliefert (`neu` = False)."""
+	nur_cnc()
+	from cnc_one.api.angebot import angebot_ui
+
+	d = _geladen(id)
+	if d.angebot and frappe.db.exists("Angebot", d.angebot):
+		return {"angebot": angebot_ui(frappe.get_doc("Angebot", d.angebot)), "dateien": [], "text": "", "neu": False}
+	if not d.kunde:
+		frappe.throw(_("Bitte zuerst den Kunden zuordnen."))
+	a = frappe.get_doc({"doctype": "Angebot", "kunde": d.kunde, "anfrage_nr": anfrage_nummer(d.betreff)})
+	a.insert()
+	dateien = _dateien_ans_angebot(d, a.name)
+	d.angebot = a.name
+	d.status = "In Bearbeitung"
+	d.save()
+	text = "\n\n".join(n.text or "" for n in d.nachrichten if n.richtung == "Eingang")
+	return {"angebot": angebot_ui(a), "dateien": dateien, "text": text, "neu": True}
+
+
+def zu_angebot(angebot):
+	"""Die Anfrage, aus der ein Angebot entstanden ist: { id, betreff, vonName, vonEmail } oder None."""
+	r = frappe.get_all("Mail Anfrage", filters={"angebot": angebot}, fields=["name", "betreff", "von_name", "von_email"], limit=1) if angebot else []
+	return {"id": r[0].name, "betreff": r[0].betreff or "", "vonName": r[0].von_name or "", "vonEmail": r[0].von_email or ""} if r else None
 
 
 @frappe.whitelist(methods=["POST"])

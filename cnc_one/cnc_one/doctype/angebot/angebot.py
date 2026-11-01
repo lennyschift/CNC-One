@@ -58,3 +58,6 @@ class Angebot(Document):
 			frappe.throw(_("Nur Entwürfe lassen sich löschen."))
 		if frappe.db.exists("Lieferantenanfrage", {"angebot": self.name}):
 			frappe.throw(_("Zu diesem Angebot gibt es Lieferantenanfragen."))
+		# Die Mail-Anfrage, aus der der Entwurf entstand, ist wieder offen
+		for m in frappe.get_all("Mail Anfrage", filters={"angebot": self.name}, pluck="name"):
+			frappe.db.set_value("Mail Anfrage", m, {"angebot": None, "status": "Neu"})

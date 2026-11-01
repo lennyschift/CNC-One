@@ -7,6 +7,7 @@ from frappe import _
 from frappe.utils import get_datetime, now_datetime
 
 from cnc_one.api import bauteil as bauteil_api
+from cnc_one.api import mail as mail_api
 from cnc_one.api.stamm import kunde_ui, nur_cnc
 
 
@@ -56,6 +57,7 @@ def angebot_ui(d):
 		],
 		"netto": d.netto or 0,
 		"entwurfId": "",
+		"mailAnfrage": mail_api.zu_angebot(d.name),
 	}
 
 

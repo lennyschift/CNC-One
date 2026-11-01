@@ -157,3 +157,38 @@ class TestMailAnfragen(IntegrationTestCase):
 			mail_api.einstellungen_speichern({"stichwoerter": "  "})
 		self.assertEqual(mail.ordnername("Gesendete Objekte"), '"Gesendete Objekte"')
 		self.assertEqual(mail.ordnername("Entwürfe"), '"Entw&APw-rfe"')
+
+	def test_angebot_aus_anfrage_mit_dateien_und_rueckweg(self):
+		import os
+
+		from cnc_one.api import angebot
+
+		ohne = mail.verarbeiten(zz_mail(von="fremd@zz-andere.de", mid="<zz-9@zz>"))
+		with self.assertRaises(frappe.ValidationError):
+			mail_api.angebot_anlegen(ohne.name)  # erst Kunde zuordnen
+		d = mail.verarbeiten(zz_mail(betreff="Anfrage Nr. 4711-B: ZZ Flansch", mid="<zz-10@zz>", anhaenge=[("zz-a.pdf", leeres_pdf("zz-a")), ("zz-a.step", b"ISO-10303-21; zz-a"), ("zz-mengen.xlsx", b"PK zz")]))
+		r = mail_api.angebot_anlegen(d.name)
+		a = r["angebot"]
+		self.assertTrue(r["neu"])
+		self.assertEqual((a["kopf"]["kundeId"], a["kopf"]["anfrageNr"], a["mailAnfrage"]["id"]), (self.kunde, "4711-B", d.name))
+		self.assertEqual([(x["name"], x["art"]) for x in r["dateien"]], [("zz-a.pdf", "Zeichnung"), ("zz-a.step", "STEP")])
+		self.assertIn("Bitte um Angebot", r["text"])
+		for x in r["dateien"]:
+			self.assertTrue(frappe.db.exists("File", {"name": x["id"], "attached_to_doctype": "Angebot", "attached_to_name": a["id"]}))
+			self.assertEqual(frappe.db.count("File", {"file_url": x["url"]}), 2)  # Mail und Angebot, eine Datei auf der Platte
+		m = frappe.get_doc("Mail Anfrage", d.name)
+		self.assertEqual((m.status, m.angebot), ("In Bearbeitung", a["id"]))
+		self.assertFalse(mail_api.angebot_anlegen(d.name)["neu"])
+		with self.assertRaises(frappe.ValidationError):
+			mail_api.keine_anfrage(d.name)
+		# Entwurf gelöscht: Anfrage wieder offen, die Dateien der Mail bleiben
+		angebot.loeschen(a["id"])
+		m.reload()
+		self.assertEqual((m.status, m.angebot), ("Neu", None))
+		self.assertTrue(os.path.exists(frappe.get_site_path(r["dateien"][0]["url"].lstrip("/"))))
+
+	def test_anfrage_nummer_aus_dem_betreff(self):
+		self.assertEqual(mail_api.anfrage_nummer("Anfrage Nr. 4711-B: Flansch"), "4711-B")
+		self.assertEqual(mail_api.anfrage_nummer("RFQ 2026-118 shafts"), "2026-118")
+		self.assertEqual(mail_api.anfrage_nummer("AW: Preisanfrage #A-77."), "A-77")
+		self.assertEqual(mail_api.anfrage_nummer("Anfrage ZZ Flansch"), "")
