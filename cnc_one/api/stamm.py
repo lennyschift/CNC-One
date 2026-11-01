@@ -179,8 +179,8 @@ def stammdaten():
 			for r in frappe.get_list("Maschine", filters={"aktiv": 1}, fields=["name", "satz"], order_by="name asc", limit_page_length=0)
 		],
 		"materialien": [
-			{"name": r.name, "preisKg": r.preis_kg or 0, "schreibweisen": schreibweisen(r.schreibweisen)}
-			for r in frappe.get_list("Material", filters={"aktiv": 1}, fields=["name", "preis_kg", "schreibweisen"], order_by="name asc", limit_page_length=0)
+			{"name": r.name, "preisKg": r.preis_kg or 0, "dichte": r.dichte or 0, "schreibweisen": schreibweisen(r.schreibweisen)}
+			for r in frappe.get_list("Material", filters={"aktiv": 1}, fields=["name", "preis_kg", "dichte", "schreibweisen"], order_by="name asc", limit_page_length=0)
 		],
 		"arten": [art_ui(frappe.get_doc("Arbeitsgangart", n)) for n in _namen("Arbeitsgangart", {"aktiv": 1})],
 		"vorlagen": [vorlage_ui(frappe.get_doc("Arbeitsplan Vorlage", n)) for n in _namen("Arbeitsplan Vorlage")],

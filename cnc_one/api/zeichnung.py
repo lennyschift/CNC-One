@@ -117,7 +117,7 @@ MAX_SCHREIBWEISEN = 30
 
 
 def _rohmaterial_ui(d):
-	return {"name": d.name, "preisKg": d.preis_kg or 0, "schreibweisen": schreibweisen(d.schreibweisen)}
+	return {"name": d.name, "preisKg": d.preis_kg or 0, "dichte": d.dichte or 0, "schreibweisen": schreibweisen(d.schreibweisen)}
 
 
 def _text(text):
