@@ -362,3 +362,56 @@ class TestMailHtml(IntegrationTestCase):
 		with patch.object(mail.smtplib, "SMTP_SSL", FakeSmtp), patch.object(mail, "gesendet_ablegen", return_value=""):
 			mail_api.angebot_senden(r["angebot"]["id"], "einkauf@zz-kunde.de", "", "AW", "Nur Text", zitieren=0)
 		self.assertNotIn("blockquote", FakeSmtp.gesendet[0]["msg"].get_body(("html",)).get_content())
+
+
+class TestTabellenvorlage(IntegrationTestCase):
+	"""Spalten der Anfrage-Tabellen je Kontakt und Kunde anlernen; Lieferzeit des Angebots aus den Liefertermin."""
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Tabellenkunde", "kontakte": [{"nachname": "Einkauf", "email": "einkauf@zz-kunde.de"}, {"nachname": "Zwei", "email": "zwei@zz-kunde.de"}]}).insert().name
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		for f in frappe.get_all("File", filters={"attached_to_doctype": "Mail Anfrage"}, fields=["name", "file_name"]):
+			if f.file_name.startswith(("zz-", "bild-")) and frappe.db.exists("File", f.name):
+				frappe.delete_doc("File", f.name, ignore_permissions=True, force=True)
+		frappe.db.rollback()
+
+	def test_vorlage_je_kontakt_sonst_vom_kunden(self):
+		d = mail.verarbeiten(zz_html_mail(mid="<zz-t1@zz-kunde.de>"))
+		ui = mail_api.anfrage_ui(frappe.get_doc("Mail Anfrage", d.name))
+		self.assertEqual(ui["tabellen"][0][0], ["Nr.", "Partnumber", "Description", "Quantity"])
+		self.assertEqual(ui["tabellenVorlage"], {"spalten": {}, "quelle": ""})
+		v = mail_api.tabellenvorlage_lernen(d.name, {"teilenummer": " Partnumber ", "menge": "Quantity", "liefertermin": "", "fremd": "x"})
+		self.assertEqual(v, {"spalten": {"teilenummer": "partnumber", "menge": "quantity"}, "quelle": "Kontakt"})
+		self.assertEqual(mail_api.tabellenvorlage(self.kunde, "ZWEI@zz-kunde.de")["quelle"], "Kunde")
+		self.assertEqual(mail_api.tabellenvorlage(self.kunde, "zwei@zz-kunde.de")["spalten"]["menge"], "quantity")
+		with self.assertRaises(frappe.ValidationError):
+			mail_api.tabellenvorlage_lernen(d.name, {"menge": "Quantity"})
+		self.assertEqual(mail_api.tabellenvorlage_vergessen(d.name), {"spalten": {}, "quelle": ""})
+
+	def test_lieferzeit_ist_der_frueheste_liefertermin(self):
+		from cnc_one.api import angebot
+		from cnc_one.tests.test_angebot import teil
+
+		a = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde, "lieferzeit": "Nach Absprache"}, "teile": [
+			teil("t1", "Platte", "ZZ-T-1", liefertermin="2026-12-04"), teil("t2", "Welle", "ZZ-T-2", liefertermin="2026-11-20"), teil("t3", "Ohne", "ZZ-T-3"),
+		]})
+		self.assertEqual(a["kopf"]["lieferzeit"], "20.11.2026")
+		b = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde, "lieferzeit": "3 Wochen"}, "teile": [teil("t1", "Ohne", "ZZ-T-4")]})
+		self.assertEqual(b["kopf"]["lieferzeit"], "3 Wochen")
+
+
+class TestTabellenRaster(IntegrationTestCase):
+	def test_verbundene_zellen_ergeben_ein_gleichmaessiges_raster(self):
+		html = (
+			"<table><tr><td>Nr.</td><td>Partnumber</td><td colspan='2'>Description</td><td>Quantity</td></tr>"
+			"<tr><td rowspan='2'>1</td><td>ZZ-R-1</td><td>PLATE</td><td>MOUNT</td><td>2</td></tr>"
+			"<tr><td>ZZ-R-2</td><td>PLATE</td><td>RAIL</td><td>4</td></tr></table>"
+		)
+		self.assertEqual(mail.tabellen(html), [[
+			["Nr.", "Partnumber", "Description", "", "Quantity"],
+			["1", "ZZ-R-1", "PLATE", "MOUNT", "2"],
+			["1", "ZZ-R-2", "PLATE", "RAIL", "4"],
+		]])

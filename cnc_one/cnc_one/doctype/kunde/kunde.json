@@ -18,7 +18,8 @@
   "adressen",
   "kontakte",
   "sb_zeichnung",
-  "zeichnungsvorlage"
+  "zeichnungsvorlage",
+  "tabellenvorlage"
  ],
  "fields": [
   {
@@ -105,6 +106,13 @@
    "label": "Zeichnungsvorlage",
    "read_only": 1,
    "description": "Angelernte Regeln, wo auf den Zeichnungen dieses Kunden Teilenummer, Werkstoff usw. stehen"
+  },
+  {
+   "fieldname": "tabellenvorlage",
+   "fieldtype": "JSON",
+   "label": "Tabellenvorlage (Mail)",
+   "read_only": 1,
+   "description": "Angelernte Spalten der Anfrage-Tabellen in Mails: je Kontakt und als Standard des Kunden"
   }
  ],
  "links": [],

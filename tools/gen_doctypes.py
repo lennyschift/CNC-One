@@ -138,6 +138,7 @@ DOCTYPES = [
         Table("kontakte", "Kunde Kontakt", "Kontakte"),
         Section("sb_zeichnung", "Zeichnungen"),
         Json("zeichnungsvorlage", "Zeichnungsvorlage", read_only=1, description="Angelernte Regeln, wo auf den Zeichnungen dieses Kunden Teilenummer, Werkstoff usw. stehen"),
+        Json("tabellenvorlage", "Tabellenvorlage (Mail)", read_only=1, description="Angelernte Spalten der Anfrage-Tabellen in Mails: je Kontakt und als Standard des Kunden"),
     ]),
     dict(name="Arbeitsplan Vorlage", autoname="VL-.####", title="vorlagenname", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung")), icon="workflow", fields=[
         Data("vorlagenname", "Name der Vorlage", reqd=1, in_list_view=1),

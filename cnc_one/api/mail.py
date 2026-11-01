@@ -48,6 +48,8 @@ def anfrage_ui(d):
 		**anfrage_kurz(d),
 		"kundeVorschlag": {"id": vorschlag, "name": frappe.db.get_value("Kunde", vorschlag, "kundenname") or ""} if vorschlag else None,
 		"kontaktVorschlag": kontakt_vorschlag(d.von_name),
+		"tabellen": [t for n in d.nachrichten if n.richtung == "Eingang" for t in mail.tabellen(n.html)],
+		"tabellenVorlage": tabellenvorlage(d.kunde, d.von_email),
 		"nachrichten": [
 			{
 				"richtung": n.richtung, "datum": _iso(n.datum), "vonEmail": n.von_email or "", "vonName": n.von_name or "",
@@ -477,3 +479,65 @@ def angebot_senden(angebot, an, cc="", betreff="", text="", zitieren=1):
 	if a.status == "Entwurf":
 		angebot_api.senden(a.name)
 	return {"angebot": angebot_api.angebot_ui(frappe.get_doc("Angebot", a.name)), "hinweis": hinweis, "mailAnfrage": d.name if d else ""}
+
+
+# ----------------------------------------------------------------- Tabellen in Anfragen
+TABELLEN_ROLLEN = ("teilenummer", "menge", "liefertermin")
+
+
+def _kopf(text):
+	"""Spaltenüberschrift zum Vergleichen: klein, ohne doppelte Leerzeichen."""
+	return " ".join((text or "").lower().split())
+
+
+def _tabellenvorlage_roh(kunde):
+	roh = frappe.db.get_value("Kunde", kunde, "tabellenvorlage") if kunde else None
+	v = json.loads(roh) if isinstance(roh, str) and roh else (roh or {})
+	return {"kontakte": dict(v.get("kontakte") or {}), "kunde": dict(v.get("kunde") or {})}
+
+
+def tabellenvorlage(kunde, kontakt):
+	"""Angelernte Spalten { rolle: überschrift } für Kunde und Kontakt: zuerst die des Kontakts, sonst die zuletzt beim
+	Kunden angelernte. `quelle`: "Kontakt", "Kunde" oder "" (dann gilt die allgemeine Erkennung)."""
+	v = _tabellenvorlage_roh(kunde)
+	eigene = v["kontakte"].get((kontakt or "").lower())
+	if eigene:
+		return {"spalten": eigene, "quelle": "Kontakt"}
+	if v["kunde"]:
+		return {"spalten": v["kunde"], "quelle": "Kunde"}
+	return {"spalten": {}, "quelle": ""}
+
+
+@frappe.whitelist(methods=["POST"])
+def tabellenvorlage_lernen(id, spalten):
+	"""Merkt sich die Spalten der Tabelle (`spalten`: { rolle: überschrift }) für den Kontakt (Absender) und als Standard
+	des Kunden. Liefert die neue Vorlage."""
+	nur_cnc()
+	d = _geladen(id)
+	if not d.kunde:
+		frappe.throw(_("Bitte zuerst den Kunden zuordnen."))
+	if isinstance(spalten, str):
+		spalten = frappe.parse_json(spalten)
+	sauber = {r: _kopf(spalten[r]) for r in TABELLEN_ROLLEN if (spalten or {}).get(r) and _kopf(spalten[r])}
+	if "teilenummer" not in sauber:
+		frappe.throw(_("Bitte die Spalte mit der Teilenummer angeben."))
+	v = _tabellenvorlage_roh(d.kunde)
+	v["kontakte"][(d.von_email or "").lower()] = sauber
+	v["kunde"] = sauber
+	frappe.db.set_value("Kunde", d.kunde, "tabellenvorlage", json.dumps(v, ensure_ascii=False))
+	return tabellenvorlage(d.kunde, d.von_email)
+
+
+@frappe.whitelist(methods=["POST"])
+def tabellenvorlage_vergessen(id):
+	"""Vergisst die angelernten Spalten des Kontakts (und den Standard des Kunden, wenn er von dort stammt)."""
+	nur_cnc()
+	d = _geladen(id)
+	if not d.kunde:
+		return tabellenvorlage(None, None)
+	v = _tabellenvorlage_roh(d.kunde)
+	eigene = v["kontakte"].pop((d.von_email or "").lower(), None)
+	if eigene is not None and v["kunde"] == eigene:
+		v["kunde"] = {}
+	frappe.db.set_value("Kunde", d.kunde, "tabellenvorlage", json.dumps(v, ensure_ascii=False))
+	return tabellenvorlage(d.kunde, d.von_email)

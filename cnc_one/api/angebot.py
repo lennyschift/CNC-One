@@ -193,7 +193,8 @@ def pdf_erzeugen(doc, zu_haenden=""):
 		t = p["teil"]
 		p["bild"] = _bild(t.get("vorschaubild") or bauteil_api.vorschau(p["bauteilId"]))
 		zeichnung = f"Zeichnung {t['zeichnungsnr']}" + (f" Rev. {t['revision']}" if t.get("revision") else "") if t.get("zeichnungsnr") else ""
-		p["angaben"] = " · ".join(x for x in (f"Teilenummer {t['teilenummer']}" if t.get("teilenummer") else "", zeichnung, t.get("material") or "") if x)
+		termin = f"Liefertermin {_de(t['liefertermin'])}" if t.get("liefertermin") else ""
+		p["angaben"] = " · ".join(x for x in (f"Teilenummer {t['teilenummer']}" if t.get("teilenummer") else "", zeichnung, t.get("material") or "", termin) if x)
 		t.setdefault("staffel", {"aktiv": False})
 	datum = get_datetime(doc.versandt_am).date() if doc.versandt_am else getdate(nowdate())
 	kunde = a["kopf"]["kunde"] or {"adresse": [], "kontakt": None}

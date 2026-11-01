@@ -319,11 +319,51 @@ def tabellen(html):
 	for t in BeautifulSoup(html or "", "html.parser").find_all("table"):
 		if t.find("table"):
 			continue
-		zeilen = [[" ".join(c.get_text(" ", strip=True).split()) for c in tr.find_all(["td", "th"])] for tr in t.find_all("tr")]
-		zeilen = [z for z in zeilen if any(z)]
+		zeilen = [z for z in _raster(t) if any(z)]
 		if len(zeilen) >= 2:
 			out.append(zeilen)
 	return out
+
+
+def _spannweite(zelle, attr):
+	try:
+		return max(1, min(50, int(zelle.get(attr) or 1)))
+	except ValueError:
+		return 1
+
+
+def _raster(tabelle):
+	"""Zellentexte als gleichmäßiges Raster: eine über mehrere Spalten verbundene Zelle (colspan) belegt alle ihre
+	Spalten (Text in der ersten, die übrigen leer), eine über Zeilen verbundene (rowspan) gilt auch in den Zeilen darunter."""
+	zeilen, offen = [], {}  # offen: Spalte -> [verbleibende Zeilen, Text]
+	for tr in tabelle.find_all("tr"):
+		z, spalte = [], 0
+		zellen = iter(tr.find_all(["td", "th"]))
+		zelle = next(zellen, None)
+		while zelle is not None or any(s >= spalte for s in offen):
+			if spalte in offen:
+				rest, text = offen[spalte]
+				z.append(text)
+				offen[spalte] = [rest - 1, text]
+				if rest - 1 <= 0:
+					del offen[spalte]
+				spalte += 1
+				continue
+			if zelle is None:
+				z.append("")
+				spalte += 1
+				continue
+			text = " ".join(zelle.get_text(" ", strip=True).split())
+			breit, hoch = _spannweite(zelle, "colspan"), _spannweite(zelle, "rowspan")
+			for i in range(breit):
+				z.append(text if i == 0 else "")
+				if hoch > 1:
+					offen[spalte + i] = [hoch - 1, text if i == 0 else ""]
+			spalte += breit
+			zelle = next(zellen, None)
+		zeilen.append(z)
+	breite = max((len(z) for z in zeilen), default=0)
+	return [z + [""] * (breite - len(z)) for z in zeilen]
 
 
 def _inline_bilder(msg):

@@ -3,6 +3,7 @@ import json
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import getdate
 
 from cnc_one.logic.kalkulation import berechne, summe
 
@@ -33,8 +34,11 @@ class Angebot(Document):
 		"""Der Server rechnet jede Position selbst. Der Browser liefert nur die Eingaben."""
 		schluessel = set()
 		ergebnisse = []
+		termine = []
 		for z in self.positionen:
 			k = als_json(z.kalkulation)
+			if k.get("liefertermin"):
+				termine.append(getdate(k["liefertermin"]))
 			if not k.get("id"):
 				frappe.throw(_("Position {0} hat keine Kennung.").format(z.idx))
 			z.position_key = str(k["id"])
@@ -52,6 +56,9 @@ class Angebot(Document):
 			z.material = k.get("material") or ""
 			ergebnisse.append(e)
 		self.netto = summe(ergebnisse)
+		# Haben Bauteile einen Liefertermin, ist die Lieferzeit des Angebots der früheste davon
+		if termine:
+			self.lieferzeit = min(termine).strftime("%d.%m.%Y")
 
 	def on_trash(self):
 		if self.status != "Entwurf":
