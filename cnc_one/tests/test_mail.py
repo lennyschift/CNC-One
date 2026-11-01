@@ -255,7 +255,8 @@ class TestAngebotPerMail(IntegrationTestCase):
 		v = mail_api.antwort_vorschlag(a["id"])
 		self.assertEqual((v["an"], v["cc"], v["betreff"], v["bereit"]), ("einkauf@zz-kunde.de", "erika@zz-kunde.de", "AW: Anfrage Nr. 77: Flansch", True))
 		self.assertTrue(v["text"].startswith("Sehr geehrter Herr Einkauf,\n\nvielen Dank für Ihre Anfrage 77. Anbei erhalten Sie unser Angebot " + a["id"]))
-		self.assertIn("schrieb Max Mustermann <einkauf@zz-kunde.de>:\n> Bitte um Angebot für 10 Stück.", v["text"])
+		self.assertTrue(v["zitat"]["kopf"].endswith("schrieb Max Mustermann <einkauf@zz-kunde.de>:"))
+		self.assertEqual(v["zitat"]["text"], "Bitte um Angebot für 10 Stück.")
 		self.assertEqual(mail_api.antwort_betreff("RE: Anfrage"), "RE: Anfrage")
 
 	def test_senden_im_verlauf_mit_kopie_in_gesendet(self):
@@ -270,6 +271,8 @@ class TestAngebotPerMail(IntegrationTestCase):
 		self.assertEqual((g["server"], g["anmeldung"], g["an"]), (("smtp.zz.invalid", 465), ("info@zz-cnc.de", "zz-geheim"), ["einkauf@zz-kunde.de", "erika@zz-kunde.de"]))
 		self.assertEqual((msg["In-Reply-To"], msg["References"], msg["Subject"], msg["From"]), ("<zz-a1@zz-kunde.de>", "<zz-a1@zz-kunde.de>", "AW: Anfrage Nr. 77: Flansch", "ZZ CNC <info@zz-cnc.de>"))
 		self.assertEqual([x.get_filename() for x in msg.iter_attachments()], [f"Angebot {a['id']}.pdf"])
+		self.assertIn("> Bitte um Angebot für 10 Stück.", msg.get_body(("plain",)).get_content())
+		self.assertIn("<blockquote", msg.get_body(("html",)).get_content())
 		self.assertIs(abgelegt[0], msg)
 		m = frappe.get_doc("Mail Anfrage", r["mailAnfrage"])
 		self.assertEqual((m.status, m.nachrichten[-1].richtung, m.nachrichten[-1].message_id), ("Beantwortet", "Ausgang", msg["Message-ID"]))
@@ -286,3 +289,76 @@ class TestAngebotPerMail(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			mail_api.angebot_senden(a["id"], "einkauf@zz-kunde.de", "", "Betreff", "Text")
 		self.assertEqual(frappe.db.get_value("Angebot", a["id"], "status"), "Entwurf")
+
+
+def zz_html_mail(mid="<zz-h1@zz-kunde.de>"):
+	m = EmailMessage()
+	m["Subject"], m["From"], m["To"], m["Date"], m["Message-ID"] = "Anfrage ZZ Tabelle", "Max Mustermann <einkauf@zz-kunde.de>", "info@zz-cnc.de", "Sun, 01 Nov 2026 09:30:00 +0000", mid
+	m.set_content("Bitte bieten Sie an (Textfassung)")
+	html = (
+		"<html><head><style>p{color:red}</style><script>alert(1)</script></head><body><p>Bitte bieten Sie uns folgende Bauteile an!</p>"
+		'<table border="1"><tr><th>Nr.</th><th>Partnumber</th><th>Description</th><th>Quantity</th></tr>'
+		'<tr><td>1</td><td>ZZ-H-001</td><td onclick="alert(2)">PLATE</td><td>2</td></tr>'
+		"<tr><td>2</td><td>ZZ-H-002</td><td>PLATE</td><td>10/25</td></tr></table>"
+		'<img src="cid:zz-shot@zz"><img src="https://tracker.zz.invalid/pixel.gif"></body></html>'
+	)
+	m.add_alternative(html, subtype="html")
+	m.get_payload()[1].add_related(b"\x89PNG zz-shot", maintype="image", subtype="png", cid="<zz-shot@zz>")
+	return m.as_bytes()
+
+
+class TestMailHtml(IntegrationTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Htmlkunde", "kontakte": [{"nachname": "Einkauf", "email": "einkauf@zz-kunde.de"}]}).insert().name
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		for f in frappe.get_all("File", filters={"attached_to_doctype": ["in", ["Mail Anfrage", "Angebot"]]}, fields=["name", "file_name"]):
+			if f.file_name.startswith(("zz-", "bild-", "Angebot ANG-")) and frappe.db.exists("File", f.name):
+				frappe.delete_doc("File", f.name, ignore_permissions=True, force=True)
+		frappe.db.rollback()
+
+	def test_html_mit_tabelle_bild_und_ohne_gefaehrliches(self):
+		d = mail.verarbeiten(zz_html_mail())
+		n = mail_api.anfrage_ui(frappe.get_doc("Mail Anfrage", d.name))["nachrichten"][0]
+		self.assertIn("<table", n["html"])
+		for verboten in ("<script", "onclick", "alert", "tracker.zz.invalid", "<style", "cid:"):
+			self.assertNotIn(verboten, n["html"])
+		bild = frappe.get_all("File", filters={"attached_to_name": d.name, "file_name": ["like", "bild-%"]}, pluck="file_url")
+		self.assertEqual(len(bild), 1)
+		self.assertIn(f'src="{bild[0]}"', n["html"])
+		self.assertEqual(n["anhaenge"], [])  # eingebettetes Bild ist kein Anhang
+		self.assertIn("1 | ZZ-H-001 | PLATE | 2", n["text"])  # Tabellenzeile bleibt eine Zeile
+		self.assertEqual(mail.tabellen(n["html"]), [[["Nr.", "Partnumber", "Description", "Quantity"], ["1", "ZZ-H-001", "PLATE", "2"], ["2", "ZZ-H-002", "PLATE", "10/25"]]])
+
+	def test_tabellen_bei_der_uebernahme_und_html_antwort_mit_bild(self):
+		from cnc_one.api import angebot
+		from cnc_one.tests.test_angebot import teil
+
+		d = mail.verarbeiten(zz_html_mail(mid="<zz-h2@zz-kunde.de>"))
+		r = mail_api.angebot_anlegen(d.name)
+		self.assertEqual(r["tabellen"][0][1], ["1", "ZZ-H-001", "PLATE", "2"])
+		angebot.entwurf_speichern({"id": r["angebot"]["id"], "kopf": {"kundeId": self.kunde}, "teile": [teil("t1", "Platte", "ZZ-H-001")]})
+		s = frappe.get_single("Mail Einstellungen")
+		s.update({"benutzer": "info@zz-cnc.de", "smtp_server": "smtp.zz.invalid", "smtp_port": 465, "verschluesselung": "SSL/TLS"})
+		s.passwort = "zz-geheim"
+		s.save()
+		FakeSmtp.gesendet = []
+		with patch.object(mail.smtplib, "SMTP_SSL", FakeSmtp), patch.object(mail, "gesendet_ablegen", return_value=""):
+			mail_api.angebot_senden(r["angebot"]["id"], "einkauf@zz-kunde.de", "", "AW: Anfrage ZZ Tabelle", "Guten Tag,\n\nanbei das Angebot.")
+		msg = FakeSmtp.gesendet[0]["msg"]
+		html = msg.get_body(("html",)).get_content()
+		self.assertIn("<table", html)
+		self.assertIn('<p style="margin:0 0 12px">Guten Tag,</p>', html)
+		eingebettet = [t for t in msg.walk() if t.get("Content-ID")]
+		self.assertEqual(len(eingebettet), 1)
+		self.assertIn("cid:" + eingebettet[0]["Content-ID"].strip("<>"), html)
+		self.assertIn("1 | ZZ-H-001 | PLATE | 2", msg.get_body(("plain",)).get_content())
+		ausgang = frappe.get_doc("Mail Anfrage", d.name).nachrichten[-1]
+		self.assertIn("<blockquote", ausgang.html)
+		# ohne Zitat
+		FakeSmtp.gesendet = []
+		with patch.object(mail.smtplib, "SMTP_SSL", FakeSmtp), patch.object(mail, "gesendet_ablegen", return_value=""):
+			mail_api.angebot_senden(r["angebot"]["id"], "einkauf@zz-kunde.de", "", "AW", "Nur Text", zitieren=0)
+		self.assertNotIn("blockquote", FakeSmtp.gesendet[0]["msg"].get_body(("html",)).get_content())

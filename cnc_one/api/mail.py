@@ -1,6 +1,7 @@
 """Mail-Anbindung: Anfragen aus dem gemeinsamen Postfach, Kunde und Kontakt zuordnen, Einstellungen."""
 
 import json
+import mimetypes
 import re
 from email.utils import getaddresses
 
@@ -50,7 +51,7 @@ def anfrage_ui(d):
 		"nachrichten": [
 			{
 				"richtung": n.richtung, "datum": _iso(n.datum), "vonEmail": n.von_email or "", "vonName": n.von_name or "",
-				"an": n.an or "", "cc": n.cc or "", "betreff": n.betreff or "", "text": n.text or "", "hinweis": n.hinweis or "",
+				"an": n.an or "", "cc": n.cc or "", "betreff": n.betreff or "", "text": n.text or "", "html": n.html or "", "hinweis": n.hinweis or "",
 				"anhaenge": [{**a, "art": _art(a.get("name"))} for a in (json.loads(n.anhaenge) if isinstance(n.anhaenge, str) and n.anhaenge else n.anhaenge or [])],
 			}
 			for n in sorted(d.nachrichten, key=lambda x: (x.datum or d.datum, x.idx))
@@ -182,7 +183,8 @@ def angebot_anlegen(id):
 	d.status = "In Bearbeitung"
 	d.save()
 	text = "\n\n".join(n.text or "" for n in d.nachrichten if n.richtung == "Eingang")
-	return {"angebot": angebot_ui(a), "dateien": dateien, "text": text, "neu": True}
+	tabellen = [t for n in d.nachrichten if n.richtung == "Eingang" for t in mail.tabellen(n.html)]
+	return {"angebot": angebot_ui(a), "dateien": dateien, "text": text, "tabellen": tabellen, "neu": True}
 
 
 def zu_angebot(angebot):
@@ -203,6 +205,7 @@ def keine_anfrage(id):
 		frappe.delete_doc("File", f, ignore_permissions=True)
 	for n in d.nachrichten:
 		n.text = ""
+		n.html = ""
 		n.anhaenge = None
 		n.hinweis = ""
 	d.status = "Keine Anfrage"
@@ -317,12 +320,33 @@ def _letzte_eingang(d):
 	return max(eingang, key=lambda n: (n.datum or d.datum, n.idx)) if eingang else None
 
 
-def _zitat(n):
+def _zitat_kopf(n):
 	from frappe.utils import format_datetime
 
-	text = (n.text or "").strip()[:4000]
-	kopf = f"Am {format_datetime(n.datum, 'dd.MM.yyyy HH:mm')} schrieb {n.von_name or n.von_email} <{n.von_email}>:"
-	return "\n\n\n" + kopf + "\n" + "\n".join("> " + z for z in text.splitlines())
+	return f"Am {format_datetime(n.datum, 'dd.MM.yyyy HH:mm')} schrieb {n.von_name or n.von_email} <{n.von_email}>:"
+
+
+def _zitat(n):
+	text = (n.text or "").strip()[:20000]
+	return "\n\n\n" + _zitat_kopf(n) + "\n" + "\n".join("> " + z for z in text.splitlines())
+
+
+def antwort_html(text, zitat=None, ganz=True):
+	"""Die Antwort als HTML: unser Text in Absätzen, darunter die Anfrage so, wie sie kam (mit Tabellen und Bildern)."""
+	from frappe.utils import escape_html
+
+	absaetze = "".join(
+		'<p style="margin:0 0 12px">' + escape_html(a.strip("\n")).replace("\n", "<br>") + "</p>"
+		for a in re.split(r"\n\s*\n", (text or "").strip()) if a.strip()
+	)
+	teile = [f'<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.45;color:#1c1c1c">{absaetze}']
+	if zitat:
+		inhalt = zitat.html or f'<div style="white-space:pre-wrap">{escape_html(zitat.text or "")}</div>'
+		teile.append(f'<div style="margin-top:24px;color:#555">{escape_html(_zitat_kopf(zitat))}</div>')
+		teile.append(f'<blockquote style="margin:6px 0 0;padding:0 0 0 12px;border-left:2px solid #ccc;color:#333">{inhalt}</blockquote>')
+	teile.append("</div>")
+	koerper = "".join(teile)
+	return f'<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>{koerper}</body></html>' if ganz else koerper
 
 
 def _empfaenger_aus_angebot(a, s):
@@ -342,7 +366,7 @@ def _empfaenger_aus_angebot(a, s):
 @frappe.whitelist(methods=["POST"])
 def antwort_vorschlag(angebot):
 	"""Vorschlag für die Mail mit dem Angebot: an den Absender der Anfrage (als Antwort im Verlauf), sonst an den Kontakt
-	des Kunden. Text aus der Vorlage, darunter die zitierte Anfrage."""
+	des Kunden. Text aus der Vorlage; die Anfrage wird beim Senden darunter zitiert (`zitat` zur Vorschau)."""
 	nur_cnc()
 	a = frappe.get_doc("Angebot", angebot)
 	a.check_permission("read")
@@ -358,20 +382,21 @@ def antwort_vorschlag(angebot):
 	text = (s.antwort_vorlage or STANDARD_VORLAGE).format_map(werte)
 	if letzte:
 		betreff = antwort_betreff(letzte.betreff or d.betreff)
-		text += _zitat(letzte)
 	else:
 		betreff = f"Angebot {a.name}" + (f" zu Ihrer Anfrage {a.anfrage_nr}" if a.anfrage_nr else "")
 	bereit = bool(s.smtp_server and s.benutzer and s.get_password("passwort", raise_exception=False))
 	return {
 		"an": an, "cc": cc, "betreff": betreff, "text": text, "anhang": f"Angebot {a.name}.pdf", "mailAnfrage": d.name if d else "",
 		"antwortAuf": {"vonName": letzte.von_name or letzte.von_email, "datum": _iso(letzte.datum)} if letzte else None,
+		"zitat": {"kopf": _zitat_kopf(letzte), "text": letzte.text or "", "html": letzte.html or ""} if letzte else None,
 		"bereit": bereit, "absender": s.benutzer or "",
 	}
 
 
 @frappe.whitelist(methods=["POST"])
-def angebot_senden(angebot, an, cc="", betreff="", text=""):
-	"""Schickt das Angebot als PDF per Mail, bei einer Mail-Anfrage als Antwort im selben Verlauf (In-Reply-To/References).
+def angebot_senden(angebot, an, cc="", betreff="", text="", zitieren=1):
+	"""Schickt das Angebot als PDF per Mail, bei einer Mail-Anfrage als Antwort im selben Verlauf (In-Reply-To/References),
+	als Text und HTML; mit `zitieren` steht die Anfrage darunter (HTML mit Tabellen und eingebetteten Bildern).
 	Danach: Kopie in „Gesendet“, Nachricht im Verlauf der Anfrage, Anfrage beantwortet, Angebot gesendet."""
 	nur_cnc()
 	from email.message import EmailMessage
@@ -399,7 +424,8 @@ def angebot_senden(angebot, an, cc="", betreff="", text=""):
 	s = mail.einstellungen()
 	d, letzte, _an, _cc = _empfaenger_aus_angebot(a, s)
 	datei = angebot_api.pdf_ablegen(a)
-	inhalt = datei.get_content()
+	with open(datei.get_full_path(), "rb") as fh:
+		inhalt = fh.read()
 
 	msg = EmailMessage()
 	msg["From"] = formataddr((s.absender_name or firma_ui().get("firmenname", ""), s.benutzer or ""))
@@ -414,7 +440,24 @@ def angebot_senden(angebot, an, cc="", betreff="", text=""):
 		msg["In-Reply-To"] = letzte.message_id
 		referenzen = " ".join(x for x in ((letzte.referenzen or "").strip(), letzte.message_id) if x)
 		msg["References"] = referenzen
-	msg.set_content(text or "")
+	zitat = letzte if (letzte and frappe.utils.cint(zitieren)) else None
+	klartext = (text or "") + (_zitat(zitat) if zitat else "")
+	html = antwort_html(text, zitat)
+	msg.set_content(klartext)
+	# Bilder im Zitat (gespeicherte Dateien dieser Anfrage) wandern als eingebettete Teile mit
+	bilder = []
+	for url in dict.fromkeys(re.findall(r'src="(/private/files/[^"]+)"', html)):
+		f = frappe.db.get_value("File", {"file_url": url, "attached_to_doctype": "Mail Anfrage", "attached_to_name": d.name if d else ""}, "name")
+		if f:
+			cid = make_msgid(domain="cnc-one.local")
+			bilder.append((cid, frappe.get_doc("File", f)))
+			html = html.replace(f'src="{url}"', f'src="cid:{cid[1:-1]}"')
+	msg.add_alternative(html, subtype="html")
+	html_teil = msg.get_payload()[-1]
+	for cid, f in bilder:
+		haupt, _s, unter = (mimetypes.guess_type(f.file_name)[0] or "image/png").partition("/")
+		with open(f.get_full_path(), "rb") as fh:
+			html_teil.add_related(fh.read(), maintype=haupt, subtype=unter, cid=cid, filename=f.file_name)
 	msg.add_attachment(inhalt, maintype="application", subtype="pdf", filename=datei.file_name)
 
 	mail.smtp_senden(s, msg, an_liste + cc_liste)
@@ -424,7 +467,8 @@ def angebot_senden(angebot, an, cc="", betreff="", text=""):
 		d.append("nachrichten", {
 			"richtung": "Ausgang", "datum": now_datetime(), "von_email": (s.benutzer or "").lower(), "von_name": s.absender_name or "",
 			"an": msg["To"], "cc": msg["Cc"] or "", "betreff": msg["Subject"], "message_id": msg["Message-ID"],
-			"in_reply_to": letzte.message_id if letzte else "", "referenzen": referenzen, "text": text or "",
+			"in_reply_to": letzte.message_id if letzte else "", "referenzen": referenzen, "text": klartext,
+			"html": antwort_html(text, zitat, ganz=False),
 			"anhaenge": json.dumps([{"name": datei.file_name, "url": datei.file_url, "groesse": len(inhalt)}], ensure_ascii=False),
 		})
 		d.status = "Beantwortet"

@@ -30,6 +30,7 @@ FREEMAIL = {
 }
 MONATE = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 MAX_TEXT = 200_000
+MAX_HTML = 500_000
 
 
 def einstellungen():
@@ -247,19 +248,95 @@ def _adressen(wert):
 	return ", ".join(f"{n} <{a}>" if n else a for n, a in getaddresses([str(wert)]) if a) if wert else ""
 
 
-def _text(msg):
-	teil = msg.get_body(preferencelist=("plain", "html"))
-	if teil is None:
-		return ""
+def _inhalt(teil):
 	try:
-		inhalt = teil.get_content()
+		return teil.get_content()
 	except (LookupError, UnicodeDecodeError):
-		inhalt = (teil.get_payload(decode=True) or b"").decode("utf-8", "replace")
-	if teil.get_content_type() == "text/html":
-		from frappe.core.utils import html_to_plain_text
+		return (teil.get_payload(decode=True) or b"").decode("utf-8", "replace")
 
-		inhalt = html_to_plain_text(inhalt)
+
+def _roh_html(msg):
+	teil = msg.get_body(preferencelist=("html",))
+	return _inhalt(teil) if teil is not None else ""
+
+
+def html_zu_text(html):
+	"""Text aus HTML; jede Tabellenzeile bleibt eine Zeile (Zellen mit | getrennt), damit Teilenummer und Menge zusammenstehen."""
+	from bs4 import BeautifulSoup
+	from frappe.core.utils import html_to_plain_text
+
+	soup = BeautifulSoup(html or "", "html.parser")
+	for tr in soup.find_all("tr"):
+		zellen = [" ".join(c.get_text(" ", strip=True).split()) for c in tr.find_all(["td", "th"])]
+		neu = soup.new_tag("p")
+		neu.string = " | ".join(zellen) if any(zellen) else ""
+		tr.replace_with(neu)
+	for t in soup.find_all(["table", "tbody", "thead"]):
+		t.unwrap()
+	return html_to_plain_text(str(soup))
+
+
+def _text(msg):
+	html = _roh_html(msg)
+	if html:
+		inhalt = html_zu_text(html)
+	else:
+		teil = msg.get_body(preferencelist=("plain",))
+		inhalt = _inhalt(teil) if teil is not None else ""
 	return re.sub(r"\n{3,}", "\n\n", inhalt.replace("\r\n", "\n")).strip()[:MAX_TEXT]
+
+
+def html_bereinigen(html, bilder=None):
+	"""HTML einer Mail sicher machen: ohne Skripte und Ereignisse (Frappe/nh3), ohne Stylesheets und Bilder fremder Server.
+	Eingebettete Bilder (cid:) zeigen auf die gespeicherten Dateien in `bilder` { cid: url }. Liefert den Inhalt des body."""
+	from bs4 import BeautifulSoup
+	from frappe.utils.html_utils import sanitize_html
+
+	soup = BeautifulSoup(sanitize_html(html or "", always_sanitize=True), "html.parser")
+	for t in soup.find_all(["link", "meta", "base", "title", "head"]):
+		t.decompose()
+	for img in soup.find_all("img"):
+		src = (img.get("src") or "").strip()
+		url = (bilder or {}).get(src[4:].strip("<>")) if src.lower().startswith("cid:") else None
+		if url:
+			img["src"] = url
+		elif not src.startswith("data:image/"):
+			img.decompose()
+	for t in soup.find_all(style=True):
+		if "url(" in t["style"].lower():
+			t["style"] = re.sub(r"url\([^)]*\)", "none", t["style"], flags=re.I)
+	for t in soup.find_all(background=True):
+		del t["background"]
+	koerper = soup.body.decode_contents() if soup.body else str(soup)
+	return koerper.strip()[:MAX_HTML]
+
+
+def tabellen(html):
+	"""Tabellen einer Mail als Zeilen mit Zellentexten (für Teilenummer und Menge). Äußere Layout-Tabellen fallen weg."""
+	from bs4 import BeautifulSoup
+
+	out = []
+	for t in BeautifulSoup(html or "", "html.parser").find_all("table"):
+		if t.find("table"):
+			continue
+		zeilen = [[" ".join(c.get_text(" ", strip=True).split()) for c in tr.find_all(["td", "th"])] for tr in t.find_all("tr")]
+		zeilen = [z for z in zeilen if any(z)]
+		if len(zeilen) >= 2:
+			out.append(zeilen)
+	return out
+
+
+def _inline_bilder(msg):
+	"""(cid, Dateiname, Inhalt) der eingebetteten Bilder (z. B. Screenshots im Text)."""
+	out = []
+	for teil in msg.walk():
+		cid = (teil.get("Content-ID") or "").strip().strip("<>")
+		if cid and teil.get_content_type().startswith("image/") and teil.get_content_disposition() != "attachment":
+			inhalt = teil.get_payload(decode=True)
+			if inhalt:
+				endung = teil.get_content_subtype().replace("jpeg", "jpg")
+				out.append((cid, teil.get_filename() or f"bild-{len(out) + 1}.{endung}", inhalt))
+	return out
 
 
 def _anhaenge(msg):
@@ -354,7 +431,19 @@ def verarbeiten(roh):
 		except Exception as e:  # zu groß, beschädigtes PDF usw.: die Anfrage kommt trotzdem
 			frappe.clear_messages()
 			hinweise.append(_("{0} nicht übernommen: {1}").format(name, frappe.utils.strip_html(str(e))[:200]))
-	if anhaenge or hinweise:
+	roh = _roh_html(msg)
+	bilder = {}
+	if roh:
+		for cid, name, inhalt in _inline_bilder(msg):
+			if f"cid:{cid}" not in roh:
+				continue
+			try:
+				f = frappe.get_doc({"doctype": "File", "file_name": name, "attached_to_doctype": "Mail Anfrage", "attached_to_name": doc.name, "is_private": 1, "content": inhalt})
+				bilder[cid] = f.insert(ignore_permissions=True).file_url
+			except Exception:
+				frappe.clear_messages()
+	html = html_bereinigen(roh, bilder) if roh else ""
+	if anhaenge or hinweise or html:
 		z = next(x for x in doc.nachrichten if x.message_id == mid)
-		z.db_set({"anhaenge": json.dumps(anhaenge, ensure_ascii=False), "hinweis": "\n".join(hinweise)}, update_modified=False)
+		z.db_set({"anhaenge": json.dumps(anhaenge, ensure_ascii=False), "hinweis": "\n".join(hinweise), "html": html}, update_modified=False)
 	return doc

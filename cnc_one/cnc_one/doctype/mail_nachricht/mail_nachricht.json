@@ -15,6 +15,7 @@
   "in_reply_to",
   "referenzen",
   "text",
+  "html",
   "anhaenge",
   "hinweis"
  ],
@@ -90,6 +91,14 @@
    "fieldtype": "Long Text",
    "label": "Text",
    "ignore_xss_filter": 1
+  },
+  {
+   "fieldname": "html",
+   "fieldtype": "Long Text",
+   "label": "Text als HTML",
+   "read_only": 1,
+   "ignore_xss_filter": 1,
+   "description": "Beim Abholen bereinigt (ohne Skripte, ohne Bilder fremder Server)"
   },
   {
    "fieldname": "anhaenge",

@@ -556,6 +556,7 @@ DOCTYPES += [
         Data("in_reply_to", "Antwort auf (Message-ID)", read_only=1, ignore_xss_filter=1),
         Text("referenzen", "Verlauf (References)", read_only=1, ignore_xss_filter=1),
         LongText("text", "Text", ignore_xss_filter=1),
+        LongText("html", "Text als HTML", read_only=1, ignore_xss_filter=1, description="Beim Abholen bereinigt (ohne Skripte, ohne Bilder fremder Server)"),
         Json("anhaenge", "Anhänge", description="[{ name, url, groesse }]"),
         Text("hinweis", "Hinweis", description="z. B. Anhang zu groß"),
     ]),
