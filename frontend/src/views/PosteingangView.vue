@@ -4,7 +4,8 @@
 import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Inbox, RefreshCw, Paperclip, FileText, Box, Table2, File, Building2, UserPlus, Check, Ban, Reply, Settings, MailWarning } from '@lucide/vue';
+import { Inbox, RefreshCw, Paperclip, FileText, Box, Table2, File, Building2, UserPlus, Check, Ban, Reply, Settings, MailWarning, Calculator, ArrowRight } from '@lucide/vue';
+import { useAngebot } from '../stores/angebot.js';
 import StatusBadge from '../components/StatusBadge.vue';
 import CustomerCombobox from '../components/CustomerCombobox.vue';
 import { useMail } from '../stores/mail.js';
@@ -17,6 +18,7 @@ const ModelViewer = defineAsyncComponent(() => import('../components/ModelViewer
 const route = useRoute();
 const router = useRouter();
 const mail = useMail();
+const draft = useAngebot();
 const istAdmin = computed(() => (benutzer()?.rollen ?? []).some((x) => ['CNC Admin', 'System Manager'].includes(x)));
 
 const filter = ref('offen');
@@ -53,6 +55,18 @@ async function zuordnen() {
   ordnet.value = true;
   await mail.kundeZuordnen(d.value.id, art.value === 'neu' ? { neuerKunde: neuerKunde.value, kontakt: kontakt.value } : { kunde: kunde.value, kontakt: kontakt.value });
   ordnet.value = false;
+}
+
+// ---- In die Workbench: Angebotsentwurf mit Kunde, Bauteile aus Zeichnungen und Modellen, Mengen aus dem Mailtext
+const uebernimmt = ref(false);
+async function inWorkbench() {
+  uebernimmt.value = true;
+  const r = await mail.angebotAnlegen(d.value.id);
+  uebernimmt.value = false;
+  if (!r) return;
+  if (r.angebot.status !== 'Entwurf') { router.push(`/angebote/${r.angebot.id}`); return; }
+  await draft.ausMailAnfrage(r);
+  router.push('/workbench');
 }
 
 // ---- Keine Anfrage (mit Rückfrage im Knopf)
@@ -128,7 +142,11 @@ const kurzZeit = (iso) => {
               <h2 class="mt-1 text-xl font-semibold tracking-tight">{{ d.betreff || '(ohne Betreff)' }}</h2>
               <p class="mt-0.5 text-sm text-mute">{{ d.vonName }} <span class="tnum">&lt;{{ d.vonEmail }}&gt;</span> · {{ zeit(d.datum) }}</p>
             </div>
-            <button class="btn !py-1.5 text-sm" :class="bestaetigen ? '!border-accent !text-accent' : '!text-mute'" :title="'Aus CNC One entfernen, im Postfach bleibt die Mail'" @click="verwerfen" @blur="bestaetigen = false">
+            <button v-if="d.kundeId" class="btn btn-primary !py-1.5 text-sm" :disabled="uebernimmt" @click="inWorkbench">
+              <template v-if="d.angebotId"><ArrowRight :size="15" /> Angebot {{ d.angebotId }} öffnen</template>
+              <template v-else><Calculator :size="15" /> {{ uebernimmt ? 'Wird übernommen …' : 'In Workbench übernehmen' }}</template>
+            </button>
+            <button v-if="!d.angebotId" class="btn !py-1.5 text-sm" :class="bestaetigen ? '!border-accent !text-accent' : '!text-mute'" :title="'Aus CNC One entfernen, im Postfach bleibt die Mail'" @click="verwerfen" @blur="bestaetigen = false">
               <Ban :size="15" /> {{ bestaetigen ? 'Wirklich entfernen?' : 'Keine Anfrage' }}
             </button>
           </div>

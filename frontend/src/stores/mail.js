@@ -87,5 +87,17 @@ export const useMail = defineStore('mail', () => {
     }
   }
 
-  return { liste, anzahl, geladen, ruft, details, laden, zaehlen, abrufen, detail, kundeZuordnen, keineAnfrage };
+  // Angebotsentwurf aus der Anfrage (oder das vorhandene Angebot); die Bauteile bildet danach die Workbench
+  async function angebotAnlegen(id) {
+    try {
+      const r = await call('cnc_one.api.mail.angebot_anlegen', { id });
+      detail(id);
+      return r;
+    } catch (e) {
+      ui.toast(e.message, 'warn');
+      return null;
+    }
+  }
+
+  return { liste, anzahl, geladen, ruft, details, laden, zaehlen, abrufen, detail, kundeZuordnen, keineAnfrage, angebotAnlegen };
 });

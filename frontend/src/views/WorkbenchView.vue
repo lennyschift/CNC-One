@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle } from '@lucide/vue';
+import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle, Inbox } from '@lucide/vue';
 import AnfrageDialog from '../components/AnfrageDialog.vue';
 import BauteilWahlDialog from '../components/BauteilWahlDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
@@ -57,6 +57,11 @@ const mwst = computed(() => a.netto * 0.19);
   <div class="mx-auto flex max-w-[1500px] flex-col gap-4">
     <!-- Angebotskopf -->
     <section class="card p-5">
+      <RouterLink v-if="a.mailAnfrage" :to="`/posteingang/${a.mailAnfrage.id}`" class="mb-4 flex items-center gap-2 rounded-xl bg-accent-soft/60 px-3.5 py-2 text-sm hover:bg-accent-soft">
+        <Inbox :size="15" class="shrink-0 text-accent" />
+        <span class="min-w-0 truncate">Aus der Mail-Anfrage von <strong>{{ a.mailAnfrage.vonName || a.mailAnfrage.vonEmail }}</strong>: {{ a.mailAnfrage.betreff }}</span>
+        <span class="ml-auto shrink-0 text-xs text-accent">Mail ansehen</span>
+      </RouterLink>
       <div class="grid gap-5 lg:grid-cols-[1fr_auto]">
         <div class="grid gap-4 md:grid-cols-[minmax(240px,1.2fr)_1fr_120px_1fr]">
           <CustomerCombobox v-model="a.kopf.kundeId" />

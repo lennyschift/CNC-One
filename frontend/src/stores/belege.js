@@ -94,5 +94,5 @@ export const useBelege = defineStore('belege', () => {
     if (a && status) a.status = status;
   }
 
-  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, angebotSpeichern, angebotSenden, angebotAblehnen, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen, auftraegeNeuLaden };
+  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, einsetzen, angebotSpeichern, angebotSenden, angebotAblehnen, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen, auftraegeNeuLaden };
 });

@@ -90,6 +90,8 @@ export const useAngebot = defineStore('angebot', () => {
   const teile = ref([]);
   const auswahlId = ref(null);
   const angebotId = ref(null);
+  // Mail-Anfrage, aus der das Angebot entstanden ist: { id, betreff, vonName, vonEmail } oder null
+  const mailAnfrage = ref(null);
   // Zuordnung zu den Stammdaten je Workbench-Bauteil: { [teilId]: { bauteilId, herkunft: 'neu' | 'bestand', seriennummern } }
   const zuordnung = ref({});
   // 'gespeichert' | 'offen' | 'speichert' | 'fehler'
@@ -138,6 +140,7 @@ export const useAngebot = defineStore('angebot', () => {
     teile.value = record.positionen.map((p) => JSON.parse(JSON.stringify(p.teil)));
     auswahlId.value = teile.value.find((t) => t.id === sitzung.auswahlId)?.id ?? teile.value[0]?.id ?? null;
     angebotId.value = record.id;
+    mailAnfrage.value = record.mailAnfrage ?? null;
     zuordnungAus(record.positionen);
     speicherStand.value = 'gespeichert';
     nextTick().then(() => { unterdrueckt = false; });
@@ -160,6 +163,7 @@ export const useAngebot = defineStore('angebot', () => {
     try {
       const rec = await belege.angebotSpeichern({ angebotId: angebotId.value, kopf: kopf.value, teile: teile.value });
       angebotId.value = rec.id;
+      mailAnfrage.value = rec.mailAnfrage ?? null;
       zuordnungAus(rec.positionen);
       // Ein Bestandsbauteil bringt sein Seriennummern-Kennzeichen aus den Stammdaten mit
       for (const p of rec.positionen) {
@@ -223,6 +227,7 @@ export const useAngebot = defineStore('angebot', () => {
       auswahlId.value = null;
       angebotId.value = null;
       kopf.value = leererKopf();
+      mailAnfrage.value = null;
       speicherStand.value = 'gespeichert';
     });
   }
@@ -343,6 +348,32 @@ export const useAngebot = defineStore('angebot', () => {
         uploads.value[teil.id] = (uploads.value[teil.id] ?? []).filter((n) => n !== datei.name);
       }
     }));
+  }
+
+  // Angebot aus einer Mail-Anfrage (cnc_one.api.mail.angebot_anlegen): Entwurf laden, je Zeichnung/Modell-Paar ein Bauteil
+  // mit den schon hochgeladenen Dateien, Mengen aus dem Mailtext (mehrere = Staffel), danach die Zeichnungen erkennen.
+  async function ausMailAnfrage({ angebot, dateien = [], text = '' }) {
+    if (speicherStand.value === 'offen') await speichern();
+    belege.einsetzen(angebot);
+    ausAngebot(angebot);
+    if (!dateien.length) return;
+    const { gruppieren, mengenAusText } = await import('../lib/mailanfrage.js');
+    const gruppen = gruppieren(dateien);
+    for (const g of gruppen) {
+      const id = hinzufuegen(g.basis.replace(/_/g, ' ')).id;
+      const t = teile.value.find((x) => x.id === id);
+      t.dateien = g.dateien.map((d) => ({ id: d.id, name: d.name, art: d.art, groesse: d.groesse, url: d.url }));
+      const mengen = mengenAusText(text, g.basis, { einziges: gruppen.length === 1 });
+      if (mengen.length) t.menge = mengen[0];
+      if (mengen.length > 1) t.staffel = { aktiv: true, stufen: mengen.map((menge) => ({ menge, extra: 0 })) };
+    }
+    auswahlId.value = teile.value[0]?.id ?? null;
+    await speichern();
+    for (const t of teile.value) {
+      const z = t.dateien.find((d) => d.art === 'Zeichnung');
+      if (z) erkennenFuer(t, z);
+    }
+    ui.toast(`${gruppen.length} Bauteil${gruppen.length === 1 ? '' : 'e'} aus der Anfrage übernommen`, 'ok');
   }
 
   // Schriftfeld-Angaben aus der Zeichnung lesen und vorhandene Bauteile dazu suchen. Übernommen wird erst nach Bestätigung.
@@ -526,5 +557,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, zuordnung, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
+  return { kopf, teile, zuordnung, mailAnfrage, ausMailAnfrage, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
 });
