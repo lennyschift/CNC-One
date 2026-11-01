@@ -280,3 +280,10 @@ app_license = "mit"
 
 # Rollen und Standardwährung beim Installieren
 after_install = "cnc_one.setup.install.after_install"
+
+# Anfragen aus dem Postfach holen (nur wenn in den Mail-Einstellungen eingeschaltet)
+scheduler_events = {
+	"cron": {
+		"*/5 * * * *": ["cnc_one.logic.mail.geplant"],
+	},
+}

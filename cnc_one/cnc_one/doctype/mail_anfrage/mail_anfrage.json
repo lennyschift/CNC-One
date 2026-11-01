@@ -1,0 +1,162 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "status",
+  "betreff",
+  "von_email",
+  "von_name",
+  "datum",
+  "letzte_nachricht",
+  "neue_antwort",
+  "kunde",
+  "kunde_name",
+  "kunde_vorschlag",
+  "angebot",
+  "sb_nachrichten",
+  "nachrichten"
+ ],
+ "fields": [
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Neu\nIn Bearbeitung\nBeantwortet\nKeine Anfrage",
+   "default": "Neu",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "betreff",
+   "fieldtype": "Data",
+   "label": "Betreff",
+   "in_list_view": 1,
+   "ignore_xss_filter": 1
+  },
+  {
+   "fieldname": "von_email",
+   "fieldtype": "Data",
+   "label": "Von (Adresse)",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "von_name",
+   "fieldtype": "Data",
+   "label": "Von (Name)",
+   "ignore_xss_filter": 1
+  },
+  {
+   "fieldname": "datum",
+   "fieldtype": "Datetime",
+   "label": "Eingegangen",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "letzte_nachricht",
+   "fieldtype": "Datetime",
+   "label": "Letzte Nachricht"
+  },
+  {
+   "fieldname": "neue_antwort",
+   "fieldtype": "Check",
+   "label": "Neue Nachricht des Kunden",
+   "description": "Der Kunde hat im Verlauf geantwortet"
+  },
+  {
+   "fieldname": "kunde",
+   "fieldtype": "Link",
+   "label": "Kunde",
+   "options": "Kunde",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "kunde_name",
+   "fieldtype": "Data",
+   "label": "Kundenname",
+   "read_only": 1
+  },
+  {
+   "fieldname": "kunde_vorschlag",
+   "fieldtype": "Link",
+   "label": "Kundenvorschlag (gleiche Domain)",
+   "options": "Kunde",
+   "read_only": 1
+  },
+  {
+   "fieldname": "angebot",
+   "fieldtype": "Link",
+   "label": "Angebot",
+   "options": "Angebot"
+  },
+  {
+   "fieldname": "sb_nachrichten",
+   "fieldtype": "Section Break",
+   "label": "Nachrichten"
+  },
+  {
+   "fieldname": "nachrichten",
+   "fieldtype": "Table",
+   "label": "Nachrichten",
+   "options": "Mail Nachricht"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Mail Anfrage",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "read": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "MAIL-.YYYY.-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "inbox",
+ "search_fields": "betreff,von_email,kunde_name"
+}

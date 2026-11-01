@@ -516,6 +516,64 @@ DOCTYPES += [
 ]
 
 
+# ---- Mail-Anbindung: Anfragen aus dem gemeinsamen Postfach (nur Mails mit Stichwort im Betreff)
+def LongText(n, label=None, **kw): return F(n, "Long Text", label, **kw)
+
+
+DOCTYPES += [
+    dict(name="Mail Einstellungen", rechte=[recht("System Manager", *ALLE), recht("CNC Admin", *ALLE)], icon="mail", extra={"issingle": 1}, fields=[
+        Check("aktiv", "Anfragen automatisch abholen", description="Alle 5 Minuten; geholt werden nur Mails mit einem Stichwort im Betreff"),
+        Section("sb_server", "Postfach"),
+        Data("benutzer", "Benutzer (E-Mail-Adresse)", description="z. B. info@cnc-hohenstein.de"),
+        F("passwort", "Password", "Passwort"),
+        Data("absender_name", "Absendername", description="erscheint beim Kunden als Absender der Antwort"),
+        Select("verschluesselung", ["SSL/TLS", "STARTTLS", "Ohne (nur Test)"], "Verschlüsselung", default="SSL/TLS"),
+        Data("imap_server", "IMAP-Server", default="imap.ionos.de"),
+        Int("imap_port", "IMAP-Port", default="993"),
+        Data("smtp_server", "SMTP-Server", default="smtp.ionos.de"),
+        Int("smtp_port", "SMTP-Port", default="465"),
+        Section("sb_abruf", "Abruf"),
+        Text("stichwoerter", "Stichwörter im Betreff", default="Anfrage", description="Eines je Zeile, Groß-/Kleinschreibung egal"),
+        Date("abholen_ab", "Mails ab", description="Ältere Mails werden nicht geholt"),
+        Data("postfach_ordner", "Ordner im Postfach", default="INBOX"),
+        Data("gesendet_ordner", "Ordner für gesendete Mails", default="Gesendete Objekte"),
+        F("letzter_abruf", "Datetime", "Letzter Abruf", read_only=1),
+        Text("letzter_fehler", "Letzter Fehler", read_only=1),
+    ]),
+    # Mailinhalte unverändert speichern (Adressen und Message-IDs stehen in <...>); angezeigt wird nur als Text
+    dict(name="Mail Nachricht", istable=1, fields=[
+        Select("richtung", ["Eingang", "Ausgang"], "Richtung", default="Eingang", in_list_view=1),
+        F("datum", "Datetime", "Datum", in_list_view=1),
+        Data("von_email", "Von (Adresse)", in_list_view=1),
+        Data("von_name", "Von (Name)", ignore_xss_filter=1),
+        Text("an", "An", ignore_xss_filter=1),
+        Text("cc", "CC", ignore_xss_filter=1),
+        Data("betreff", "Betreff", in_list_view=1, ignore_xss_filter=1),
+        Data("message_id", "Message-ID", read_only=1, ignore_xss_filter=1),
+        Data("in_reply_to", "Antwort auf (Message-ID)", read_only=1, ignore_xss_filter=1),
+        Text("referenzen", "Verlauf (References)", read_only=1, ignore_xss_filter=1),
+        LongText("text", "Text", ignore_xss_filter=1),
+        Json("anhaenge", "Anhänge", description="[{ name, url, groesse }]"),
+        Text("hinweis", "Hinweis", description="z. B. Anhang zu groß"),
+    ]),
+    dict(name="Mail Anfrage", autoname="MAIL-.YYYY.-.#####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="inbox", extra={"search_fields": "betreff,von_email,kunde_name"}, fields=[
+        Select("status", ["Neu", "In Bearbeitung", "Beantwortet", "Keine Anfrage"], "Status", default="Neu", in_list_view=1, in_standard_filter=1),
+        Data("betreff", "Betreff", in_list_view=1, ignore_xss_filter=1),
+        Data("von_email", "Von (Adresse)", in_list_view=1, in_standard_filter=1),
+        Data("von_name", "Von (Name)", ignore_xss_filter=1),
+        F("datum", "Datetime", "Eingegangen", in_list_view=1),
+        F("letzte_nachricht", "Datetime", "Letzte Nachricht"),
+        Check("neue_antwort", "Neue Nachricht des Kunden", description="Der Kunde hat im Verlauf geantwortet"),
+        Link("kunde", "Kunde", "Kunde", in_standard_filter=1),
+        Data("kunde_name", "Kundenname", read_only=1),
+        Link("kunde_vorschlag", "Kunde", "Kundenvorschlag (gleiche Domain)", read_only=1),
+        Link("angebot", "Angebot", "Angebot"),
+        Section("sb_nachrichten", "Nachrichten"),
+        Table("nachrichten", "Mail Nachricht", "Nachrichten"),
+    ]),
+]
+
+
 def doctype_json(d):
     fields = d["fields"]
     j = {

@@ -1,0 +1,314 @@
+"""Anfragen aus dem gemeinsamen Postfach holen (IMAP).
+
+Geholt werden nur Mails mit einem Stichwort im Betreff. Die Suche läuft auf dem Mailserver, andere Mails werden gar nicht
+übertragen. Das Postfach bleibt unverändert: Der Ordner wird nur lesend geöffnet, Mails bleiben ungelesen.
+Antwortet ein Kunde im Verlauf, kommt seine Mail zur bestehenden Anfrage.
+"""
+
+import base64
+import email
+import hashlib
+import imaplib
+import json
+import re
+import ssl
+from email.policy import default as POLICY
+from email.utils import getaddresses, parsedate_to_datetime
+from zoneinfo import ZoneInfo
+
+import frappe
+from frappe import _
+from frappe.utils import get_system_timezone, now_datetime
+
+# Bei diesen Anbietern sagt die Domain nichts über den Kunden
+FREEMAIL = {
+	"gmail.com", "googlemail.com", "web.de", "gmx.de", "gmx.net", "gmx.at", "t-online.de", "outlook.com", "outlook.de",
+	"hotmail.com", "hotmail.de", "live.com", "live.de", "yahoo.com", "yahoo.de", "icloud.com", "me.com", "aol.com",
+	"freenet.de", "posteo.de", "mailbox.org", "arcor.de", "online.de", "ionos.de",
+}
+MONATE = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+MAX_TEXT = 200_000
+
+
+def einstellungen():
+	return frappe.get_single("Mail Einstellungen")
+
+
+def stichwoerter(s):
+	return [z.strip() for z in (s.stichwoerter or "").splitlines() if z.strip()]
+
+
+# ----------------------------------------------------------------- Verbindung
+def _ssl():
+	return ssl.create_default_context()
+
+
+def imap_verbinden(s):
+	"""Angemeldete IMAP-Verbindung mit den Einstellungen."""
+	if not (s.imap_server and s.benutzer):
+		frappe.throw(_("Bitte zuerst Server und Benutzer des Postfachs eintragen."))
+	passwort = s.get_password("passwort", raise_exception=False)
+	if not passwort:
+		frappe.throw(_("Bitte zuerst das Passwort des Postfachs eintragen."))
+	port = int(s.imap_port or (993 if s.verschluesselung == "SSL/TLS" else 143))
+	if s.verschluesselung == "SSL/TLS":
+		m = imaplib.IMAP4_SSL(s.imap_server, port, ssl_context=_ssl(), timeout=30)
+	else:
+		m = imaplib.IMAP4(s.imap_server, port, timeout=30)
+		if s.verschluesselung == "STARTTLS":
+			m.starttls(_ssl())
+	m.login(s.benutzer, passwort)
+	return m
+
+
+def ordnername(name):
+	"""Ordnername für IMAP: in Anführungszeichen, Umlaute als modifiziertes UTF-7 (RFC 3501)."""
+	out, puffer = [], ""
+
+	def leeren():
+		nonlocal puffer
+		if puffer:
+			b = base64.b64encode(puffer.encode("utf-16-be")).decode().rstrip("=").replace("/", ",")
+			out.append(f"&{b}-")
+			puffer = ""
+
+	for z in name or "INBOX":
+		if 0x20 <= ord(z) <= 0x7E:
+			leeren()
+			out.append("&-" if z == "&" else z)
+		else:
+			puffer += z
+	leeren()
+	return '"' + "".join(out).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _imap_datum(d):
+	return f"{d.day:02d}-{MONATE[d.month - 1]}-{d.year}"
+
+
+def suchen(m, woerter, ab=None):
+	"""UIDs der Mails, deren Betreff eines der Stichwörter enthält (Suche auf dem Server)."""
+	uids = set()
+	datum = ["SINCE", _imap_datum(ab)] if ab else []
+	for w in woerter:
+		if w.isascii():
+			_typ, daten = m.uid("SEARCH", *datum, "SUBJECT", '"' + w.replace("\\", "\\\\").replace('"', '\\"') + '"')
+		else:
+			m.literal = w.encode("utf-8")
+			_typ, daten = m.uid("SEARCH", "CHARSET", "UTF-8", *datum, "SUBJECT")
+		for u in (daten[0] or b"").split():
+			uids.add(int(u))
+	return sorted(uids)
+
+
+def kopfzeilen(m, uids):
+	"""{ uid: (message_id, absender) } aus den Kopfzeilen, ohne die Mails zu laden."""
+	out = {}
+	if not uids:
+		return out
+	_typ, daten = m.uid("FETCH", ",".join(str(u) for u in uids), "(UID BODY.PEEK[HEADER.FIELDS (MESSAGE-ID FROM)])")
+	for teil in daten:
+		if not isinstance(teil, tuple):
+			continue
+		treffer = re.search(rb"UID (\d+)", teil[0])
+		if not treffer:
+			continue
+		kopf = email.message_from_bytes(teil[1], policy=POLICY)
+		out[int(treffer.group(1))] = ((kopf.get("Message-ID") or "").strip(), absender(kopf.get("From"))[1])
+	return out
+
+
+def absender(wert):
+	"""(Name, Adresse) des Absenders; die erste Angabe mit @, auch bei einem Komma im Namen ohne Anführungszeichen."""
+	paare = getaddresses([str(wert or "")])
+	for i, (name, adresse) in enumerate(paare):
+		if "@" in adresse:
+			vorher = [n or a for n, a in paare[:i] if "@" not in a]
+			return (", ".join([*vorher, name]) if vorher and name else name or ", ".join(vorher)).strip(), adresse.lower()
+	return "", ""
+
+
+def laden(m, uid):
+	_typ, daten = m.uid("FETCH", str(uid), "(BODY.PEEK[])")
+	for teil in daten:
+		if isinstance(teil, tuple):
+			return teil[1]
+	return None
+
+
+# ----------------------------------------------------------------- Abholen
+def abholen(s=None):
+	"""Holt neue Anfragen. Liefert die Anzahl der neu angelegten Anfragen und Antworten im Verlauf."""
+	from frappe.utils.synchronization import filelock
+
+	s = s or einstellungen()
+	woerter = stichwoerter(s)
+	if not woerter:
+		frappe.throw(_("Bitte mindestens ein Stichwort für den Betreff eintragen."))
+	neu = 0
+	with filelock("cnc_one_mail_abruf", timeout=60):
+		m = imap_verbinden(s)
+		try:
+			typ, _antwort = m.select(ordnername(s.postfach_ordner or "INBOX"), readonly=True)
+			if typ != "OK":
+				frappe.throw(_("Den Ordner {0} gibt es im Postfach nicht.").format(s.postfach_ordner or "INBOX"))
+			kandidaten = kopfzeilen(m, suchen(m, woerter, s.abholen_ab))
+			bekannt = set(frappe.get_all("Mail Nachricht", filters={"message_id": ["in", [mid for mid, _v in kandidaten.values() if mid] or [""]]}, pluck="message_id"))
+			eigene = (s.benutzer or "").lower()
+			for uid, (mid, von) in kandidaten.items():
+				if (mid and mid in bekannt) or von == eigene:
+					continue
+				roh = laden(m, uid)
+				if roh and verarbeiten(roh):
+					neu += 1
+				frappe.db.commit()
+		finally:
+			try:
+				m.logout()
+			except Exception:
+				pass
+	frappe.db.set_single_value("Mail Einstellungen", {"letzter_abruf": now_datetime(), "letzter_fehler": ""})
+	frappe.db.commit()
+	return neu
+
+
+def geplant():
+	"""Alle 5 Minuten (Scheduler), nur wenn eingeschaltet. Fehler landen in den Einstellungen und im Fehlerprotokoll."""
+	s = einstellungen()
+	if not s.aktiv:
+		return
+	try:
+		abholen(s)
+	except Exception as e:
+		frappe.db.rollback()
+		frappe.db.set_single_value("Mail Einstellungen", {"letzter_abruf": now_datetime(), "letzter_fehler": str(e)[:1000]})
+		frappe.db.commit()
+		frappe.log_error(title="CNC One: Mail-Abruf")
+
+
+# ----------------------------------------------------------------- Eine Mail verarbeiten
+def _datum(msg):
+	try:
+		d = parsedate_to_datetime(str(msg.get("Date")))
+	except (TypeError, ValueError):
+		return now_datetime()
+	if d.tzinfo:
+		d = d.astimezone(ZoneInfo(get_system_timezone())).replace(tzinfo=None)
+	return d
+
+
+def _adressen(wert):
+	return ", ".join(f"{n} <{a}>" if n else a for n, a in getaddresses([str(wert)]) if a) if wert else ""
+
+
+def _text(msg):
+	teil = msg.get_body(preferencelist=("plain", "html"))
+	if teil is None:
+		return ""
+	try:
+		inhalt = teil.get_content()
+	except (LookupError, UnicodeDecodeError):
+		inhalt = (teil.get_payload(decode=True) or b"").decode("utf-8", "replace")
+	if teil.get_content_type() == "text/html":
+		from frappe.core.utils import html_to_plain_text
+
+		inhalt = html_to_plain_text(inhalt)
+	return re.sub(r"\n{3,}", "\n\n", inhalt.replace("\r\n", "\n")).strip()[:MAX_TEXT]
+
+
+def _anhaenge(msg):
+	"""(Dateiname, Inhalt) der Anhänge. Bilder aus der Signatur (eingebettet, ohne Anhang-Kennzeichen) bleiben weg."""
+	out = []
+	for teil in msg.iter_attachments():
+		name = teil.get_filename()
+		typ = teil.get_content_type()
+		if not name or typ == "message/rfc822":
+			continue
+		if typ.startswith("image/") and teil.get("Content-ID") and teil.get_content_disposition() != "attachment":
+			continue
+		inhalt = teil.get_payload(decode=True)
+		if inhalt:
+			out.append((name, inhalt))
+	return out
+
+
+def _ids(*werte):
+	return [x for w in werte if w for x in re.findall(r"<[^>]+>", str(w))]
+
+
+def kunde_zur_adresse(adresse):
+	"""Kunde, bei dem diese Adresse als Kontakt hinterlegt ist."""
+	if not adresse:
+		return None
+	r = frappe.db.sql("select parent from `tabKunde Kontakt` where parenttype = 'Kunde' and lower(email) = %s limit 1", adresse.lower())
+	return r[0][0] if r else None
+
+
+def kunde_vorschlag(adresse):
+	"""Kunde mit einem Kontakt derselben Domain (nicht bei Freemail-Anbietern)."""
+	domain = (adresse or "").rsplit("@", 1)[-1].lower()
+	if not domain or "@" not in (adresse or "") or domain in FREEMAIL:
+		return None
+	r = frappe.db.sql("select parent from `tabKunde Kontakt` where parenttype = 'Kunde' and lower(email) like %s limit 1", "%@" + domain)
+	return r[0][0] if r else None
+
+
+def _verlauf(ids):
+	"""Bestehende Anfrage, zu deren Verlauf eine der Message-IDs gehört."""
+	if not ids:
+		return None
+	r = frappe.get_all("Mail Nachricht", filters={"message_id": ["in", ids], "parenttype": "Mail Anfrage"}, pluck="parent", limit=1)
+	return r[0] if r else None
+
+
+def verarbeiten(roh):
+	"""Legt eine Mail als Anfrage an oder hängt sie an den Verlauf einer bestehenden. Liefert die Anfrage oder None (schon da)."""
+	msg = email.message_from_bytes(roh, policy=POLICY)
+	mid = (msg.get("Message-ID") or "").strip() or f"<ohne-id-{hashlib.sha1(roh).hexdigest()}@cnc-one>"
+	if frappe.db.exists("Mail Nachricht", {"message_id": mid}):
+		return None
+	von_name, von = absender(msg.get("From"))
+	betreff = str(msg.get("Subject") or "").strip()
+	datum = _datum(msg)
+	in_reply_to = (msg.get("In-Reply-To") or "").strip()
+	referenzen = str(msg.get("References") or "").strip()
+	zeile = {
+		"richtung": "Eingang", "datum": datum, "von_email": von, "von_name": von_name, "an": _adressen(msg.get("To")),
+		"cc": _adressen(msg.get("Cc")), "betreff": betreff, "message_id": mid, "in_reply_to": in_reply_to,
+		"referenzen": referenzen, "text": _text(msg),
+	}
+
+	bestehend = _verlauf(_ids(in_reply_to, referenzen))
+	if bestehend:
+		doc = frappe.get_doc("Mail Anfrage", bestehend)
+		if doc.status == "Keine Anfrage":
+			# Verlauf wurde verworfen: nur merken, dass es die Mail gibt
+			doc.append("nachrichten", {**zeile, "text": ""})
+			doc.save(ignore_permissions=True)
+			return None
+		doc.neue_antwort = 1
+		doc.letzte_nachricht = datum
+		doc.append("nachrichten", zeile)
+		doc.save(ignore_permissions=True)
+	else:
+		kunde = kunde_zur_adresse(von)
+		doc = frappe.get_doc({
+			"doctype": "Mail Anfrage", "status": "Neu", "betreff": betreff, "von_email": von, "von_name": von_name,
+			"datum": datum, "letzte_nachricht": datum, "kunde": kunde, "kunde_vorschlag": None if kunde else kunde_vorschlag(von),
+		})
+		doc.append("nachrichten", zeile)
+		doc.insert(ignore_permissions=True)
+
+	anhaenge, hinweise = [], []
+	for name, inhalt in _anhaenge(msg):
+		try:
+			f = frappe.get_doc({"doctype": "File", "file_name": name, "attached_to_doctype": "Mail Anfrage", "attached_to_name": doc.name, "is_private": 1, "content": inhalt})
+			f.insert(ignore_permissions=True)
+			anhaenge.append({"name": name, "url": f.file_url, "groesse": len(inhalt)})
+		except Exception as e:  # zu groß, beschädigtes PDF usw.: die Anfrage kommt trotzdem
+			frappe.clear_messages()
+			hinweise.append(_("{0} nicht übernommen: {1}").format(name, frappe.utils.strip_html(str(e))[:200]))
+	if anhaenge or hinweise:
+		z = next(x for x in doc.nachrichten if x.message_id == mid)
+		z.db_set({"anhaenge": json.dumps(anhaenge, ensure_ascii=False), "hinweis": "\n".join(hinweise)}, update_modified=False)
+	return doc

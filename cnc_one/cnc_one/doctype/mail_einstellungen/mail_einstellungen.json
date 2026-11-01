@@ -1,0 +1,168 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "aktiv",
+  "sb_server",
+  "benutzer",
+  "passwort",
+  "absender_name",
+  "verschluesselung",
+  "imap_server",
+  "imap_port",
+  "smtp_server",
+  "smtp_port",
+  "sb_abruf",
+  "stichwoerter",
+  "abholen_ab",
+  "postfach_ordner",
+  "gesendet_ordner",
+  "letzter_abruf",
+  "letzter_fehler"
+ ],
+ "fields": [
+  {
+   "fieldname": "aktiv",
+   "fieldtype": "Check",
+   "label": "Anfragen automatisch abholen",
+   "description": "Alle 5 Minuten; geholt werden nur Mails mit einem Stichwort im Betreff"
+  },
+  {
+   "fieldname": "sb_server",
+   "fieldtype": "Section Break",
+   "label": "Postfach"
+  },
+  {
+   "fieldname": "benutzer",
+   "fieldtype": "Data",
+   "label": "Benutzer (E-Mail-Adresse)",
+   "description": "z. B. info@cnc-hohenstein.de"
+  },
+  {
+   "fieldname": "passwort",
+   "fieldtype": "Password",
+   "label": "Passwort"
+  },
+  {
+   "fieldname": "absender_name",
+   "fieldtype": "Data",
+   "label": "Absendername",
+   "description": "erscheint beim Kunden als Absender der Antwort"
+  },
+  {
+   "fieldname": "verschluesselung",
+   "fieldtype": "Select",
+   "label": "Verschlüsselung",
+   "options": "SSL/TLS\nSTARTTLS\nOhne (nur Test)",
+   "default": "SSL/TLS"
+  },
+  {
+   "fieldname": "imap_server",
+   "fieldtype": "Data",
+   "label": "IMAP-Server",
+   "default": "imap.ionos.de"
+  },
+  {
+   "fieldname": "imap_port",
+   "fieldtype": "Int",
+   "label": "IMAP-Port",
+   "default": "993"
+  },
+  {
+   "fieldname": "smtp_server",
+   "fieldtype": "Data",
+   "label": "SMTP-Server",
+   "default": "smtp.ionos.de"
+  },
+  {
+   "fieldname": "smtp_port",
+   "fieldtype": "Int",
+   "label": "SMTP-Port",
+   "default": "465"
+  },
+  {
+   "fieldname": "sb_abruf",
+   "fieldtype": "Section Break",
+   "label": "Abruf"
+  },
+  {
+   "fieldname": "stichwoerter",
+   "fieldtype": "Small Text",
+   "label": "Stichwörter im Betreff",
+   "default": "Anfrage",
+   "description": "Eines je Zeile, Groß-/Kleinschreibung egal"
+  },
+  {
+   "fieldname": "abholen_ab",
+   "fieldtype": "Date",
+   "label": "Mails ab",
+   "description": "Ältere Mails werden nicht geholt"
+  },
+  {
+   "fieldname": "postfach_ordner",
+   "fieldtype": "Data",
+   "label": "Ordner im Postfach",
+   "default": "INBOX"
+  },
+  {
+   "fieldname": "gesendet_ordner",
+   "fieldtype": "Data",
+   "label": "Ordner für gesendete Mails",
+   "default": "Gesendete Objekte"
+  },
+  {
+   "fieldname": "letzter_abruf",
+   "fieldtype": "Datetime",
+   "label": "Letzter Abruf",
+   "read_only": 1
+  },
+  {
+   "fieldname": "letzter_fehler",
+   "fieldtype": "Small Text",
+   "label": "Letzter Fehler",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Mail Einstellungen",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "hash",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "mail",
+ "issingle": 1
+}
