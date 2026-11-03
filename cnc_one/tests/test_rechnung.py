@@ -350,6 +350,24 @@ class TestRechnung(IntegrationTestCase):
 		self.assertEqual(next(a for a in mahnung.liste() if a["id"] == m2["id"])["status"], "Erledigt")
 		self.assertEqual(mahnung.vorschlag(), [])
 
+	def test_mahnung_als_pdf_beim_versenden_festgeschrieben(self):
+		from pypdf import PdfReader
+
+		from cnc_one.api import belegdruck
+
+		r = rechnung.festschreiben(self.gesamt(self.auftrag())["id"])
+		self.ueberfaellig(r)
+		m = mahnung.anlegen(r["id"])
+		self.assertEqual(belegdruck.pdf_holen("Mahnung", m["id"])["name"], f"Zahlungserinnerung {m['id']}.pdf")
+		mahnung.versendet_setzen(m["id"])
+		f = frappe.get_all("File", filters={"attached_to_doctype": "Mahnung", "attached_to_name": m["id"]}, fields=["name", "file_url"])
+		self.assertEqual(len(f), 1)
+		text = PdfReader(frappe.get_site_path(f[0].file_url.lstrip("/"))).pages[0].extract_text()
+		self.assertIn(r["nummer"], text)
+		self.assertIn("309,40", text)
+		mahnung.zurueckziehen(m["id"])  # verschickt: das PDF bleibt
+		self.assertEqual(frappe.get_all("File", filters={"attached_to_doctype": "Mahnung", "attached_to_name": m["id"]}, pluck="name"), [f[0].name])
+
 	def test_storno_zieht_offene_mahnungen_zurueck(self):
 		r = rechnung.festschreiben(self.gesamt(self.auftrag())["id"])
 		self.ueberfaellig(r)

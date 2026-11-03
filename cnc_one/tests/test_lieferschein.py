@@ -186,6 +186,38 @@ class TestLieferschein(IntegrationTestCase):
 		l2 = self.liefern(auf, 6)
 		self.assertEqual((l2["positionen"][0]["serienVon"], l2["positionen"][0]["serienBis"]), (1005, 1010))
 
+	def test_pdf_offen_neu_beim_liefern_festgeschrieben(self):
+		import io
+
+		from pypdf import PdfReader
+
+		from cnc_one.api import belegdruck
+
+		def text(ls_id):
+			url = frappe.db.get_value("File", {"attached_to_doctype": "Lieferschein", "attached_to_name": ls_id}, "file_url")
+			with open(frappe.get_site_path(url.lstrip("/")), "rb") as fh:
+				return PdfReader(io.BytesIO(fh.read())).pages[0].extract_text()
+
+		auf = self.auftrag(10)
+		ls = self.liefern(auf, 4)
+		r = belegdruck.pdf_holen("Lieferschein", ls["id"])
+		self.assertEqual(r["name"], f"Lieferschein {ls['id']}.pdf")
+		belegdruck.pdf_holen("Lieferschein", ls["id"])  # offen: neu erzeugt, nicht doppelt
+		self.assertEqual(frappe.db.count("File", {"attached_to_doctype": "Lieferschein", "attached_to_name": ls["id"]}), 1)
+		lieferschein.geliefert_setzen(ls["id"])
+		geliefert = frappe.get_all("File", filters={"attached_to_doctype": "Lieferschein", "attached_to_name": ls["id"]}, pluck="name")
+		self.assertIn("ZZ-L1", text(ls["id"]))
+		self.assertIn("4 Stk", text(ls["id"]))
+		belegdruck.pdf_holen("Lieferschein", ls["id"])
+		lieferschein.stornieren(ls["id"])  # geliefert: das PDF bleibt, wie es rausging
+		self.assertEqual(frappe.get_all("File", filters={"attached_to_doctype": "Lieferschein", "attached_to_name": ls["id"]}, pluck="name"), geliefert)
+		self.assertNotIn("STORNIERT", text(ls["id"]))
+		ls2 = self.liefern(auf, 2)
+		lieferschein.stornieren(ls2["id"])  # nie geliefert: mit Vermerk
+		self.assertIn("STORNIERT", text(ls2["id"]))
+		with self.assertRaises(frappe.ValidationError):
+			belegdruck.pdf_holen("Angebot", ls["id"])
+
 	# ------------------------------------------------------------- bauteilunabhängig
 	def test_lieferschein_frei_aus_bauteilen_des_kunden(self):
 		auf = self.auftrag(10)

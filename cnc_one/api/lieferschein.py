@@ -188,6 +188,10 @@ def geliefert_setzen(id):
 	doc.status = "Geliefert"
 	doc.geliefert_am = today()
 	doc.save()
+	# Das PDF, wie es mit der Ware rausging, bleibt am Lieferschein
+	from cnc_one.api.belegdruck import lieferschein_pdf_ablegen
+
+	lieferschein_pdf_ablegen(doc, neu=True)
 	return lieferschein_ui(doc)
 
 
@@ -198,8 +202,13 @@ def stornieren(id):
 	doc = _geladen(id)
 	if doc.status == "Storniert":
 		frappe.throw(_("Der Lieferschein ist schon storniert."))
+	war_bereit = doc.status == "Bereit"
 	doc.status = "Storniert"
 	doc.save()
+	if war_bereit:  # nie geliefert: PDF mit Vermerk STORNIERT; ein geliefertes bleibt, wie es war
+		from cnc_one.api.belegdruck import lieferschein_pdf_ablegen
+
+		lieferschein_pdf_ablegen(doc, neu=True)
 	for z in doc.positionen:
 		lager.buchen(z.bauteil, z.menge, "Storno Lieferschein", lieferschein=doc.name, auftrag=z.auftrag or None)
 	return lieferschein_ui(doc)

@@ -118,6 +118,10 @@ def versendet_setzen(id):
 	if m.status != "Angelegt":
 		frappe.throw(_("Nur eine angelegte Mahnung lässt sich als versendet markieren."))
 	frappe.db.set_value("Mahnung", m.name, {"status": "Versendet", "versandt_am": getdate(today())})
+	# Das PDF, wie es verschickt wurde, bleibt an der Mahnung
+	from cnc_one.api.belegdruck import mahnung_pdf_ablegen
+
+	mahnung_pdf_ablegen(frappe.get_doc("Mahnung", m.name), neu=True)
 	return mahnung_ui(frappe.get_doc("Mahnung", m.name))
 
 
@@ -128,5 +132,10 @@ def zurueckziehen(id):
 	m = _geladen(id)
 	if m.status not in ("Angelegt", "Versendet"):
 		frappe.throw(_("Diese Mahnung lässt sich nicht zurückziehen."))
+	war_angelegt = m.status == "Angelegt"
 	frappe.db.set_value("Mahnung", m.name, "status", "Zurückgezogen")
+	if war_angelegt:  # nie verschickt: PDF mit Vermerk ZURÜCKGEZOGEN; ein verschicktes bleibt, wie es war
+		from cnc_one.api.belegdruck import mahnung_pdf_ablegen
+
+		mahnung_pdf_ablegen(frappe.get_doc("Mahnung", m.name), neu=True)
 	return mahnung_ui(frappe.get_doc("Mahnung", m.name))

@@ -1,0 +1,21 @@
+@page { size: A4; margin: 15mm 15mm 20mm 15mm;
+  @bottom-center { content: "Seite " counter(page) " von " counter(pages); font-family: "DejaVu Sans"; font-size: 7pt; color: #888; } }
+* { box-sizing: border-box; }
+body { font-family: "DejaVu Sans", sans-serif; font-size: 8.4pt; line-height: 1.45; color: #1c1c1c; margin: 0; }
+.kopf { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.6pt solid #d4242a; padding-bottom: 4mm; }
+.firma { font-size: 16pt; font-weight: bold; letter-spacing: 0.5pt; color: #d4242a; text-transform: uppercase; }
+.unterzeile { font-size: 6.5pt; letter-spacing: 2pt; text-transform: uppercase; color: #777; }
+.adresse-rechts { text-align: right; font-size: 7.5pt; color: #666; }
+.block { display: flex; justify-content: space-between; margin-top: 9mm; gap: 12mm; }
+.block > div { flex: 1; }
+.label { font-size: 6.5pt; letter-spacing: 1pt; text-transform: uppercase; color: #999; margin-bottom: 1mm; }
+.meta { width: 68mm; flex: none; border-collapse: collapse; }
+.meta td { border: 0; padding: 0.3mm 0; }
+.meta .k { color: #777; padding-right: 4mm; }
+.meta .v { text-align: right; white-space: nowrap; }
+h1 { font-size: 13pt; margin: 9mm 0 2mm; }
+.einleitung { color: #555; margin-bottom: 4mm; white-space: pre-line; }
+.klein { font-size: 7.6pt; color: #666; }
+.fuss { margin-top: 10mm; border-top: 0.6pt solid #bbb; padding-top: 2mm; display: flex; gap: 8mm; font-size: 6.6pt; color: #777; line-height: 1.5; break-inside: avoid; }
+.fuss > div { flex: 1; }
+.stempel { position: fixed; top: 90mm; left: 30mm; transform: rotate(-24deg); font-size: 44pt; font-weight: bold; color: #e2e2e2; letter-spacing: 6pt; }
