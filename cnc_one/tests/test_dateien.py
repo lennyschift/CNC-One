@@ -4,6 +4,7 @@ import os
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from cnc_one.tests.dateischutz import dateien_vorher, eigene_dateien_loeschen
 from cnc_one.api import angebot, bauteil
 from cnc_one.tests.test_angebot import teil
 
@@ -31,13 +32,13 @@ class TestBauteilDateien(IntegrationTestCase):
 	"""STEP-Modell, Zeichnung und Vorschaubild kommen aus der Workbench (am Angebot hochgeladen) ins Bauteil."""
 
 	def setUp(self):
+		self._dateien = dateien_vorher()
 		frappe.set_user("Administrator")
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Dateikunde"}).insert().name
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for name in frappe.get_all("File", filters={"file_name": ["like", "zz-datei-%"]}, pluck="name"):
-			frappe.delete_doc("File", name, ignore_permissions=True, force=True)
+		eigene_dateien_loeschen(self._dateien)
 		frappe.db.rollback()
 
 	def hochladen(self, angebot_id, name, inhalt=None):
@@ -107,6 +108,7 @@ class TestBauteilErkennung(IntegrationTestCase):
 	"""Vorhandene Bauteile zu den aus der Zeichnung erkannten Nummern finden; Revision aus der Workbench."""
 
 	def setUp(self):
+		self._dateien = dateien_vorher()
 		frappe.set_user("Administrator")
 		self.k1 = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Erkennung Eins"}).insert().name
 		self.k2 = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Erkennung Zwei"}).insert().name
@@ -115,6 +117,7 @@ class TestBauteilErkennung(IntegrationTestCase):
 		self.b3 = frappe.get_doc({"doctype": "Bauteil", "kunde": self.k2, "teilenummer": "ZZ-E-300", "zeichnungsnr": "ZN4711.01"}).insert().name
 
 	def tearDown(self):
+		eigene_dateien_loeschen(self._dateien)
 		frappe.db.rollback()
 
 	def test_teilenummer_ohne_trennzeichen_und_eigener_kunde_zuerst(self):
@@ -138,13 +141,13 @@ class TestBauteilRevisionen(IntegrationTestCase):
 	"""Neue Revisionen am selben Bauteil mit Historie; Aufträge und Fertigung behalten die bestellte Revision."""
 
 	def setUp(self):
+		self._dateien = dateien_vorher()
 		frappe.set_user("Administrator")
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Revisionskunde"}).insert().name
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for name in frappe.get_all("File", filters={"file_name": ["like", "zz-rev-%"]}, pluck="name"):
-			frappe.delete_doc("File", name, ignore_permissions=True, force=True)
+		eigene_dateien_loeschen(self._dateien)
 		frappe.db.rollback()
 
 	def speichern(self, angebot_id, revision, dateien=()):

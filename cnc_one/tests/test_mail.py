@@ -5,6 +5,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from cnc_one.tests.dateischutz import dateien_vorher, eigene_dateien_loeschen
 from cnc_one.api import mail as mail_api
 from cnc_one.logic import mail
 from cnc_one.tests.test_dateien import leeres_pdf
@@ -64,6 +65,7 @@ class FakeImap:
 
 class TestMailAnfragen(IntegrationTestCase):
 	def setUp(self):
+		self._dateien = dateien_vorher()
 		frappe.set_user("Administrator")
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Mailkunde", "kontakte": [{"nachname": "Einkauf", "email": "Einkauf@zz-kunde.de"}]}).insert().name
 		s = frappe.get_single("Mail Einstellungen")
@@ -73,9 +75,7 @@ class TestMailAnfragen(IntegrationTestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for name in frappe.get_all("File", filters={"attached_to_doctype": "Mail Anfrage"}, pluck="name"):
-			if frappe.db.get_value("File", name, "file_name").startswith("zz-"):
-				frappe.delete_doc("File", name, ignore_permissions=True, force=True)
+		eigene_dateien_loeschen(self._dateien)
 		frappe.db.rollback()
 
 	def test_mail_wird_anfrage_mit_text_anhaengen_und_kunde(self):
@@ -215,6 +215,7 @@ class FakeSmtp:
 
 class TestAngebotPerMail(IntegrationTestCase):
 	def setUp(self):
+		self._dateien = dateien_vorher()
 		frappe.set_user("Administrator")
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Antwortkunde", "kontakte": [{"anrede": "Herr", "nachname": "Einkauf", "email": "einkauf@zz-kunde.de"}]}).insert().name
 		s = frappe.get_single("Mail Einstellungen")
@@ -225,9 +226,7 @@ class TestAngebotPerMail(IntegrationTestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for name in frappe.get_all("File", filters={"attached_to_doctype": ["in", ["Mail Anfrage", "Angebot"]]}, fields=["name", "file_name"]):
-			if name.file_name.startswith(("zz-", "Angebot ANG-")) and frappe.db.get_value("File", name.name, "creation") and frappe.db.exists("File", name.name):
-				frappe.delete_doc("File", name.name, ignore_permissions=True, force=True)
+		eigene_dateien_loeschen(self._dateien)
 		frappe.db.rollback()
 
 	def angebot_aus_mail(self):
@@ -309,14 +308,13 @@ def zz_html_mail(mid="<zz-h1@zz-kunde.de>"):
 
 class TestMailHtml(IntegrationTestCase):
 	def setUp(self):
+		self._dateien = dateien_vorher()
 		frappe.set_user("Administrator")
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Htmlkunde", "kontakte": [{"nachname": "Einkauf", "email": "einkauf@zz-kunde.de"}]}).insert().name
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for f in frappe.get_all("File", filters={"attached_to_doctype": ["in", ["Mail Anfrage", "Angebot"]]}, fields=["name", "file_name"]):
-			if f.file_name.startswith(("zz-", "bild-", "Angebot ANG-")) and frappe.db.exists("File", f.name):
-				frappe.delete_doc("File", f.name, ignore_permissions=True, force=True)
+		eigene_dateien_loeschen(self._dateien)
 		frappe.db.rollback()
 
 	def test_html_mit_tabelle_bild_und_ohne_gefaehrliches(self):
@@ -368,14 +366,13 @@ class TestTabellenvorlage(IntegrationTestCase):
 	"""Spalten der Anfrage-Tabellen je Kontakt und Kunde anlernen; Lieferzeit des Angebots aus den Liefertermin."""
 
 	def setUp(self):
+		self._dateien = dateien_vorher()
 		frappe.set_user("Administrator")
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Tabellenkunde", "kontakte": [{"nachname": "Einkauf", "email": "einkauf@zz-kunde.de"}, {"nachname": "Zwei", "email": "zwei@zz-kunde.de"}]}).insert().name
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for f in frappe.get_all("File", filters={"attached_to_doctype": "Mail Anfrage"}, fields=["name", "file_name"]):
-			if f.file_name.startswith(("zz-", "bild-")) and frappe.db.exists("File", f.name):
-				frappe.delete_doc("File", f.name, ignore_permissions=True, force=True)
+		eigene_dateien_loeschen(self._dateien)
 		frappe.db.rollback()
 
 	def test_vorlage_je_kontakt_sonst_vom_kunden(self):

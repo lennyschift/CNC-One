@@ -4,6 +4,7 @@ import frappe
 from frappe.tests import IntegrationTestCase, UnitTestCase
 from lxml import etree
 
+from cnc_one.tests.dateischutz import dateien_vorher, eigene_dateien_loeschen
 from cnc_one.api import angebot, auftrag, erechnung as ablage, firma, lieferschein, rechnung
 from cnc_one.logic import erechnung
 from cnc_one.logic.pdf import pdf_a3
@@ -133,6 +134,7 @@ class TestERechnungLogik(UnitTestCase):
 
 class TestERechnung(IntegrationTestCase):
 	def setUp(self):
+		self._dateien = dateien_vorher()
 		frappe.set_user("Administrator")
 		frappe.flags.erechnung_testen = True
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ E-Kunde", "zahlungsziel_tage": 30, "ust_id": "DE999", "leitweg_id": ""}).insert().name
@@ -144,8 +146,7 @@ class TestERechnung(IntegrationTestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
-		for f in frappe.get_all("File", filters={"attached_to_doctype": "Rechnung"}, pluck="name"):
-			frappe.delete_doc("File", f, ignore_permissions=True, force=True)
+		eigene_dateien_loeschen(self._dateien)
 		frappe.flags.erechnung_testen = False
 		frappe.db.rollback()
 
