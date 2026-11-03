@@ -579,6 +579,43 @@ DOCTYPES += [
 ]
 
 
+
+# ---- Dokumentenmanagement: ein Eintrag je Dokument (Inhalt), gleiche Datei an mehreren Belegen = ein Dokument
+DOKUMENT_ARTEN = ["Zeichnung", "3D-Modell", "Angebot", "Rechnung", "E-Rechnung (XML)", "Lieferschein", "Mahnung", "Bestellung", "Mail-Anhang", "Sonstiges"]
+
+DOCTYPES += [
+    dict(name="Dokument Bezug", istable=1, fields=[
+        Data("beleg_typ", "Belegart", in_list_view=1),
+        Data("beleg", "Beleg", in_list_view=1),
+        Data("bezeichnung", "Bezeichnung", in_list_view=1),
+        Data("datei", "Dateieintrag", read_only=1),
+    ]),
+    dict(name="Dokument", autoname="DOK-.#####", title="titel", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung", "CNC Buchhaltung")), icon="folder-open", extra={"search_fields": "titel,teilenummer,kunde_name"}, fields=[
+        Data("titel", "Titel", in_list_view=1, ignore_xss_filter=1),
+        Select("art", DOKUMENT_ARTEN, "Art", in_list_view=1, in_standard_filter=1),
+        Link("kunde", "Kunde", "Kunde", in_list_view=1, in_standard_filter=1),
+        Data("kunde_name", "Kundenname", read_only=1),
+        Data("teilenummer", "Teilenummer", in_standard_filter=1),
+        Data("revision", "Revision"),
+        Select("fassung", ["", "Aktuell", "Ältere Fassung"], "Fassung"),
+        F("datum", "Datetime", "Datum", in_list_view=1),
+        Section("sb_datei", "Datei"),
+        Data("datei", "Datei (URL)", read_only=1),
+        Data("content_hash", "Prüfwert", read_only=1, unique=1),
+        Int("groesse", "Größe (Bytes)", read_only=1),
+        Data("endung", "Dateityp", read_only=1),
+        Section("sb_pflege", "Schlagworte und Notiz"),
+        Text("schlagworte", "Schlagworte", description="mit Komma getrennt"),
+        Text("notiz", "Notiz"),
+        Section("sb_bezug", "Bezüge"),
+        Table("bezuege", "Dokument Bezug", "Bezüge"),
+        Section("sb_text", "Text für die Suche", collapsible=1),
+        Check("text_gelesen", "Text gelesen", read_only=1),
+        LongText("inhalt", "Text aus der Datei", read_only=1, ignore_xss_filter=1),
+    ]),
+]
+
+
 def doctype_json(d):
     fields = d["fields"]
     j = {

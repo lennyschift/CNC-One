@@ -284,6 +284,6 @@ after_install = "cnc_one.setup.install.after_install"
 # Anfragen aus dem Postfach holen (nur wenn in den Mail-Einstellungen eingeschaltet)
 scheduler_events = {
 	"cron": {
-		"*/5 * * * *": ["cnc_one.logic.mail.geplant"],
+		"*/5 * * * *": ["cnc_one.logic.mail.geplant", "cnc_one.logic.dokumente.geplant"],
 	},
 }
