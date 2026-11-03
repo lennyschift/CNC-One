@@ -2,7 +2,9 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ArrowLeft, Printer, Lock, Trash2, Banknote, BellRing, Undo2, FileText, Truck, ShieldCheck, FileDown, TriangleAlert } from '@lucide/vue';
-import RechnungDokument from '../components/RechnungDokument.vue';
+import BelegPdf from '../components/BelegPdf.vue';
+import { belegPdfUrl, pdfDrucken } from '../lib/belegpdf.js';
+import { useUi } from '../stores/ui.js';
 import StatusBadge from '../components/StatusBadge.vue';
 import NumField from '../components/NumField.vue';
 import { useRechnung } from '../stores/rechnung.js';
@@ -67,12 +69,18 @@ const laedt = ref(false);
 const datei = computed(() => `/api/method/cnc_one.api.erechnung.herunterladen?id=${encodeURIComponent(r.value.id)}`);
 async function eRechnungNeu() { laedt.value = true; await store.eRechnungNeu(r.value.id); laedt.value = false; }
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
-const drucken = () => window.print();
+// Angezeigt und gedruckt wird das PDF: als Entwurf mit Stempel, festgeschrieben die abgelegte E-Rechnung
+const ui = useUi();
+const geladen = Date.now();
+const pdfUrl = computed(() => (r.value ? belegPdfUrl('Rechnung', r.value.id, `${r.value.status}-${r.value.nummer ?? ''}-${r.value.eRechnung?.status ?? ''}-${geladen}`) : ''));
+async function drucken() {
+  try { await pdfDrucken(pdfUrl.value); } catch (e) { ui.toast(e.message, 'warn'); }
+}
 </script>
 
 <template>
   <div v-if="r" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_360px]">
-    <RechnungDokument :rechnung="r" />
+    <BelegPdf :url="pdfUrl" :name="`${r.nummer ? `Rechnung ${r.nummer}` : 'Rechnung Entwurf'}.pdf`" />
 
     <aside class="no-print space-y-4 xl:sticky xl:top-0">
       <RouterLink to="/rechnungen" class="inline-flex items-center gap-1.5 text-sm text-mute hover:text-ink"><ArrowLeft :size="15" /> Alle Rechnungen</RouterLink>
@@ -94,7 +102,7 @@ const drucken = () => window.print();
             <p class="text-xs text-mute">Beim Festschreiben bekommt die Rechnung ihre lückenlose Nummer und das heutige Datum. Danach lässt sie sich nur noch stornieren.</p>
             <button class="btn w-full justify-center !text-mute" @click="bestaetigt('weg', verwerfen)"><Trash2 :size="16" /> {{ frage === 'weg' ? 'Wirklich verwerfen?' : 'Entwurf verwerfen' }}</button>
           </template>
-          <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken / als PDF speichern</button>
+          <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken</button>
         </div>
       </section>
 

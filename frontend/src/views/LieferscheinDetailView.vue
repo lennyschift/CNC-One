@@ -1,11 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, Printer, PackageCheck, XCircle, FileText } from '@lucide/vue';
-import PdfVorschauDialog from '../components/PdfVorschauDialog.vue';
-import { call } from '../data/api.js';
+import { ArrowLeft, Printer, PackageCheck, XCircle } from '@lucide/vue';
 import { useUi } from '../stores/ui.js';
-import LieferscheinDokument from '../components/LieferscheinDokument.vue';
+import BelegPdf from '../components/BelegPdf.vue';
+import { belegPdfUrl, pdfDrucken } from '../lib/belegpdf.js';
 import StatusBadge from '../components/StatusBadge.vue';
 import { useLieferung } from '../stores/lieferung.js';
 import { useRechnung } from '../stores/rechnung.js';
@@ -21,19 +20,18 @@ function stornieren() {
   l.stornieren(ls.value.id);
   stornoFrage.value = false;
 }
-const drucken = () => window.print();
-// Das PDF vom Server; nach „geliefert“ ist es festgeschrieben
+// Angezeigt und gedruckt wird das PDF vom Server; nach „geliefert“ ist es festgeschrieben
 const ui = useUi();
-const pdf = ref(null);
-async function pdfAnsehen() {
-  try { pdf.value = await call('cnc_one.api.belegdruck.pdf_holen', { doctype: 'Lieferschein', id: ls.value.id }); } catch (e) { ui.toast(e.message, 'warn'); }
+const geladen = Date.now();
+const pdfUrl = computed(() => (ls.value ? belegPdfUrl('Lieferschein', ls.value.id, `${ls.value.status}-${geladen}`) : ''));
+async function drucken() {
+  try { await pdfDrucken(pdfUrl.value); } catch (e) { ui.toast(e.message, 'warn'); }
 }
 </script>
 
 <template>
   <div v-if="ls" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_340px]">
-    <LieferscheinDokument :lieferschein="ls" />
-    <PdfVorschauDialog v-if="pdf" :url="pdf.url" :name="pdf.name" @schliessen="pdf = null" />
+    <BelegPdf :url="pdfUrl" :name="`Lieferschein ${ls.id}.pdf`" />
 
     <aside class="no-print space-y-4 xl:sticky xl:top-0">
       <RouterLink to="/lieferscheine" class="inline-flex items-center gap-1.5 text-sm text-mute hover:text-ink"><ArrowLeft :size="15" /> Alle Lieferscheine</RouterLink>
@@ -42,7 +40,6 @@ async function pdfAnsehen() {
         <p class="mt-1 text-sm text-mute">{{ ls.kundeName }}</p>
         <div class="mt-5 space-y-2">
           <button v-if="ls.status === 'Bereit'" class="btn btn-primary w-full justify-center" @click="l.geliefertSetzen(ls.id)"><PackageCheck :size="16" /> Als geliefert markieren</button>
-          <button class="btn w-full justify-center" @click="pdfAnsehen"><FileText :size="16" /> PDF ansehen</button>
           <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken</button>
           <button v-if="ls.status !== 'Storniert'" class="btn w-full justify-center" :class="stornoFrage ? '!border-accent !bg-accent-soft !text-accent' : '!text-mute'" @click="stornieren"><XCircle :size="16" /> {{ stornoFrage ? 'Wirklich stornieren?' : 'Stornieren' }}</button>
         </div>

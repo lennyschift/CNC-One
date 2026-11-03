@@ -10,7 +10,7 @@ export class ApiFehler extends Error {
 
 const csrf = () => window.frappe_csrf_token || '';
 
-function textAus(data) {
+export function textAus(data) {
   try {
     const m = JSON.parse(data._server_messages || '[]');
     if (m.length) return String(JSON.parse(m[0]).message).replace(/<[^>]+>/g, '');

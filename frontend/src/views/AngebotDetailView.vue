@@ -1,12 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, FileText, Inbox, ClipboardList } from '@lucide/vue';
+import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, Inbox, ClipboardList } from '@lucide/vue';
 import AngebotMailDialog from '../components/AngebotMailDialog.vue';
-import { call } from '../data/api.js';
-import PdfVorschauDialog from '../components/PdfVorschauDialog.vue';
 import { useUi } from '../stores/ui.js';
-import AngebotDokument from '../components/AngebotDokument.vue';
+import BelegPdf from '../components/BelegPdf.vue';
+import { belegPdfUrl, pdfDrucken } from '../lib/belegpdf.js';
 import AuftragDialog from '../components/AuftragDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
 import WorkflowSteps from '../components/WorkflowSteps.vue';
@@ -21,11 +20,6 @@ const b = useBelege();
 const draft = useAngebot();
 const ui = useUi();
 const mailDialog = ref(false);
-const pdf = ref(null);
-// Das PDF, wie es verschickt wird (auf dem Server erzeugt)
-async function pdfAnsehen() {
-  try { pdf.value = await call('cnc_one.api.angebot.pdf', { id: angebot.value.id }); } catch (e) { ui.toast(e.message, 'warn'); }
-}
 
 const angebot = computed(() => b.angebot(route.params.id));
 const status = computed(() => (angebot.value ? b.statusVon(angebot.value) : ''));
@@ -37,7 +31,12 @@ const stand = computed(() => (status.value === 'Bestellt' ? 2 : status.value ===
 const beauftragt = computed(() => stand.value > 0);
 const auftraegeDazu = computed(() => b.auftraege.filter((x) => x.angebotId === angebot.value?.id && x.status !== 'Storniert'));
 
-const drucken = () => window.print();
+// Angezeigt und gedruckt wird das PDF, wie es verschickt wird (beim Entwurf frisch erzeugt, nach dem Senden das verschickte)
+const geladen = Date.now();
+const pdfUrl = computed(() => (angebot.value ? belegPdfUrl('Angebot', angebot.value.id, `${angebot.value.status}-${geladen}`) : ''));
+async function drucken() {
+  try { await pdfDrucken(pdfUrl.value); } catch (e) { ui.toast(e.message, 'warn'); }
+}
 
 function bearbeiten() {
   draft.ausAngebot(angebot.value);
@@ -54,7 +53,8 @@ function angelegt(auftrag) {
 
 <template>
   <div v-if="angebot" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_340px]">
-    <AngebotDokument :angebot="angebot" />
+    <BelegPdf v-if="angebot.kopf?.kundeId" :url="pdfUrl" :name="`Angebot ${angebot.id}.pdf`" />
+    <div v-else class="card grid min-h-[300px] place-items-center p-10 text-sm text-mute">Ohne Kunden gibt es noch kein PDF. Bitte das Angebot in der Workbench vervollständigen.</div>
 
     <aside class="no-print space-y-4 xl:sticky xl:top-0">
       <RouterLink to="/angebote" class="inline-flex items-center gap-1.5 text-sm text-mute hover:text-ink"><ArrowLeft :size="15" /> Alle Angebote</RouterLink>
@@ -81,7 +81,6 @@ function angelegt(auftrag) {
             <button v-if="status === 'Teilweise bestellt'" class="btn w-full justify-center" :class="auftraegeDazu.length === 1 ? '' : 'btn-primary'" @click="dialog = true"><ShoppingCart :size="16" /> Weitere Bauteile in Auftrag übernehmen</button>
             <button v-else class="btn w-full justify-center" title="Dasselbe Angebot noch einmal beauftragen, z. B. für einen Abruf" @click="dialog = true"><ShoppingCart :size="16" /> Weiteren Auftrag (Abruf) anlegen</button>
           </template>
-          <button class="btn w-full justify-center" @click="pdfAnsehen"><FileText :size="16" /> PDF ansehen</button>
           <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken</button>
           <button v-if="angebot.status === 'Gesendet' && !beauftragt" class="btn w-full justify-center !text-mute" @click="b.angebotAblehnen(angebot.id)"><XCircle :size="16" /> Als abgelehnt markieren</button>
           <button v-if="angebot.status === 'Entwurf'" class="btn w-full justify-center !text-mute" @click="loeschen"><Trash2 :size="16" /> Entwurf löschen</button>
@@ -108,7 +107,6 @@ function angelegt(auftrag) {
       <AngebotAnfragen :ziel="{ angebotId: angebot.id }" variante="karte" />
     </aside>
 
-    <PdfVorschauDialog v-if="pdf" :url="pdf.url" :name="pdf.name" @schliessen="pdf = null" />
     <AngebotMailDialog v-if="mailDialog" :angebot="angebot" @schliessen="mailDialog = false" @gesendet="mailDialog = false" />
     <AuftragDialog v-if="dialog" :angebot="angebot" @schliessen="dialog = false" @angelegt="angelegt" />
   </div>

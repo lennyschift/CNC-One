@@ -1,9 +1,12 @@
 <script setup>
 import { reactive, computed, ref } from 'vue';
-import { Plus, Trash2, AlertTriangle, Check } from '@lucide/vue';
+import { Plus, Trash2, AlertTriangle, Check, Upload, FileText } from '@lucide/vue';
 import StammNav from '../components/StammNav.vue';
 import NumField from '../components/NumField.vue';
+import PdfVorschauDialog from '../components/PdfVorschauDialog.vue';
 import { useFirma } from '../stores/firma.js';
+import { useUi } from '../stores/ui.js';
+import { hochladen } from '../data/api.js';
 import { benutzer } from '../data/repo.js';
 import { ibanGueltig, ibanFormatiert } from '../lib/iban.js';
 
@@ -16,6 +19,29 @@ const bankStatus = (b) => (!b.iban.trim() ? 'leer' : ibanGueltig(b.iban) ? 'ok' 
 const gueltig = computed(() => !!f.firmenname.trim() && f.banken.every((b) => bankStatus(b) !== 'falsch'));
 
 function ibanFertig(b) { if (ibanGueltig(b.iban)) b.iban = ibanFormatiert(b.iban); }
+// Kopfzeile der Belege: Bild hochladen und gleich speichern, damit das Muster und die nächsten Belege es zeigen
+const ui = useUi();
+const laedt = ref(false);
+const muster = ref(null);
+async function kopfzeileSetzen(url) {
+  const rec = await store.speichern({ ...JSON.parse(JSON.stringify(f)), briefkopf: url });
+  if (rec) Object.assign(f, JSON.parse(JSON.stringify(rec)));
+}
+async function kopfzeileHochladen(e) {
+  const datei = e.target.files?.[0];
+  e.target.value = '';
+  if (!datei) return;
+  laedt.value = true;
+  try {
+    const r = await hochladen(datei, { doctype: 'Firma', docname: 'Firma' });
+    await kopfzeileSetzen(r.file_url);
+  } catch (err) {
+    ui.toast(err.message, 'warn');
+  } finally {
+    laedt.value = false;
+  }
+}
+
 async function speichern() {
   speichert.value = true;
   const rec = await store.speichern(f);
@@ -43,7 +69,20 @@ async function speichern() {
           <label class="block"><span class="label mb-1 block">Webseite</span><input v-model="f.web" class="field" :disabled="!darf" /></label>
           <label class="block"><span class="label mb-1 block">Ansprechpartner für Rechnungen</span><input v-model="f.ansprechpartner" class="field" placeholder="Name, für die E-Rechnung" :disabled="!darf" /></label>
         </div>
-        <p class="mt-3 text-xs text-mute">Das Logo lässt sich später hier ergänzen.</p>
+      </section>
+
+      <section class="card p-5">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-sm font-semibold">Kopfzeile der Belege</h2>
+          <div class="flex gap-2">
+            <button type="button" class="btn !py-1 !text-xs" @click="muster = `/api/method/cnc_one.api.firma.briefbogen_muster?t=${Date.now()}`"><FileText :size="13" /> Muster ansehen</button>
+            <label v-if="darf" class="btn !py-1 !text-xs cursor-pointer"><Upload :size="13" /> {{ f.briefkopf ? 'Ersetzen' : 'Bild hochladen' }}<input type="file" accept="image/png,image/jpeg" class="hidden" :disabled="laedt" @change="kopfzeileHochladen" /></label>
+            <button v-if="darf && f.briefkopf" type="button" class="btn !py-1 !text-xs !text-mute" @click="kopfzeileSetzen('')"><Trash2 :size="13" /> Entfernen</button>
+          </div>
+        </div>
+        <div v-if="f.briefkopf" class="rounded-lg border border-line bg-white p-3"><img :src="f.briefkopf" alt="Kopfzeile" class="max-h-40 w-full object-contain object-left-top" /></div>
+        <p v-else class="text-xs text-mute">Noch kein Bild: Auf den Belegen steht oben der Firmenname mit Anschrift.</p>
+        <p class="mt-2 text-xs text-mute">PNG oder JPG über die volle Textbreite (18 cm, gut sind etwa 2100 Pixel Breite). Es steht oben auf der ersten Seite von Angebot, Rechnung, Lieferschein und Mahnung. Die Fußzeile steht auf jeder Seite ganz unten: Anschrift mit Handelsregister und USt-ID, daneben Telefon, E-Mail, Webseite und Geschäftsführer, rechts die Banken mit IBAN.</p>
       </section>
 
       <section class="card p-5">
@@ -87,5 +126,6 @@ async function speichern() {
       <div v-if="darf" class="flex justify-end"><button type="submit" class="btn btn-primary" :disabled="!gueltig || speichert" :class="!gueltig || speichert ? 'pointer-events-none opacity-40' : ''">Firmendaten speichern</button></div>
       <p v-else class="text-center text-xs text-mute">Die Firmendaten pflegt die Buchhaltung oder der Admin.</p>
     </form>
+    <PdfVorschauDialog v-if="muster" :url="muster" name="Briefbogen Muster.pdf" @schliessen="muster = null" />
   </div>
 </template>
