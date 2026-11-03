@@ -12,17 +12,15 @@ from cnc_one.api.angebot import _bild
 from cnc_one.api.bauteil import vorschau
 from cnc_one.api.firma import firma_ui
 from cnc_one.api.stamm import nur_cnc
-from cnc_one.logic import pdf
+from cnc_one.logic import briefbogen, pdf
 from cnc_one.logic.serien import formatiert
 
 
 def _vorlage(name, kontext):
 	from cnc_one.api.erechnung import _de, _eur
 
-	with open(frappe.get_app_path("cnc_one", "templates", "beleg_basis.css"), encoding="utf-8") as f:
-		basis = f.read()
 	with open(frappe.get_app_path("cnc_one", "templates", name), encoding="utf-8") as f:
-		return frappe.render_template(f.read(), {**kontext, "basis": basis, "de": _de, "eur": _eur})
+		return frappe.render_template(f.read(), {**kontext, "de": _de, "eur": _eur, "rahmen": briefbogen.rahmen(kontext["f"])})
 
 
 def _ablegen(doctype, doc, dateiname, offen, erzeugen, neu=False):
@@ -98,3 +96,68 @@ def pdf_holen(doctype, id):
 	doc.check_permission("read")
 	f = lieferschein_pdf_ablegen(doc) if doctype == "Lieferschein" else mahnung_pdf_ablegen(doc)
 	return {"url": f.file_url, "name": f.file_name}
+
+
+# ----------------------------------------------------------------- Ansehen und Drucken in der App
+def _inhalt(datei):
+	with open(datei.get_full_path(), "rb") as fh:
+		return datei.file_name, fh.read()
+
+
+def _angebot(doc):
+	from cnc_one.api.angebot import pdf_ablegen, pdf_erzeugen
+
+	if doc.status != "Entwurf":
+		return _inhalt(pdf_ablegen(doc))
+	if not doc.kunde:
+		frappe.throw(_("Bitte zuerst einen Kunden wählen."))
+	return f"Angebot {doc.name}.pdf", pdf_erzeugen(doc)
+
+
+def _rechnung(doc):
+	from cnc_one.api import erechnung
+
+	if doc.status == "Entwurf":
+		firma = erechnung._firma(doc)
+		return "Rechnung Entwurf.pdf", pdf.pdf_a3(erechnung._html(doc, firma), titel="Rechnung (Entwurf)", autor=firma.get("firmenname", ""))
+	name = erechnung._datei_suchen(doc)
+	if not name:
+		erechnung.erzeugen(doc)
+		name = erechnung._datei_suchen(doc)
+	return _inhalt(frappe.get_doc("File", name))
+
+
+def _lieferschein(doc):
+	if doc.status == "Bereit":
+		return f"Lieferschein {doc.name}.pdf", lieferschein_pdf_erzeugen(doc)
+	return _inhalt(lieferschein_pdf_ablegen(doc))
+
+
+def _mahnung(doc):
+	if doc.status == "Angelegt":
+		return f"{doc.stufe} {doc.name}.pdf", mahnung_pdf_erzeugen(doc)
+	return _inhalt(mahnung_pdf_ablegen(doc))
+
+
+ANSEHEN = {"Angebot": _angebot, "Rechnung": _rechnung, "Lieferschein": _lieferschein, "Mahnung": _mahnung}
+
+
+def ansehen_pdf(doctype, id):
+	"""(Dateiname, PDF) eines Belegs, so wie er verschickt wird. Offene Belege (Angebotsentwurf, Rechnungsentwurf mit
+	Stempel, bereiter Lieferschein, angelegte Mahnung) werden frisch erzeugt und nicht abgelegt; abgelegt wird erst beim
+	Senden, Festschreiben, Liefern oder Versenden. Abgeschlossene Belege zeigen ihr abgelegtes PDF."""
+	if doctype not in ANSEHEN:
+		frappe.throw(_("Für {0} gibt es hier kein PDF.").format(doctype))
+	doc = frappe.get_doc(doctype, id)
+	doc.check_permission("read")
+	return ANSEHEN[doctype](doc)
+
+
+@frappe.whitelist(methods=["GET"])
+def ansehen(doctype, id, v=None):
+	"""Das PDF zum Ansehen und Drucken in der App (inline). `v` ändert nur die Adresse, damit nichts Altes aus dem Zwischenspeicher kommt."""
+	nur_cnc()
+	name, inhalt = ansehen_pdf(doctype, id)
+	frappe.local.response.filename = name
+	frappe.local.response.filecontent = inhalt
+	frappe.local.response.type = "pdf"

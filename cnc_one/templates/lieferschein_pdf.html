@@ -5,13 +5,7 @@
 <title>Lieferschein {{ l.id }}</title>
 <meta name="author" content="{{ f.firmenname }}">
 <style>
-{{ basis | safe }}
-  .pos { display: flex; gap: 4mm; padding: 3mm 0; border-top: 0.4pt solid #e2e2e2; break-inside: avoid; }
-  .nr { color: #999; width: 7mm; flex: none; }
-  .bild { width: 15mm; height: 15mm; flex: none; border: 0.4pt solid #e2e2e2; border-radius: 1.5mm; object-fit: contain; }
-  .inhalt { flex: 1; }
-  .zeile { display: flex; justify-content: space-between; gap: 6mm; }
-  .name { font-weight: bold; }
+{{ rahmen.css | safe }}
   .menge { white-space: nowrap; font-weight: bold; font-size: 9.5pt; }
   .bemerkung { margin-top: 5mm; border-top: 0.4pt solid #e2e2e2; padding-top: 3mm; color: #555; white-space: pre-line; }
   .unterschrift { margin-top: 16mm; display: flex; gap: 14mm; break-inside: avoid; }
@@ -20,14 +14,8 @@
 </head>
 <body>
 {% if stempel %}<div class="stempel">{{ stempel }}</div>{% endif %}
-<div class="kopf">
-  <div><div class="firma">{{ f.firmenname }}</div><div class="unterzeile">CNC-Fertigung</div></div>
-  <div class="adresse-rechts">
-    {% for z in f.adresse %}<div>{{ z }}</div>{% endfor %}
-    {% if f.telefon %}<div>Tel. {{ f.telefon }}</div>{% endif %}
-    {% if f.email %}<div>{{ f.email }}</div>{% endif %}
-  </div>
-</div>
+{{ rahmen.fuss | safe }}
+{{ rahmen.kopf | safe }}
 
 <div class="block">
   <div>
@@ -64,10 +52,5 @@
   <div>Datum, Unterschrift Empfänger</div>
 </div>
 
-<div class="fuss">
-  <div><strong>{{ f.firmenname }}{% if f.rechtsform %} {{ f.rechtsform }}{% endif %}</strong>{% for z in f.adresse %}<br>{{ z }}{% endfor %}</div>
-  <div>{% if f.steuernummer %}Steuernummer {{ f.steuernummer }}<br>{% endif %}{% if f.ustId %}USt-IdNr. {{ f.ustId }}<br>{% endif %}{% if f.handelsregister %}{{ f.handelsregister }}<br>{% endif %}{% if f.geschaeftsfuehrer %}Geschäftsführer: {{ f.geschaeftsfuehrer }}{% endif %}</div>
-  <div>{% for b in f.banken %}{{ b.bezeichnung }}: {{ b.iban }}{% if b.bic %} · {{ b.bic }}{% endif %}<br>{% endfor %}</div>
-</div>
 </body>
 </html>

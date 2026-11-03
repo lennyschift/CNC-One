@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Briefbogen Muster</title>
+<style>
+{{ rahmen.css | safe }}
+  .muster p { color: #999; margin: 0 0 3mm; }
+</style>
+</head>
+<body>
+{{ rahmen.fuss | safe }}
+{{ rahmen.kopf | safe }}
+<div class="block">
+  <div>
+    <div class="label">Anschrift</div>
+    <div style="font-weight:bold">Musterkunde GmbH</div><div>Musterstraße 1</div><div>12345 Musterstadt</div>
+  </div>
+  <table class="meta">
+    <tr><td class="k">Beleg</td><td class="v"><strong>MUSTER</strong></td></tr>
+    <tr><td class="k">Datum</td><td class="v">{{ datum }}</td></tr>
+  </table>
+</div>
+<h1>Briefbogen – Muster</h1>
+<div class="muster">
+{% for i in range(34) %}<p>Blindtext Zeile {{ i + 1 }}: So viel Platz bleibt zwischen Kopf- und Fußzeile für die Positionen eines Belegs. Ab Seite 2 steht oben keine Kopfzeile mehr.</p>{% endfor %}
+</div>
+</body>
+</html>

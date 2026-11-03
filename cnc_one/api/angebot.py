@@ -193,7 +193,7 @@ def pdf_erzeugen(doc, zu_haenden=""):
 	"""Das Angebot als PDF (PDF/A-3, wie die Rechnung). Datum ist der Versandtag, sonst heute."""
 	from cnc_one.api.erechnung import _de, _eur
 	from cnc_one.api.firma import firma_ui
-	from cnc_one.logic import pdf
+	from cnc_one.logic import briefbogen, pdf
 
 	a = angebot_ui(doc)
 	for p in a["positionen"]:
@@ -210,6 +210,7 @@ def pdf_erzeugen(doc, zu_haenden=""):
 		"a": a, "f": firma, "kunde": kunde, "zu_haenden": zu_haenden or (kunde.get("kontakt") or {}).get("name", ""),
 		"datum": datum, "gueltig_bis": add_days(datum, 7 * int(doc.gueltig_wochen or 4)), "mwst": round((doc.netto or 0) * 0.19, 2),
 		"staffel": any(p["teil"]["staffel"].get("aktiv") for p in a["positionen"]), "de": _de, "eur": _eur,
+		"rahmen": briefbogen.rahmen(firma),
 	}
 	with open(frappe.get_app_path("cnc_one", PDF_VORLAGE), encoding="utf-8") as f:
 		html = frappe.render_template(f.read(), kontext)

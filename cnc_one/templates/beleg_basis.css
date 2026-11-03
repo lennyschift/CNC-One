@@ -1,11 +1,5 @@
-@page { size: A4; margin: 15mm 15mm 20mm 15mm;
-  @bottom-center { content: "Seite " counter(page) " von " counter(pages); font-family: "DejaVu Sans"; font-size: 7pt; color: #888; } }
 * { box-sizing: border-box; }
 body { font-family: "DejaVu Sans", sans-serif; font-size: 8.4pt; line-height: 1.45; color: #1c1c1c; margin: 0; }
-.kopf { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.6pt solid #d4242a; padding-bottom: 4mm; }
-.firma { font-size: 16pt; font-weight: bold; letter-spacing: 0.5pt; color: #d4242a; text-transform: uppercase; }
-.unterzeile { font-size: 6.5pt; letter-spacing: 2pt; text-transform: uppercase; color: #777; }
-.adresse-rechts { text-align: right; font-size: 7.5pt; color: #666; }
 .block { display: flex; justify-content: space-between; margin-top: 9mm; gap: 12mm; }
 .block > div { flex: 1; }
 .label { font-size: 6.5pt; letter-spacing: 1pt; text-transform: uppercase; color: #999; margin-bottom: 1mm; }
@@ -16,6 +10,18 @@ body { font-family: "DejaVu Sans", sans-serif; font-size: 8.4pt; line-height: 1.
 h1 { font-size: 13pt; margin: 9mm 0 2mm; }
 .einleitung { color: #555; margin-bottom: 4mm; white-space: pre-line; }
 .klein { font-size: 7.6pt; color: #666; }
-.fuss { margin-top: 10mm; border-top: 0.6pt solid #bbb; padding-top: 2mm; display: flex; gap: 8mm; font-size: 6.6pt; color: #777; line-height: 1.5; break-inside: avoid; }
-.fuss > div { flex: 1; }
-.stempel { position: fixed; top: 90mm; left: 30mm; transform: rotate(-24deg); font-size: 44pt; font-weight: bold; color: #e2e2e2; letter-spacing: 6pt; }
+/* Positionen: Nummer, Bauteilbild, Inhalt (Name, Angaben) und Betrag rechts – gleich in allen Belegen */
+.pos { display: flex; gap: 4mm; padding: 3mm 0; border-top: 0.4pt solid #e2e2e2; break-inside: avoid; }
+.nr { color: #999; width: 7mm; flex: none; }
+.bild { width: 17mm; height: 17mm; flex: none; border: 0.4pt solid #e2e2e2; border-radius: 1.5mm; object-fit: contain; }
+.inhalt { flex: 1; }
+.zeile { display: flex; justify-content: space-between; gap: 6mm; }
+.name { font-weight: bold; }
+.preis { white-space: nowrap; text-align: right; }
+.kosten { display: flex; justify-content: space-between; padding-left: 4mm; color: #555; font-size: 7.8pt; margin-top: 0.6mm; }
+.summen { display: flex; justify-content: flex-end; margin-top: 3mm; border-top: 1.2pt solid #333; padding-top: 2mm; break-inside: avoid; }
+.summen table { width: 75mm; border-collapse: collapse; }
+.summen td { padding: 0.6mm 0; }
+.summen .r { text-align: right; white-space: nowrap; }
+.summen .gesamt td { border-top: 0.6pt solid #888; padding-top: 1.6mm; font-weight: bold; font-size: 10pt; }
+.schluss { margin-top: 8mm; color: #444; break-inside: avoid; }

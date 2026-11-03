@@ -12,7 +12,7 @@ from frappe import _
 from cnc_one.api.firma import firma_ui
 from cnc_one.api.rechnung import BUCHHALTUNG, FESTGESCHRIEBEN, kaeufer_felder, rechnung_ui
 from cnc_one.api.stamm import nur_cnc
-from cnc_one.logic import erechnung, pdf
+from cnc_one.logic import briefbogen, erechnung, pdf
 from cnc_one.logic.kalkulation import r2
 
 STATUS_ZUGFERD = "ZUGFeRD"
@@ -152,13 +152,18 @@ def _zuschlaege_markieren(positionen):
 
 
 def _html(doc, firma):
+	from cnc_one.api.angebot import _bild
+	from cnc_one.api.bauteil import vorschau
+
 	r = rechnung_ui(doc)
 	r["firma"] = firma
 	_zuschlaege_markieren(r["positionen"])
+	for p in r["positionen"]:
+		p["bild"] = _bild(vorschau(p["bauteilId"])) if p.get("art") == "Bauteil" and p.get("bauteilId") else ""
 	storno = doc.art == "Storno"
 	von, bis = _de(doc.leistung_von), _de(doc.leistung_bis)
 	kontext = {
-		"r": r, "f": firma, "storno": storno, "de": _de, "eur": _eur,
+		"r": r, "f": firma, "storno": storno, "de": _de, "eur": _eur, "rahmen": briefbogen.rahmen(firma),
 		"leistung": von if von == bis else f"{von} – {bis}" if von and bis else "",
 		"vorgaenger_nummer": frappe.db.get_value("Rechnung", doc.storno_zu, "rechnungsnummer") if doc.storno_zu else "",
 	}

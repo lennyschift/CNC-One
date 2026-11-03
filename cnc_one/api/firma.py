@@ -25,6 +25,7 @@ def firma_ui(d=None):
 		"zahlungszielTage": d.zahlungsziel_tage or 14,
 		"mahnfristTage": d.mahnfrist_tage or 7,
 		"mahngebuehr": d.mahngebuehr or 0,
+		"briefkopf": d.briefkopf or "",
 	}
 
 
@@ -58,6 +59,9 @@ def speichern(daten):
 		d.mahnfrist_tage = max(0, int(daten["mahnfristTage"] or 0))
 	if "mahngebuehr" in daten:
 		d.mahngebuehr = max(0, float(daten["mahngebuehr"] or 0))
+	if "briefkopf" in daten and (daten["briefkopf"] or "") != (d.briefkopf or ""):
+		_alte_kopfzeile_entfernen(d.briefkopf)
+		d.briefkopf = daten["briefkopf"] or ""
 	if "banken" in daten:
 		d.set("banken", [])
 		for b in daten["banken"] or []:
@@ -69,3 +73,22 @@ def speichern(daten):
 			d.append("banken", {"bezeichnung": (b.get("bezeichnung") or "").strip() or iban, "iban": iban, "bic": (b.get("bic") or "").strip().upper()})
 	d.save()
 	return firma_ui(d)
+
+
+def _alte_kopfzeile_entfernen(url):
+	"""Die bisherige Kopfzeile löschen, wenn sie nur an den Firmendaten hängt (fertige Belege haben ihr PDF schon)."""
+	if not url:
+		return
+	for name in frappe.get_all("File", filters={"file_url": url, "attached_to_doctype": "Firma"}, pluck="name"):
+		frappe.delete_doc("File", name, ignore_permissions=True)
+
+
+@frappe.whitelist(methods=["GET"])
+def briefbogen_muster():
+	"""Musterbeleg mit Kopf- und Fußzeile über zwei Seiten (ohne Kunden- oder Belegdaten), zum Ansehen in den Firmendaten."""
+	nur_cnc()
+	from cnc_one.logic import briefbogen, pdf
+
+	frappe.local.response.filename = "Briefbogen Muster.pdf"
+	frappe.local.response.filecontent = pdf.pdf_a3(briefbogen.muster_html(firma_ui()), titel="Briefbogen Muster")
+	frappe.local.response.type = "download"

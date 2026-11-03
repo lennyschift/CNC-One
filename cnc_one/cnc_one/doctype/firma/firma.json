@@ -23,6 +23,7 @@
   "banken",
   "sb_beleg",
   "logo",
+  "briefkopf",
   "rechnung_text",
   "rechnung_fusstext",
   "zahlungsziel_tage",
@@ -129,6 +130,12 @@
    "fieldname": "logo",
    "fieldtype": "Attach Image",
    "label": "Logo"
+  },
+  {
+   "fieldname": "briefkopf",
+   "fieldtype": "Attach Image",
+   "label": "Kopfzeile der Belege (Bild)",
+   "description": "PNG über die volle Textbreite (18 cm), steht oben auf Seite 1 von Angebot, Rechnung, Lieferschein und Mahnung"
   },
   {
    "fieldname": "rechnung_text",

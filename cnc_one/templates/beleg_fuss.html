@@ -1,0 +1,13 @@
+<div class="fuss">
+  <div class="fuss-spalten">
+    <div><strong>{{ f.firmenname }}</strong><br>{% for z in f.adresse %}{{ z }}<br>{% endfor %}{% if f.handelsregister %}{{ f.handelsregister }}<br>{% endif %}{% if f.ustId %}USt-ID-Nr.: {{ f.ustId }}{% endif %}</div>
+    <div class="kontakt">
+      {% if f.telefon %}<div><img src="{{ symbol.telefon }}">Telefon {{ f.telefon }}</div>{% endif %}
+      {% if f.email %}<div><img src="{{ symbol.mail }}">{{ f.email }}</div>{% endif %}
+      {% if f.web %}<div><img src="{{ symbol.web }}">{{ f.web }}</div>{% endif %}
+      {% if f.geschaeftsfuehrer %}<div><img src="{{ symbol.person }}">Geschäftsführer: {{ f.geschaeftsfuehrer }}</div>{% endif %}
+    </div>
+    <div class="banken">{% for b in f.banken %}<div class="bank"><strong>{{ b.bezeichnung }}</strong><br>IBAN {{ b.iban }}</div>{% endfor %}</div>
+  </div>
+  <div class="seitenzahl"></div>
+</div>

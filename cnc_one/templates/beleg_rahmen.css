@@ -1,0 +1,19 @@
+/* Kopf und Fuß aller Belege (Angebot, Rechnung, Lieferschein, Mahnung). Der Fuß steht auf jeder Seite ganz unten. */
+@page { size: A4; margin: 15mm 15mm 40mm 15mm;
+  @bottom-center { content: element(fuss); width: 180mm; vertical-align: top; padding-top: 4mm; } }
+.briefkopf { border-bottom: 1.6pt solid #d4242a; padding-bottom: 3mm; }
+.briefkopf img { display: block; width: 100%; max-height: 55mm; object-fit: contain; object-position: left top; }
+.kopf { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.6pt solid #d4242a; padding-bottom: 4mm; }
+.firma { font-size: 16pt; font-weight: bold; letter-spacing: 0.5pt; color: #d4242a; text-transform: uppercase; }
+.unterzeile { font-size: 6.5pt; letter-spacing: 2pt; text-transform: uppercase; color: #777; }
+.adresse-rechts { text-align: right; font-size: 7.5pt; color: #666; }
+.fuss { position: running(fuss); width: 100%; font-family: "DejaVu Sans", sans-serif; font-size: 6.8pt; color: #444; line-height: 1.6; }
+.fuss-spalten { display: flex; justify-content: space-between; gap: 6mm; border-top: 1pt solid #d4242a; padding-top: 2.5mm; }
+.fuss-spalten > div { flex: 0 1 auto; }
+.fuss .kontakt img { width: 2.7mm; height: 2.7mm; vertical-align: -0.55mm; margin-right: 2mm; }
+.fuss .banken { flex: none; white-space: nowrap; }
+.fuss .bank + .bank { margin-top: 2.2mm; }
+.fuss strong { color: #1c1c1c; }
+.seitenzahl { margin-top: 2mm; text-align: center; font-size: 6.5pt; color: #999; }
+.seitenzahl::after { content: "Seite " counter(page) " von " counter(pages); }
+.stempel { position: fixed; top: 90mm; left: 30mm; transform: rotate(-24deg); font-size: 44pt; font-weight: bold; color: #e2e2e2; letter-spacing: 6pt; }

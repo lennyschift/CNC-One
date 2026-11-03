@@ -1,0 +1,12 @@
+{% if bild %}
+<div class="briefkopf"><img src="{{ bild }}" alt="{{ f.firmenname }}"></div>
+{% else %}
+<div class="kopf">
+  <div><div class="firma">{{ f.firmenname }}</div><div class="unterzeile">CNC-Fertigung</div></div>
+  <div class="adresse-rechts">
+    {% for z in f.adresse %}<div>{{ z }}</div>{% endfor %}
+    {% if f.telefon %}<div>Tel. {{ f.telefon }}</div>{% endif %}
+    {% if f.email %}<div>{{ f.email }}</div>{% endif %}
+  </div>
+</div>
+{% endif %}

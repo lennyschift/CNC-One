@@ -406,6 +406,7 @@ DOCTYPES += [
         Table("banken", "Firma Bank", "Banken"),
         Section("sb_beleg", "Belege"),
         F("logo", "Attach Image", "Logo"),
+        F("briefkopf", "Attach Image", "Kopfzeile der Belege (Bild)", description="PNG über die volle Textbreite (18 cm), steht oben auf Seite 1 von Angebot, Rechnung, Lieferschein und Mahnung"),
         Text("rechnung_text", "Einleitungstext der Rechnung"),
         Text("rechnung_fusstext", "Fußtext der Rechnung"),
         Int("zahlungsziel_tage", "Zahlungsziel (Tage)", default="14"),

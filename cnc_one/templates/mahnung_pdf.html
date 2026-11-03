@@ -5,26 +5,20 @@
 <title>{{ m.stufe }} {{ m.id }}</title>
 <meta name="author" content="{{ f.firmenname }}">
 <style>
-{{ basis | safe }}
+{{ rahmen.css | safe }}
   .text { white-space: pre-line; color: #333; }
   table.betrag { margin-top: 6mm; width: 95mm; border-collapse: collapse; }
   table.betrag td { padding: 1.2mm 0; border-bottom: 0.4pt solid #e2e2e2; }
   table.betrag .r { text-align: right; white-space: nowrap; }
   table.betrag .summe td { border-bottom: 0; border-top: 0.8pt solid #888; padding-top: 2mm; font-weight: bold; font-size: 10pt; }
-  .bank { margin-top: 7mm; color: #444; break-inside: avoid; }
+  .ueberweisung { margin-top: 7mm; color: #444; break-inside: avoid; }
   .gruss { margin-top: 7mm; color: #444; }
 </style>
 </head>
 <body>
 {% if stempel %}<div class="stempel">{{ stempel }}</div>{% endif %}
-<div class="kopf">
-  <div><div class="firma">{{ f.firmenname }}</div><div class="unterzeile">CNC-Fertigung</div></div>
-  <div class="adresse-rechts">
-    {% for z in f.adresse %}<div>{{ z }}</div>{% endfor %}
-    {% if f.telefon %}<div>Tel. {{ f.telefon }}</div>{% endif %}
-    {% if f.email %}<div>{{ f.email }}</div>{% endif %}
-  </div>
-</div>
+{{ rahmen.fuss | safe }}
+{{ rahmen.kopf | safe }}
 
 <div class="block">
   <div>
@@ -49,15 +43,10 @@
 </table>
 
 {% if f.banken %}
-<div class="bank"><strong>Bitte überweisen Sie unter Angabe der Rechnungsnummer {{ m.rechnungNummer }} auf eines unserer Konten:</strong><br>
+<div class="ueberweisung"><strong>Bitte überweisen Sie unter Angabe der Rechnungsnummer {{ m.rechnungNummer }} auf eines unserer Konten:</strong><br>
 {% for b in f.banken %}{{ b.bezeichnung }}: IBAN {{ b.iban }}{% if b.bic %}, BIC {{ b.bic }}{% endif %}<br>{% endfor %}</div>
 {% endif %}
 <div class="gruss">Mit freundlichen Grüßen<br>{{ f.firmenname }}</div>
 
-<div class="fuss">
-  <div><strong>{{ f.firmenname }}{% if f.rechtsform %} {{ f.rechtsform }}{% endif %}</strong>{% for z in f.adresse %}<br>{{ z }}{% endfor %}</div>
-  <div>{% if f.steuernummer %}Steuernummer {{ f.steuernummer }}<br>{% endif %}{% if f.ustId %}USt-IdNr. {{ f.ustId }}<br>{% endif %}{% if f.handelsregister %}{{ f.handelsregister }}<br>{% endif %}{% if f.geschaeftsfuehrer %}Geschäftsführer: {{ f.geschaeftsfuehrer }}{% endif %}</div>
-  <div>{% for b in f.banken %}{{ b.bezeichnung }}: {{ b.iban }}{% if b.bic %} · {{ b.bic }}{% endif %}<br>{% endfor %}</div>
-</div>
 </body>
 </html>
