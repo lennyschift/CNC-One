@@ -4,7 +4,7 @@
 import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { watchDebounced } from '@vueuse/core';
-import { Search, FolderOpen, FileText, Box, Receipt, FileCode2, Mail, File, ScrollText, RefreshCw, Download, Tag, Link2, Truck, Bell, ShoppingBag } from '@lucide/vue';
+import { Search, FolderOpen, FileText, Box, Receipt, FileCode2, Mail, File, ScrollText, RefreshCw, Download, Tag, Link2, Truck, Bell, ShoppingBag, Lock, Archive, History, PackageOpen } from '@lucide/vue';
 import CustomerCombobox from '../components/CustomerCombobox.vue';
 import { call } from '../data/api.js';
 import { useUi } from '../stores/ui.js';
@@ -33,6 +33,8 @@ const BELEG = {
 const suche = ref(route.query.q ?? '');
 const art = ref(route.query.art ?? '');
 const kunde = ref(route.query.kunde ?? '');
+const von = ref(route.query.von ?? '');
+const bis = ref(route.query.bis ?? '');
 const liste = ref([]);
 const arten = ref({});
 const laedt = ref(false);
@@ -40,7 +42,7 @@ const laedt = ref(false);
 async function laden() {
   laedt.value = true;
   try {
-    const r = await call('cnc_one.api.dokumente.liste', { suche: suche.value, art: art.value, kunde: kunde.value });
+    const r = await call('cnc_one.api.dokumente.liste', { suche: suche.value, art: art.value, kunde: kunde.value, von: von.value, bis: bis.value });
     liste.value = r.dokumente;
     arten.value = r.arten;
   } catch (e) {
@@ -51,8 +53,13 @@ async function laden() {
 }
 onMounted(laden);
 watchDebounced(suche, laden, { debounce: 300 });
-watch([art, kunde], laden);
-watch([suche, art, kunde], () => router.replace({ query: { ...route.query, q: suche.value || undefined, art: art.value || undefined, kunde: kunde.value || undefined } }));
+watch([art, kunde, von, bis], laden);
+watch([suche, art, kunde, von, bis], () => router.replace({ query: { ...route.query, q: suche.value || undefined, art: art.value || undefined, kunde: kunde.value || undefined, von: von.value || undefined, bis: bis.value || undefined } }));
+// Export der gefilterten Dokumente als ZIP (mit Verzeichnis und Prüfsummen); der Klick lädt herunter
+const exportUrl = computed(() => {
+  const q = new URLSearchParams(Object.entries({ suche: suche.value, art: art.value, kunde: kunde.value, von: von.value, bis: bis.value }).filter(([, v]) => v));
+  return `/api/method/cnc_one.api.dokumente.export?${q}`;
+});
 
 async function aktualisieren() {
   try {
@@ -68,13 +75,21 @@ function waehlen(d) { router.replace({ path: `/dokumente/${d.id}`, query: route.
 
 // Schlagworte und Notiz: beim Verlassen des Feldes speichern
 const pflege = ref({ schlagworte: '', notiz: '' });
-watch(gewaehlt, (d) => { pflege.value = { schlagworte: d?.schlagworte ?? '', notiz: d?.notiz ?? '' }; }, { immediate: true });
+const verlauf = ref([]);
+watch(gewaehlt, async (d) => {
+  pflege.value = { schlagworte: d?.schlagworte ?? '', notiz: d?.notiz ?? '' };
+  verlauf.value = [];
+  if (!d) return;
+  try { verlauf.value = (await call('cnc_one.api.dokumente.detail', { id: d.id })).verlauf; } catch { /* Verlauf ist nicht wichtig */ }
+}, { immediate: true });
 async function speichern(feld) {
   const d = gewaehlt.value;
   if (!d || pflege.value[feld] === d[feld]) return;
   try {
     const neu = await call('cnc_one.api.dokumente.pflegen', { id: d.id, [feld]: pflege.value[feld] });
-    Object.assign(d, neu);
+    const { verlauf: v, ...rest } = neu;
+    Object.assign(d, rest);
+    verlauf.value = v ?? verlauf.value;
     pflege.value[feld] = neu[feld];
   } catch (e) { ui.toast(e.message, 'warn'); }
 }
@@ -82,6 +97,8 @@ async function speichern(feld) {
 const anzahl = computed(() => Object.values(arten.value).reduce((a, b) => a + b, 0));
 const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)} KB`);
 const datum = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
+const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+const AKTION = { Abgelegt: 'text-ok', Geändert: 'text-accent', Gelöscht: 'text-warn', Exportiert: 'text-mute' };
 const vorschau = (d) => (d.endung === 'pdf' ? 'pdf' : ['stp', 'step'].includes(d.endung) ? '3d' : ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(d.endung) ? 'bild' : '');
 </script>
 
@@ -95,6 +112,14 @@ const vorschau = (d) => (d.endung === 'pdf' ? 'pdf' : ['stp', 'step'].includes(d
       <div class="w-64"><CustomerCombobox v-model="kunde" /></div>
       <button v-if="kunde" class="text-xs text-mute hover:text-ink" @click="kunde = ''">alle Kunden</button>
       <button class="btn" title="Register mit den Dateien abgleichen" @click="aktualisieren"><RefreshCw :size="15" :class="laedt ? 'animate-spin' : ''" /> Aktualisieren</button>
+      <a class="btn" :href="exportUrl" title="Gefilterte Dokumente als ZIP mit Verzeichnis (CSV) und Prüfsummen herunterladen"><PackageOpen :size="15" /> Exportieren</a>
+    </div>
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-mute">
+      <span>Zeitraum</span>
+      <input v-model="von" type="date" class="field !w-40 !py-1" />
+      <span>bis</span>
+      <input v-model="bis" type="date" class="field !w-40 !py-1" />
+      <button v-if="von || bis" class="hover:text-ink" @click="von = ''; bis = ''">zurücksetzen</button>
     </div>
 
     <div class="mb-4 flex flex-wrap gap-1.5">
@@ -126,7 +151,7 @@ const vorschau = (d) => (d.endung === 'pdf' ? 'pdf' : ['stp', 'step'].includes(d
                 <div class="flex items-center gap-2.5">
                   <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface2 text-accent"><component :is="ICON[d.art] ?? File" :size="16" /></span>
                   <div class="min-w-0">
-                    <div class="truncate font-medium">{{ d.titel }}</div>
+                    <div class="flex items-center gap-1.5 truncate font-medium">{{ d.titel }}<Lock v-if="d.gesperrt" :size="12" class="shrink-0 text-mute" :title="`Aufzubewahren bis ${datum(d.aufbewahrenBis)}`" /></div>
                     <div class="truncate text-xs text-mute">
                       {{ d.art }}<template v-if="d.teilenummer"> · {{ d.teilenummer }}</template><template v-if="d.revision"> · Rev. {{ d.revision }}</template><template v-if="d.fassung === 'Ältere Fassung'"> · ältere Fassung</template> · {{ groesse(d.groesse) }}
                     </div>
@@ -175,8 +200,26 @@ const vorschau = (d) => (d.endung === 'pdf' ? 'pdf' : ['stp', 'step'].includes(d
             </div>
             <p v-if="gewaehlt.kundeName" class="mt-1.5 text-xs text-mute">Kunde: <span class="text-ink">{{ gewaehlt.kundeName }}</span></p>
           </div>
+          <div class="rounded-xl bg-surface2 px-3 py-2 text-xs">
+            <div class="flex items-center gap-1.5 font-medium"><Archive :size="13" class="text-accent" /> Aufbewahrung</div>
+            <p v-if="gewaehlt.gesperrt" class="mt-0.5 text-mute"><Lock :size="11" class="inline" /> Abgeschlossen, aufzubewahren bis <strong class="text-ink">{{ datum(gewaehlt.aufbewahrenBis) }}</strong>; bis dahin nicht löschbar.</p>
+            <p v-else-if="gewaehlt.abgeschlossen && gewaehlt.aufbewahrenBis" class="mt-0.5 text-mute">Frist abgelaufen am {{ datum(gewaehlt.aufbewahrenBis) }}.</p>
+            <p v-else-if="gewaehlt.abgeschlossen" class="mt-0.5 text-mute">Abgeschlossen, für diese Art gilt keine Aufbewahrungspflicht.</p>
+            <p v-else class="mt-0.5 text-mute">Noch nicht abgeschlossen (z. B. Entwurf); die Frist beginnt mit dem Abschluss<template v-if="gewaehlt.aufbewahrenBis">, voraussichtlich bis {{ datum(gewaehlt.aufbewahrenBis) }}</template>.</p>
+          </div>
           <label class="block"><span class="label mb-1 flex items-center gap-1"><Tag :size="12" /> Schlagworte</span><input v-model="pflege.schlagworte" class="field" placeholder="z. B. Erstmuster, eilig" @blur="speichern('schlagworte')" @keydown.enter="speichern('schlagworte')" /></label>
           <label class="block"><span class="label mb-1 block">Notiz</span><textarea v-model="pflege.notiz" rows="3" class="field" placeholder="Hinweis zum Dokument" @blur="speichern('notiz')" /></label>
+          <div v-if="verlauf.length">
+            <h3 class="mb-1.5 flex items-center gap-1.5 text-xs font-semibold"><History :size="13" class="text-accent" /> Verlauf</h3>
+            <ul class="space-y-1 text-xs">
+              <li v-for="(v, i) in verlauf" :key="i" class="flex flex-wrap gap-x-2">
+                <span class="tnum text-mute">{{ zeit(v.zeit) }}</span>
+                <span class="font-medium" :class="AKTION[v.aktion]">{{ v.aktion }}</span>
+                <span class="text-mute">{{ v.benutzer }}<template v-if="v.beleg"> · {{ v.beleg }}</template></span>
+                <span v-if="v.details" class="w-full whitespace-pre-line pl-1 text-mute">{{ v.details }}</span>
+              </li>
+            </ul>
+          </div>
         </section>
       </aside>
       <div v-else class="card hidden flex-col items-center justify-center p-14 text-sm text-mute xl:flex"><FolderOpen :size="30" :stroke-width="1.4" class="mb-2" /> Dokument links auswählen</div>
