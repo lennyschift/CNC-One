@@ -4,7 +4,7 @@
 import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Inbox, RefreshCw, Paperclip, FileText, Box, Table2, File, Building2, UserPlus, Check, Ban, Reply, Settings, MailWarning, Calculator, ArrowRight } from '@lucide/vue';
+import { Inbox, RefreshCw, Paperclip, FileText, Box, Table2, File, FileArchive, Building2, UserPlus, Check, Ban, Reply, Settings, MailWarning, Calculator, ArrowRight } from '@lucide/vue';
 import { useAngebot } from '../stores/angebot.js';
 import StatusBadge from '../components/StatusBadge.vue';
 import CustomerCombobox from '../components/CustomerCombobox.vue';
@@ -89,7 +89,13 @@ async function verwerfen() {
 
 // ---- Anhänge
 const vorschau = ref(null);
-const ICON = { Zeichnung: FileText, STEP: Box, Tabelle: Table2, Datei: File };
+const ICON = { Zeichnung: FileText, STEP: Box, Tabelle: Table2, ZIP: FileArchive, Datei: File };
+// Anhänge der Nachricht: die direkten (auch die ZIP selbst) und je ZIP die daraus ausgepackten Dateien
+function ausZip(n) {
+  const je = new Map();
+  for (const a of n.anhaenge) if (a.aus) je.set(a.aus, [...(je.get(a.aus) ?? []), a]);
+  return [...je].map(([zip, dateien]) => ({ zip, dateien }));
+}
 const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)} KB`);
 const ansehbar = (a) => a.art === 'Zeichnung' || a.art === 'STEP';
 // Je Nachricht: HTML (wie im Mailprogramm) oder reiner Text
@@ -211,12 +217,21 @@ const kurzZeit = (iso) => {
             <button v-if="n.html" class="mt-1 text-[11px] text-mute hover:text-ink" @click="alsText[i] = false">Wie im Mailprogramm anzeigen</button>
           </template>
           <div v-if="n.anhaenge.length" class="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
-            <span class="mr-1 inline-flex items-center gap-1 text-xs text-mute"><Paperclip :size="13" /> {{ n.anhaenge.length }}</span>
+            <span class="mr-1 inline-flex items-center gap-1 text-xs text-mute"><Paperclip :size="13" /> {{ n.anhaenge.filter((x) => !x.aus).length }}</span>
             <component
-              :is="ansehbar(a) ? 'button' : 'a'" v-for="a in n.anhaenge" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
+              :is="ansehbar(a) ? 'button' : 'a'" v-for="a in n.anhaenge.filter((x) => !x.aus)" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
               class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
             >
               <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
+            </component>
+          </div>
+          <div v-for="z in ausZip(n)" :key="z.zip" class="mt-2 flex flex-wrap gap-2 rounded-lg bg-surface2/60 p-2">
+            <span class="mr-1 inline-flex w-full items-center gap-1 text-[11px] text-mute"><FileArchive :size="12" /> Ausgepackt aus {{ z.zip }} · {{ z.dateien.length }} Datei{{ z.dateien.length === 1 ? '' : 'en' }}</span>
+            <component
+              :is="ansehbar(a) ? 'button' : 'a'" v-for="a in z.dateien" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
+              class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" :title="a.ordner ? `${a.ordner}/${a.name}` : a.name" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
+            >
+              <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate"><span v-if="a.ordner" class="opacity-60">{{ a.ordner }} / </span>{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
             </component>
           </div>
           <p v-if="n.hinweis" class="mt-2 flex items-start gap-1.5 text-xs text-warn"><MailWarning :size="13" class="mt-0.5 shrink-0" /> {{ n.hinweis }}</p>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gruppieren, mengenAusText } from './mailanfrage.js';
+import { gruppieren, mengenAusText, dateiPfad } from './mailanfrage.js';
 
 describe('Bauteile aus den Anhängen einer Mail', () => {
   it('Zeichnung und Modell mit gleichem Namen ergeben ein Bauteil', () => {
@@ -7,6 +7,24 @@ describe('Bauteile aus den Anhängen einer Mail', () => {
       { name: 'ZZ-3D-001_Flansch.pdf' }, { name: 'ZZ-3D-002_Halteblock.pdf' }, { name: 'zz-3d-001 flansch.step' }, { name: 'ZZ-3D-002_Halteblock.stp' },
     ]);
     expect(g.map((x) => [x.basis, x.dateien.length])).toEqual([['ZZ-3D-001_Flansch', 2], ['ZZ-3D-002_Halteblock', 2]]);
+  });
+
+  it('aus einer ZIP: der Ordner ist das Bauteil, wenn die Dateien allgemein heißen', () => {
+    const g = gruppieren([
+      { name: 'Zeichnung.pdf', art: 'Zeichnung', ordner: '4711-A' }, { name: 'Modell.stp', art: 'STEP', ordner: '4711-A' },
+      { name: 'Zeichnung.pdf', art: 'Zeichnung', ordner: '4712-B' }, { name: '4712-B.step', art: 'STEP', ordner: '4712-B' },
+      { name: 'ZZ-9.pdf', art: 'Zeichnung', ordner: '4713-C' }, { name: 'ZZ-9.stp', art: 'STEP', ordner: '4713-C' },
+    ]);
+    expect(g.map((x) => [x.basis, x.dateien.length])).toEqual([['4711-A', 2], ['4712-B', 2], ['ZZ-9', 2]]);
+  });
+
+  it('aus einer ZIP: ein Sammelordner zählt nicht als Bauteil', () => {
+    const g = gruppieren([
+      { name: 'ZZ-1.pdf', art: 'Zeichnung', ordner: 'Zeichnungen' }, { name: 'ZZ-2.pdf', art: 'Zeichnung', ordner: 'Zeichnungen' },
+      { name: 'ZZ-1.stp', art: 'STEP', ordner: 'Modelle' }, { name: 'ZZ-2.stp', art: 'STEP', ordner: 'Modelle' },
+    ]);
+    expect(g.map((x) => [x.basis, x.dateien.length])).toEqual([['ZZ-1', 2], ['ZZ-2', 2]]);
+    expect(dateiPfad({ name: 'Zeichnung.pdf', ordner: '4711-A' })).toBe('4711-A/Zeichnung.pdf');
   });
 });
 

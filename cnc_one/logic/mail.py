@@ -9,11 +9,13 @@ import base64
 import email
 import hashlib
 import imaplib
+import io
 import json
 import re
 import smtplib
 import ssl
 import time
+import zipfile
 from email.policy import default as POLICY
 from email.utils import getaddresses, parsedate_to_datetime
 from zoneinfo import ZoneInfo
@@ -31,6 +33,11 @@ FREEMAIL = {
 MONATE = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 MAX_TEXT = 200_000
 MAX_HTML = 500_000
+# Aus ZIP-Anhängen werden Zeichnungen und CAD-Dateien übernommen, der Rest bleibt in der ZIP
+AUS_ZIP = ("pdf", "stp", "step", "igs", "iges", "dxf", "dwg")
+ZIP_MAX_DATEIEN = 500
+ZIP_MAX_MB = 500
+ZIP_BALLAST = (".ds_store", "thumbs.db", "desktop.ini")
 
 
 def einstellungen():
@@ -395,6 +402,58 @@ def _anhaenge(msg):
 	return out
 
 
+def _zip_name(info):
+	"""Pfad im ZIP mit richtigen Umlauten: ohne UTF-8-Kennzeichen steht er im DOS-Zeichensatz (deutsches Windows: cp850)."""
+	if info.flag_bits & 0x800:
+		return info.filename
+	roh = info.filename.encode("cp437")
+	try:
+		return roh.decode("utf-8")
+	except UnicodeDecodeError:
+		return roh.decode("cp850")
+
+
+def zip_auspacken(name, inhalt, tiefe=0):
+	"""Dateien aus einem ZIP-Anhang: ([(dateiname, ordner, inhalt)], [hinweise]).
+
+	Pfade aus dem Archiv werden nie als Pfad benutzt: Es zählt nur der Dateiname, dazu der letzte Ordner (oft die
+	Teilenummer, wenn die Dateien nur „Zeichnung.pdf“ und „Modell.stp“ heißen). Eine ZIP in der ZIP wird eine Ebene
+	tief mit ausgepackt; ihr Name gilt dann als Ordner."""
+	try:
+		z = zipfile.ZipFile(io.BytesIO(inhalt))
+		infos = [i for i in z.infolist() if not i.is_dir()]
+	except (zipfile.BadZipFile, ValueError):
+		return [], [_("{0}: kein gültiges ZIP-Archiv, nicht ausgepackt").format(name)]
+	if len(infos) > ZIP_MAX_DATEIEN or sum(i.file_size for i in infos) > ZIP_MAX_MB * 1024 * 1024:
+		return [], [_("{0}: zu groß zum Auspacken (höchstens {1} Dateien und {2} MB)").format(name, ZIP_MAX_DATEIEN, ZIP_MAX_MB)]
+	out, hinweise, rest = [], [], []
+	for i in infos:
+		teile = [t for t in _zip_name(i).replace("\\", "/").split("/") if t not in ("", ".", "..")]
+		if not teile or any(t.lower() == "__macosx" for t in teile):
+			continue
+		datei, ordner = teile[-1], teile[-2] if len(teile) > 1 else ""
+		if datei.startswith("._") or datei.lower() in ZIP_BALLAST:
+			continue
+		endung = datei.rsplit(".", 1)[-1].lower() if "." in datei else ""
+		if i.flag_bits & 0x1:
+			hinweise.append(_("{0}: {1} ist verschlüsselt, nicht ausgepackt").format(name, datei))
+			continue
+		try:
+			if endung == "zip" and tiefe == 0:
+				innen, h = zip_auspacken(datei, z.read(i), tiefe=1)
+				out += [(n, o or datei.rsplit(".", 1)[0], x) for n, o, x in innen]
+				hinweise += h
+			elif endung in AUS_ZIP:
+				out.append((datei, ordner, z.read(i)))
+			else:
+				rest.append(datei)
+		except (zipfile.BadZipFile, NotImplementedError, OSError, EOFError) as e:
+			hinweise.append(_("{0}: {1} nicht lesbar ({2})").format(name, datei, str(e)[:100]))
+	if rest:
+		hinweise.append(_("{0}: in der ZIP belassen: {1}").format(name, ", ".join(rest[:10]) + (" …" if len(rest) > 10 else "")))
+	return out, hinweise
+
+
 def _ids(*werte):
 	return [x for w in werte if w for x in re.findall(r"<[^>]+>", str(w))]
 
@@ -464,13 +523,23 @@ def verarbeiten(roh):
 
 	anhaenge, hinweise = [], []
 	for name, inhalt in _anhaenge(msg):
-		try:
-			f = frappe.get_doc({"doctype": "File", "file_name": name, "attached_to_doctype": "Mail Anfrage", "attached_to_name": doc.name, "is_private": 1, "content": inhalt})
-			f.insert(ignore_permissions=True)
-			anhaenge.append({"name": name, "url": f.file_url, "groesse": len(inhalt)})
-		except Exception as e:  # zu groß, beschädigtes PDF usw.: die Anfrage kommt trotzdem
-			frappe.clear_messages()
-			hinweise.append(_("{0} nicht übernommen: {1}").format(name, frappe.utils.strip_html(str(e))[:200]))
+		# Die ZIP bleibt als Original erhalten, ihre Zeichnungen und Modelle kommen als eigene Anhänge dazu (mit Herkunft)
+		dateien = [(name, inhalt, {})]
+		if name.lower().endswith(".zip"):
+			ausgepackt, h = zip_auspacken(name, inhalt)
+			hinweise += h
+			dateien += [(n, x, {"aus": name, "ordner": o}) for n, o, x in ausgepackt]
+		for dateiname, daten, herkunft in dateien:
+			# abgelegt mit dem Ordner im Namen: "4711-A Zeichnung.pdf" statt vieler gleicher "Zeichnung.pdf"
+			ordner = herkunft.get("ordner") or ""
+			ablage = f"{ordner} {dateiname}" if ordner and ordner.lower() not in dateiname.lower() else dateiname
+			try:
+				f = frappe.get_doc({"doctype": "File", "file_name": ablage, "attached_to_doctype": "Mail Anfrage", "attached_to_name": doc.name, "is_private": 1, "content": daten})
+				f.insert(ignore_permissions=True)
+				anhaenge.append({"name": dateiname, "url": f.file_url, "groesse": len(daten), **herkunft})
+			except Exception as e:  # zu groß, beschädigtes PDF usw.: die Anfrage kommt trotzdem
+				frappe.clear_messages()
+				hinweise.append(_("{0} nicht übernommen: {1}").format(dateiname, frappe.utils.strip_html(str(e))[:200]))
 	roh = _roh_html(msg)
 	bilder = {}
 	if roh:

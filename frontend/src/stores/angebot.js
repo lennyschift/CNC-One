@@ -363,14 +363,14 @@ export const useAngebot = defineStore('angebot', () => {
     belege.einsetzen(angebot);
     ausAngebot(angebot);
     if (!dateien.length) return;
-    const [{ gruppieren, mengenAusText }, { passtZu }] = await Promise.all([import('../lib/mailanfrage.js'), import('../lib/mailtabelle.js')]);
+    const [{ gruppieren, mengenAusText, dateiPfad }, { passtZu }] = await Promise.all([import('../lib/mailanfrage.js'), import('../lib/mailtabelle.js')]);
     const gruppen = gruppieren(dateien);
     for (const g of gruppen) {
       const id = hinzufuegen(g.basis.replace(/_/g, ' ')).id;
       const t = teile.value.find((x) => x.id === id);
       t.dateien = g.dateien.map((d) => ({ id: d.id, name: d.name, art: d.art, groesse: d.groesse, url: d.url }));
       // bestätigte Zeile der Tabelle (Menge, Liefertermin), sonst Mengen aus dem Text
-      const zeile = zeilen.find((z) => g.dateien.some((d) => (z.datei ? d.name === z.datei : passtZu(z.teilenummer, d.name))));
+      const zeile = zeilen.find((z) => g.dateien.some((d) => (z.datei ? dateiPfad(d) === z.datei : passtZu(z.teilenummer, dateiPfad(d)))));
       if (zeile?.liefertermin) t.liefertermin = zeile.liefertermin;
       const mengen = zeile?.menge?.length ? zeile.menge : mengenAusText(text, g.basis, { einziges: gruppen.length === 1 });
       if (mengen.length) t.menge = mengen[0];

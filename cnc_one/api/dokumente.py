@@ -46,7 +46,7 @@ def _bezuege(namen):
 def dokument_ui(d, bezuege, treffer=""):
 	return {
 		"id": d.name, "titel": d.titel or "", "art": d.art or "", "kundeId": d.kunde or "", "kundeName": d.kunde_name or "",
-		"teilenummer": d.teilenummer or "", "revision": d.revision or "", "fassung": d.fassung or "", "datum": _iso(d.datum),
+		"teilenummer": d.teilenummer or "", "revision": d.revision or "", "fassung": d.fassung or "", "herkunft": d.herkunft or "", "datum": _iso(d.datum),
 		"url": d.datei or "", "groesse": d.groesse or 0, "endung": d.endung or "", "schlagworte": d.schlagworte or "", "notiz": d.notiz or "",
 		"abgeschlossen": bool(d.abgeschlossen), "aufbewahrenBis": _iso(d.aufbewahren_bis), "gesperrt": bool(d.gesperrt),
 		"bezuege": bezuege, "treffer": treffer,

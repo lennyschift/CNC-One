@@ -618,6 +618,7 @@ DOCTYPES += [
         Data("revision", "Revision"),
         Select("fassung", ["", "Aktuell", "Ältere Fassung"], "Fassung"),
         F("datum", "Datetime", "Datum", in_list_view=1),
+        Data("herkunft", "Herkunft", read_only=1, ignore_xss_filter=1, description="z. B. aus einer ZIP-Datei der Mail-Anfrage"),
         Section("sb_archiv", "Aufbewahrung"),
         Check("abgeschlossen", "Abgeschlossen", read_only=1, description="Der Beleg ist festgeschrieben, gesendet, geliefert oder versendet"),
         Date("aufbewahren_bis", "Aufzubewahren bis", read_only=1),

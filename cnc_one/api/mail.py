@@ -21,7 +21,7 @@ def _iso(d):
 
 def _art(name):
 	n = (name or "").lower()
-	return "Zeichnung" if n.endswith(".pdf") else "STEP" if n.endswith((".stp", ".step")) else "Tabelle" if n.endswith((".xlsx", ".xls", ".csv")) else "Datei"
+	return "Zeichnung" if n.endswith(".pdf") else "STEP" if n.endswith((".stp", ".step")) else "Tabelle" if n.endswith((".xlsx", ".xls", ".csv")) else "ZIP" if n.endswith(".zip") else "Datei"
 
 
 def kontakt_vorschlag(name):
@@ -161,7 +161,7 @@ def _dateien_ans_angebot(d, angebot):
 			if not quelle:
 				continue
 			f = frappe.get_doc("File", quelle).create_attachment_copy("Angebot", angebot, ignore_permissions=True)
-			out.append({"id": f.name, "name": a["name"], "art": _art(a["name"]), "groesse": a.get("groesse") or 0, "url": f.file_url})
+			out.append({"id": f.name, "name": a["name"], "art": _art(a["name"]), "groesse": a.get("groesse") or 0, "url": f.file_url, "ordner": a.get("ordner") or ""})
 	return out
 
 

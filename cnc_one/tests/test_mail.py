@@ -412,3 +412,79 @@ class TestTabellenRaster(IntegrationTestCase):
 			["1", "ZZ-R-1", "PLATE", "MOUNT", "2"],
 			["1", "ZZ-R-2", "PLATE", "RAIL", "4"],
 		]])
+
+
+def zz_zip(dateien):
+	import io
+	import zipfile
+
+	puffer = io.BytesIO()
+	with zipfile.ZipFile(puffer, "w", zipfile.ZIP_DEFLATED) as z:
+		for name, inhalt in dateien:
+			z.writestr(name, inhalt)
+	return puffer.getvalue()
+
+
+class TestZipAnhang(IntegrationTestCase):
+	def setUp(self):
+		self._dateien = dateien_vorher()
+		frappe.set_user("Administrator")
+		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Zipkunde", "kontakte": [{"nachname": "Einkauf", "email": "einkauf@zz-zip.de"}]}).insert().name
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		eigene_dateien_loeschen(self._dateien)
+		frappe.db.rollback()
+
+	def test_zip_wird_ausgepackt_und_bleibt_als_original(self):
+		from cnc_one.logic import dokumente
+
+		innen = zz_zip([("Zeichnung.pdf", leeres_pdf("zz-zip-innen"))])
+		zip_daten = zz_zip([
+			("4711-A/Zeichnung.pdf", leeres_pdf("zz-zip-a")), ("4711-A/Modell.stp", b"ISO-10303-21; zz-zip-a"),
+			("__MACOSX/4711-A/._Zeichnung.pdf", b"mac"), ("4711-A/.DS_Store", b"mac"), ("Thumbs.db", b"win"),
+			("stueckliste.xlsx", b"PK zz"), ("4712-B.zip", innen),
+		])
+		d = mail.verarbeiten(zz_mail(von="einkauf@zz-zip.de", mid="<zz-zip-1@zz>", anhaenge=[("zz-anfrage.zip", zip_daten)]))
+		n = mail_api.anfrage_ui(frappe.get_doc("Mail Anfrage", d.name))["nachrichten"][0]
+		self.assertEqual(
+			[(a["name"], a["art"], a.get("aus", ""), a.get("ordner", "")) for a in n["anhaenge"]],
+			[
+				("zz-anfrage.zip", "ZIP", "", ""),
+				("Zeichnung.pdf", "Zeichnung", "zz-anfrage.zip", "4711-A"),
+				("Modell.stp", "STEP", "zz-anfrage.zip", "4711-A"),
+				("Zeichnung.pdf", "Zeichnung", "zz-anfrage.zip", "4712-B"),  # aus der ZIP in der ZIP, ihr Name ist der Ordner
+			],
+		)
+		self.assertEqual(n["hinweis"], "zz-anfrage.zip: in der ZIP belassen: stueckliste.xlsx")
+		abgelegt = frappe.get_all("File", filters={"attached_to_doctype": "Mail Anfrage", "attached_to_name": d.name}, pluck="file_name", order_by="creation")
+		self.assertEqual(sorted(abgelegt), ["4711-A Modell.stp", "4711-A Zeichnung.pdf", "4712-B Zeichnung.pdf", "zz-anfrage.zip"])
+
+		r = mail_api.angebot_anlegen(d.name)
+		self.assertEqual([(x["name"], x["ordner"]) for x in r["dateien"]], [("Zeichnung.pdf", "4711-A"), ("Modell.stp", "4711-A"), ("Zeichnung.pdf", "4712-B")])
+
+		dokumente.abgleichen()
+		url = n["anhaenge"][1]["url"]
+		doc = frappe.get_doc("Dokument", {"datei": ["in", [url, r["dateien"][0]["url"]]]})
+		self.assertEqual(doc.herkunft, "aus zz-anfrage.zip")
+		self.assertEqual(frappe.db.get_value("Dokument", {"titel": "zz-anfrage.zip"}, ["art", "herkunft"]), ("Mail-Anhang", ""))
+
+	def test_kaputte_oder_zu_grosse_zip_kommt_trotzdem_als_anhang(self):
+		d = mail.verarbeiten(zz_mail(von="einkauf@zz-zip.de", mid="<zz-zip-2@zz>", anhaenge=[("zz-kaputt.zip", b"PK kein zip")]))
+		n = mail_api.anfrage_ui(frappe.get_doc("Mail Anfrage", d.name))["nachrichten"][0]
+		self.assertEqual([a["name"] for a in n["anhaenge"]], ["zz-kaputt.zip"])
+		self.assertIn("kein gültiges ZIP-Archiv", n["hinweis"])
+		with patch.object(mail, "ZIP_MAX_DATEIEN", 1):
+			dateien, hinweise = mail.zip_auspacken("zz-gross.zip", zz_zip([("a.pdf", b"a"), ("b.pdf", b"b")]))
+		self.assertEqual(dateien, [])
+		self.assertIn("zu groß zum Auspacken", hinweise[0])
+
+	def test_pfade_und_umlaute_im_zip(self):
+		from types import SimpleNamespace
+
+		dateien, _h = mail.zip_auspacken("zz.zip", zz_zip([("../../etc/zz-teil.pdf", b"%PDF zz"), ("Gehäuse/Gehäuse.step", b"ISO zz")]))
+		self.assertEqual([(n, o) for n, o, _x in dateien], [("zz-teil.pdf", "etc"), ("Gehäuse.step", "Gehäuse")])
+		# ohne UTF-8-Kennzeichen: UTF-8 (manche Packer) oder DOS-Zeichensatz (Windows)
+		utf8 = SimpleNamespace(flag_bits=0, filename="Gehäuse.pdf".encode("utf-8").decode("cp437"))
+		dos = SimpleNamespace(flag_bits=0, filename="Gehäuse.pdf".encode("cp850").decode("cp437"))
+		self.assertEqual((mail._zip_name(utf8), mail._zip_name(dos)), ("Gehäuse.pdf", "Gehäuse.pdf"))

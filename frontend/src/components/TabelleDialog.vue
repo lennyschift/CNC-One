@@ -7,6 +7,7 @@ import { ref, computed, watch } from 'vue';
 import { useEventListener } from '@vueuse/core';
 import { X, Table2, Check, Sparkles, AlertTriangle, MousePointerClick, Heading } from '@lucide/vue';
 import { ROLLEN, tabelleDeuten, rollenMitKopf, zeileWerte, passtZu, vorlageAus } from '../lib/mailtabelle.js';
+import { dateiPfad } from '../lib/mailanfrage.js';
 import { call } from '../data/api.js';
 import { useUi } from '../stores/ui.js';
 
@@ -17,7 +18,7 @@ const ui = useUi();
 const FARBE = { teilenummer: 'rolle-teil', menge: 'rolle-menge', liefertermin: 'rolle-termin' };
 const QUELLE = { vorlage: 'angelernt', stichwort: 'Überschrift', inhalt: 'Inhalt' };
 
-const dateien = computed(() => props.anfrage.nachrichten.flatMap((n) => n.anhaenge).filter((a) => a.art === 'Zeichnung' || a.art === 'STEP').map((a) => a.name));
+const dateien = computed(() => props.anfrage.nachrichten.flatMap((n) => n.anhaenge).filter((a) => a.art === 'Zeichnung' || a.art === 'STEP').map(dateiPfad));
 let vorlage = props.anfrage.tabellenVorlage ?? { spalten: {}, quelle: '' };
 let erkannt = tabelleDeuten(props.anfrage.tabellen, vorlage.spalten, dateien.value);
 

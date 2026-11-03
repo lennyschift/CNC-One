@@ -12,6 +12,7 @@
   "revision",
   "fassung",
   "datum",
+  "herkunft",
   "sb_archiv",
   "abgeschlossen",
   "aufbewahren_bis",
@@ -82,6 +83,14 @@
    "fieldtype": "Datetime",
    "label": "Datum",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "herkunft",
+   "fieldtype": "Data",
+   "label": "Herkunft",
+   "read_only": 1,
+   "ignore_xss_filter": 1,
+   "description": "z. B. aus einer ZIP-Datei der Mail-Anfrage"
   },
   {
    "fieldname": "sb_archiv",

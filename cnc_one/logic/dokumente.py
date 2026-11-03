@@ -6,6 +6,7 @@ Schlagworte und Notiz pflegt der Benutzer, sie bleiben beim Abgleich erhalten. F
 STEP und XML gelesen.
 """
 
+import json
 import os
 import re
 
@@ -82,7 +83,19 @@ class _Belege:
 			bez = frappe.db.get_value("Rechnung", name, "rechnungsnummer") or name
 		elif dt == "Mail Anfrage":
 			bez = f"{name} · {(frappe.db.get_value('Mail Anfrage', name, 'betreff') or '')[:60]}"
+			return {"kunde": kunde, "bezeichnung": bez, "aus_zip": _aus_zip(name)}
 		return {"kunde": kunde, "bezeichnung": bez}
+
+
+def _aus_zip(anfrage):
+	"""{ Datei-URL: Name der ZIP } für die aus ZIP-Anhängen ausgepackten Dateien einer Mail-Anfrage."""
+	out = {}
+	for roh in frappe.get_all("Mail Nachricht", filters={"parent": anfrage, "parenttype": "Mail Anfrage"}, pluck="anhaenge"):
+		try:
+			out.update({a["url"]: a["aus"] for a in json.loads(roh or "[]") if a.get("aus") and a.get("url")})
+		except (ValueError, TypeError, KeyError):
+			continue
+	return out
 
 
 def _revision(url, bauteil, teil):
@@ -116,7 +129,7 @@ def soll(eintraege, belege):
 	arten = [art_von(f) for f in eintraege]
 	art = min(arten, key=RANG.index)
 	haupt = next(f for f, a in zip(eintraege, arten) if a == art)
-	bezuege, kunde, teilenummer, revision, fassung = [], None, "", "", ""
+	bezuege, kunde, teilenummer, revision, fassung, herkunft = [], None, "", "", "", ""
 	for f in eintraege:
 		b = belege(f.attached_to_doctype, f.attached_to_name)
 		if not b:
@@ -124,6 +137,8 @@ def soll(eintraege, belege):
 		if not any(x["beleg_typ"] == f.attached_to_doctype and x["beleg"] == f.attached_to_name for x in bezuege):
 			bezuege.append({"beleg_typ": f.attached_to_doctype, "beleg": f.attached_to_name, "bezeichnung": b["bezeichnung"], "datei": f.name})
 		kunde = kunde or b.get("kunde")
+		if b.get("aus_zip", {}).get(f.file_url):
+			herkunft = herkunft or f"aus {b['aus_zip'][f.file_url]}"
 		if f.attached_to_doctype == "Bauteil" and b.get("teil"):
 			teilenummer = b["teil"].teilenummer or teilenummer
 			if art in ("Zeichnung", "3D-Modell"):
@@ -135,7 +150,7 @@ def soll(eintraege, belege):
 		"abgeschlossen": 1 if fertig else 0, "aufbewahren_bis": bis, "gesperrt": 1 if gesperrt else 0,
 		"titel": haupt.file_name or "", "art": art, "datei": haupt.file_url, "groesse": haupt.file_size or 0, "endung": _endung(haupt.file_name),
 		"datum": get_datetime(eintraege[0].creation), "kunde": kunde or None, "teilenummer": teilenummer, "revision": revision, "fassung": fassung,
-		"bezuege": sorted(bezuege, key=lambda x: (x["beleg_typ"], x["beleg"])),
+		"herkunft": herkunft, "bezuege": sorted(bezuege, key=lambda x: (x["beleg_typ"], x["beleg"])),
 	}
 
 
@@ -145,7 +160,7 @@ def _vergleich(doc):
 		"gesperrt": 1 if doc.gesperrt else 0,
 		"titel": doc.titel or "", "art": doc.art, "datei": doc.datei, "groesse": doc.groesse or 0, "endung": doc.endung or "",
 		"datum": get_datetime(doc.datum) if doc.datum else None, "kunde": doc.kunde or None, "teilenummer": doc.teilenummer or "", "revision": doc.revision or "", "fassung": doc.fassung or "",
-		"bezuege": sorted(({"beleg_typ": b.beleg_typ, "beleg": b.beleg, "bezeichnung": b.bezeichnung, "datei": b.datei} for b in doc.bezuege), key=lambda x: (x["beleg_typ"], x["beleg"])),
+		"herkunft": doc.herkunft or "", "bezuege": sorted(({"beleg_typ": b.beleg_typ, "beleg": b.beleg, "bezeichnung": b.bezeichnung, "datei": b.datei} for b in doc.bezuege), key=lambda x: (x["beleg_typ"], x["beleg"])),
 	}
 
 

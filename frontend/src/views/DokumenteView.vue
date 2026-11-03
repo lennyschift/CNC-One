@@ -178,7 +178,7 @@ const vorschau = (d) => (d.endung === 'pdf' ? 'pdf' : ['stp', 'step'].includes(d
             <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent"><component :is="ICON[gewaehlt.art] ?? File" :size="19" /></span>
             <div class="min-w-0 flex-1">
               <h2 class="break-words text-sm font-semibold">{{ gewaehlt.titel }}</h2>
-              <p class="text-xs text-mute">{{ gewaehlt.art }} · {{ datum(gewaehlt.datum) }} · {{ groesse(gewaehlt.groesse) }}<template v-if="gewaehlt.revision"> · Rev. {{ gewaehlt.revision }} ({{ gewaehlt.fassung === 'Aktuell' ? 'aktuell' : 'ältere Fassung' }})</template></p>
+              <p class="text-xs text-mute">{{ gewaehlt.art }} · {{ datum(gewaehlt.datum) }} · {{ groesse(gewaehlt.groesse) }}<template v-if="gewaehlt.revision"> · Rev. {{ gewaehlt.revision }} ({{ gewaehlt.fassung === 'Aktuell' ? 'aktuell' : 'ältere Fassung' }})</template><template v-if="gewaehlt.herkunft"> · {{ gewaehlt.herkunft }}</template></p>
             </div>
             <a :href="gewaehlt.url" :download="gewaehlt.titel" class="btn !py-1 text-xs" title="Herunterladen"><Download :size="14" /></a>
           </div>

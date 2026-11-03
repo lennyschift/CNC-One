@@ -4,11 +4,25 @@
 const basis = (name) => (/^(.*?)(\.[^.]+)?$/.exec(name)?.[1] ?? name).trim();
 const schluessel = (s) => s.toLowerCase().replace(/[\s_\-./]+/g, '');
 
+// Name einer Datei mit ihrem Ordner aus der ZIP ("4711-A/Zeichnung.pdf"), eindeutig auch bei gleichen Dateinamen
+export const dateiPfad = (d) => (d.ordner ? `${d.ordner}/${d.name}` : d.name);
+
+// Aus einer ZIP: Liegen Zeichnung und Modell in einem eigenen Ordner und heißen nicht wie das Bauteil
+// ("4711-A/Zeichnung.pdf", "4711-A/Modell.stp"), ist der Ordner das Bauteil. Ein Sammelordner mit mehreren
+// Zeichnungen oder Modellen ("Zeichnungen/") ist es nicht, dort zählt der Dateiname.
+function ordnerIstBauteil(d, dateien) {
+  if (!d.ordner) return false;
+  const imOrdner = dateien.filter((x) => x.ordner === d.ordner);
+  if (imOrdner.filter((x) => x.art === 'Zeichnung').length > 1 || imOrdner.filter((x) => x.art === 'STEP').length > 1) return false;
+  const k = schluessel(basis(d.name));
+  return new Set(imOrdner.map((x) => schluessel(basis(x.name)))).size > 1 || dateien.some((x) => x.ordner !== d.ordner && schluessel(basis(x.name)) === k);
+}
+
 // [{ basis, dateien }] je Bauteil, in der Reihenfolge der Mail
 export function gruppieren(dateien) {
   const gruppen = new Map();
   for (const d of dateien) {
-    const b = basis(d.name);
+    const b = ordnerIstBauteil(d, dateien) ? d.ordner : basis(d.name);
     const k = schluessel(b);
     if (!gruppen.has(k)) gruppen.set(k, { basis: b, dateien: [] });
     gruppen.get(k).dateien.push(d);
