@@ -1,7 +1,10 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, Printer, Send, Undo2 } from '@lucide/vue';
+import { ArrowLeft, Printer, Send, Undo2, FileText } from '@lucide/vue';
+import PdfVorschauDialog from '../components/PdfVorschauDialog.vue';
+import { call } from '../data/api.js';
+import { useUi } from '../stores/ui.js';
 import MahnungDokument from '../components/MahnungDokument.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import { useRechnung } from '../stores/rechnung.js';
@@ -14,11 +17,18 @@ const m = computed(() => store.mahnung(route.params.id));
 const darf = computed(() => (benutzer()?.rollen ?? []).some((x) => ['CNC Admin', 'CNC Buchhaltung', 'System Manager'].includes(x)));
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
 const drucken = () => window.print();
+// Das PDF vom Server; nach „versendet“ ist es festgeschrieben
+const ui = useUi();
+const pdf = ref(null);
+async function pdfAnsehen() {
+  try { pdf.value = await call('cnc_one.api.belegdruck.pdf_holen', { doctype: 'Mahnung', id: m.value.id }); } catch (e) { ui.toast(e.message, 'warn'); }
+}
 </script>
 
 <template>
   <div v-if="m" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_340px]">
     <MahnungDokument :mahnung="m" />
+    <PdfVorschauDialog v-if="pdf" :url="pdf.url" :name="pdf.name" @schliessen="pdf = null" />
     <aside class="no-print space-y-4 xl:sticky xl:top-0">
       <RouterLink to="/mahnwesen" class="inline-flex items-center gap-1.5 text-sm text-mute hover:text-ink"><ArrowLeft :size="15" /> Mahnwesen</RouterLink>
       <section class="card p-5">
@@ -28,7 +38,8 @@ const drucken = () => window.print();
         <p class="mt-1 text-xs text-mute">Zahlen bis {{ de(m.fristBis) }}<template v-if="m.versandtAm"> · versendet am {{ de(m.versandtAm) }}</template></p>
         <div class="mt-4 space-y-2">
           <button v-if="m.status === 'Angelegt' && darf" class="btn btn-primary w-full justify-center" @click="store.mahnungVersendet(m.id)"><Send :size="16" /> Als versendet markieren</button>
-          <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken / als PDF speichern</button>
+          <button class="btn w-full justify-center" @click="pdfAnsehen"><FileText :size="16" /> PDF ansehen</button>
+          <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken</button>
           <button v-if="['Angelegt', 'Versendet'].includes(m.status) && darf" class="btn w-full justify-center !text-mute" @click="store.mahnungZurueckziehen(m.id)"><Undo2 :size="16" /> Zurückziehen</button>
         </div>
         <p v-if="m.status === 'Erledigt'" class="mt-3 text-xs text-mute">Die Rechnung ist inzwischen bezahlt.</p>
