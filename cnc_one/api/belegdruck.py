@@ -30,8 +30,13 @@ def _ablegen(doctype, doc, dateiname, offen, erzeugen, neu=False):
 	vorhanden = frappe.get_all("File", filters={"attached_to_doctype": doctype, "attached_to_name": doc.name, "file_name": dateiname}, pluck="name")
 	if vorhanden and not offen and not neu:
 		return frappe.get_doc("File", vorhanden[0])
-	for f in vorhanden:
-		frappe.delete_doc("File", f, ignore_permissions=True)
+	# beim Abschluss ersetzt das endgültige PDF das offene (die Löschsperre gilt erst für das endgültige)
+	frappe.flags.archivsperre_aus = True
+	try:
+		for f in vorhanden:
+			frappe.delete_doc("File", f, ignore_permissions=True)
+	finally:
+		frappe.flags.archivsperre_aus = False
 	return frappe.get_doc({
 		"doctype": "File", "file_name": dateiname, "attached_to_doctype": doctype, "attached_to_name": doc.name, "is_private": 1, "content": erzeugen(),
 	}).insert(ignore_permissions=True)

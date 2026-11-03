@@ -12,6 +12,11 @@ def dateien_vorher():
 
 
 def eigene_dateien_loeschen(vorher):
-	for name in frappe.get_all("File", filters={"is_folder": 0}, pluck="name"):
-		if name not in vorher:
-			frappe.delete_doc("File", name, ignore_permissions=True, force=True)
+	"""Löscht die im Test angelegten Dateien, auch abgeschlossene (die Löschsperre gilt für echte Dokumente)."""
+	frappe.flags.archivsperre_aus = True
+	try:
+		for name in frappe.get_all("File", filters={"is_folder": 0}, pluck="name"):
+			if name not in vorher:
+				frappe.delete_doc("File", name, ignore_permissions=True, force=True)
+	finally:
+		frappe.flags.archivsperre_aus = False

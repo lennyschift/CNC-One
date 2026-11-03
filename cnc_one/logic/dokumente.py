@@ -10,7 +10,7 @@ import os
 import re
 
 import frappe
-from frappe.utils import get_datetime, now_datetime
+from frappe.utils import get_datetime, getdate, now_datetime
 
 # Belege, an denen Dokumente hängen können, und woher der Kunde kommt
 BELEGE = {
@@ -128,7 +128,11 @@ def soll(eintraege, belege):
 			teilenummer = b["teil"].teilenummer or teilenummer
 			if art in ("Zeichnung", "3D-Modell"):
 				revision, fassung = _revision(f.file_url, f.attached_to_name, b["teil"])
+	from cnc_one.logic import archiv
+
+	fertig, bis, gesperrt = archiv.stand(eintraege, art)
 	return {
+		"abgeschlossen": 1 if fertig else 0, "aufbewahren_bis": bis, "gesperrt": 1 if gesperrt else 0,
 		"titel": haupt.file_name or "", "art": art, "datei": haupt.file_url, "groesse": haupt.file_size or 0, "endung": _endung(haupt.file_name),
 		"datum": get_datetime(eintraege[0].creation), "kunde": kunde or None, "teilenummer": teilenummer, "revision": revision, "fassung": fassung,
 		"bezuege": sorted(bezuege, key=lambda x: (x["beleg_typ"], x["beleg"])),
@@ -137,6 +141,8 @@ def soll(eintraege, belege):
 
 def _vergleich(doc):
 	return {
+		"abgeschlossen": 1 if doc.abgeschlossen else 0, "aufbewahren_bis": getdate(doc.aufbewahren_bis) if doc.aufbewahren_bis else None,
+		"gesperrt": 1 if doc.gesperrt else 0,
 		"titel": doc.titel or "", "art": doc.art, "datei": doc.datei, "groesse": doc.groesse or 0, "endung": doc.endung or "",
 		"datum": get_datetime(doc.datum) if doc.datum else None, "kunde": doc.kunde or None, "teilenummer": doc.teilenummer or "", "revision": doc.revision or "", "fassung": doc.fassung or "",
 		"bezuege": sorted(({"beleg_typ": b.beleg_typ, "beleg": b.beleg, "bezeichnung": b.bezeichnung, "datei": b.datei} for b in doc.bezuege), key=lambda x: (x["beleg_typ"], x["beleg"])),

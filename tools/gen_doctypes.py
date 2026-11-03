@@ -584,6 +584,25 @@ DOCTYPES += [
 DOKUMENT_ARTEN = ["Zeichnung", "3D-Modell", "Angebot", "Rechnung", "E-Rechnung (XML)", "Lieferschein", "Mahnung", "Bestellung", "Mail-Anhang", "Sonstiges"]
 
 DOCTYPES += [
+    dict(name="Archiv Frist", istable=1, fields=[
+        Select("art", DOKUMENT_ARTEN, "Dokumentart", reqd=1, in_list_view=1),
+        Int("jahre", "Jahre", in_list_view=1, description="0 = keine Aufbewahrungspflicht"),
+        Data("grundlage", "Grundlage", in_list_view=1),
+    ]),
+    dict(name="Archiv Einstellungen", rechte=[recht("System Manager", *ALLE), recht("CNC Admin", *ALLE), recht("CNC Buchhaltung", "read", "write"), recht("CNC Vertrieb", "read"), recht("CNC Fertigung", "read")], icon="archive", extra={"issingle": 1}, fields=[
+        Table("fristen", "Archiv Frist", "Aufbewahrungsfristen", description="Die Frist beginnt mit dem Schluss des Kalenderjahres, in dem das Dokument entstanden ist (§ 147 Abs. 4 AO)"),
+    ]),
+    dict(name="Dokument Protokoll", autoname="DPR-.########", rechte=[recht("System Manager", "read", "report", "export"), recht("CNC Admin", "read", "report", "export"), recht("CNC Buchhaltung", "read", "report", "export"), recht("CNC Vertrieb", "read"), recht("CNC Fertigung", "read")], icon="history", extra={"search_fields": "titel,beleg"}, fields=[
+        F("zeit", "Datetime", "Zeitpunkt", in_list_view=1),
+        Link("benutzer", "User", "Benutzer", in_list_view=1, in_standard_filter=1),
+        Select("aktion", ["Abgelegt", "Geändert", "Gelöscht", "Exportiert"], "Aktion", in_list_view=1, in_standard_filter=1),
+        Data("titel", "Dokument", in_list_view=1, ignore_xss_filter=1),
+        Data("art", "Art"),
+        Data("beleg_typ", "Belegart"),
+        Data("beleg", "Beleg", in_standard_filter=1),
+        Data("content_hash", "Prüfwert"),
+        Text("details", "Details", ignore_xss_filter=1),
+    ]),
     dict(name="Dokument Bezug", istable=1, fields=[
         Data("beleg_typ", "Belegart", in_list_view=1),
         Data("beleg", "Beleg", in_list_view=1),
@@ -599,6 +618,10 @@ DOCTYPES += [
         Data("revision", "Revision"),
         Select("fassung", ["", "Aktuell", "Ältere Fassung"], "Fassung"),
         F("datum", "Datetime", "Datum", in_list_view=1),
+        Section("sb_archiv", "Aufbewahrung"),
+        Check("abgeschlossen", "Abgeschlossen", read_only=1, description="Der Beleg ist festgeschrieben, gesendet, geliefert oder versendet"),
+        Date("aufbewahren_bis", "Aufzubewahren bis", read_only=1),
+        Check("gesperrt", "Löschsperre", read_only=1, description="Abgeschlossen und die Aufbewahrungsfrist läuft noch"),
         Section("sb_datei", "Datei"),
         Data("datei", "Datei (URL)", read_only=1),
         Data("content_hash", "Prüfwert", read_only=1, unique=1),

@@ -287,3 +287,13 @@ scheduler_events = {
 		"*/5 * * * *": ["cnc_one.logic.mail.geplant", "cnc_one.logic.dokumente.geplant"],
 	},
 }
+
+# Dateien: Löschsperre für abgeschlossene Dokumente (vor dem Entfernen von der Platte) und Protokoll
+override_doctype_class = {
+	"File": "cnc_one.overrides.file.ArchivFile",
+}
+doc_events = {
+	"File": {
+		"after_insert": "cnc_one.logic.archiv.datei_abgelegt",
+	},
+}

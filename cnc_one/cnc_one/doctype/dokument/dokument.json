@@ -12,6 +12,10 @@
   "revision",
   "fassung",
   "datum",
+  "sb_archiv",
+  "abgeschlossen",
+  "aufbewahren_bis",
+  "gesperrt",
   "sb_datei",
   "datei",
   "content_hash",
@@ -78,6 +82,31 @@
    "fieldtype": "Datetime",
    "label": "Datum",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "sb_archiv",
+   "fieldtype": "Section Break",
+   "label": "Aufbewahrung"
+  },
+  {
+   "fieldname": "abgeschlossen",
+   "fieldtype": "Check",
+   "label": "Abgeschlossen",
+   "read_only": 1,
+   "description": "Der Beleg ist festgeschrieben, gesendet, geliefert oder versendet"
+  },
+  {
+   "fieldname": "aufbewahren_bis",
+   "fieldtype": "Date",
+   "label": "Aufzubewahren bis",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gesperrt",
+   "fieldtype": "Check",
+   "label": "Löschsperre",
+   "read_only": 1,
+   "description": "Abgeschlossen und die Aufbewahrungsfrist läuft noch"
   },
   {
    "fieldname": "sb_datei",

@@ -7,3 +7,4 @@ cnc_one.patches.v0_1.lager_aus_fertigung
 cnc_one.patches.v0_1.rechnung_grundausstattung
 cnc_one.patches.v0_1.xrechnung_entfernen
 cnc_one.patches.v0_1.revisionen_anlegen
+cnc_one.patches.v0_1.protokoll_nachtragen
