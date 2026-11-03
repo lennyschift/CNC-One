@@ -145,12 +145,19 @@ def senden(id):
 	return angebot_ui(doc)
 
 
+def beauftragt(name):
+	"""Gibt es zum Angebot einen Auftrag (nicht storniert)? Dann ist es angenommen: nicht mehr ablehnen, nicht neu senden."""
+	return bool(frappe.db.exists("Auftrag", {"angebot": name, "status": ["!=", "Storniert"]}))
+
+
 @frappe.whitelist(methods=["POST"])
 def ablehnen(id):
 	nur_cnc()
 	doc = _geladen(id)
 	if doc.status != "Gesendet":
 		frappe.throw(_("Nur ein gesendetes Angebot lässt sich als abgelehnt markieren."))
+	if beauftragt(doc.name):
+		frappe.throw(_("Zu diesem Angebot gibt es schon einen Auftrag, es lässt sich nicht mehr ablehnen."))
 	doc.flags.status_wechsel = True
 	doc.status = "Abgelehnt"
 	doc.save()

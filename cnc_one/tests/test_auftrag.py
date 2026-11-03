@@ -57,6 +57,19 @@ class TestAuftrag(IntegrationTestCase):
 		self.assertNotEqual(eins["id"], zwei["id"])
 		self.assertEqual({x["id"] for x in auftrag.liste() if x["angebotId"] == a["id"]}, {eins["id"], zwei["id"]})
 
+	def test_beauftragtes_angebot_nicht_mehr_ablehnen_oder_senden(self):
+		from cnc_one.api import mail as mail_api
+
+		a = self.gesendet([teil("t1")])
+		auftrag.aus_angebot(a["id"], "", [{"angebotKey": "t1", "menge": 4}])
+		self.assertTrue(angebot.beauftragt(a["id"]))
+		with self.assertRaises(frappe.ValidationError) as fehler:
+			angebot.ablehnen(a["id"])
+		self.assertIn("schon einen Auftrag", str(fehler.exception))
+		with self.assertRaises(frappe.ValidationError) as fehler:
+			mail_api.angebot_senden(a["id"], "einkauf@zz-kunde.invalid")
+		self.assertIn("schon einen Auftrag", str(fehler.exception))
+
 	def test_nur_gesendete_angebote_und_bekannte_positionen(self):
 		entwurf = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde}, "teile": [teil("t1")]})
 		with self.assertRaises(frappe.ValidationError):

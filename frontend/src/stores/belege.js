@@ -17,6 +17,7 @@ export const useBelege = defineStore('belege', () => {
   const bestellt = computed(() => {
     const m = {};
     for (const a of auftraege.value) {
+      if (a.status === 'Storniert') continue;
       for (const p of a.positionen) {
         m[a.angebotId] ??= {};
         m[a.angebotId][p.angebotKey] = (m[a.angebotId][p.angebotKey] ?? 0) + p.menge;

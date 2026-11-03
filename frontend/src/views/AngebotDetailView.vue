@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, FileText, Inbox } from '@lucide/vue';
+import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, FileText, Inbox, ClipboardList } from '@lucide/vue';
 import AngebotMailDialog from '../components/AngebotMailDialog.vue';
 import { call } from '../data/api.js';
 import PdfVorschauDialog from '../components/PdfVorschauDialog.vue';
@@ -33,6 +33,9 @@ const bestellt = computed(() => (angebot.value ? b.bestelltFuer(angebot.value.id
 const dialog = ref(false);
 // Nur zwei Schritte: Angebot und Auftrag. Ein Haken beim Angebot, sobald etwas bestellt ist, beim Auftrag erst wenn alles bestellt ist.
 const stand = computed(() => (status.value === 'Bestellt' ? 2 : status.value === 'Teilweise bestellt' ? 1 : 0));
+// Mit einem Auftrag ist das Angebot angenommen: nicht mehr senden oder ablehnen. Weitere Aufträge (Abrufe) gehen weiterhin.
+const beauftragt = computed(() => stand.value > 0);
+const auftraegeDazu = computed(() => b.auftraege.filter((x) => x.angebotId === angebot.value?.id && x.status !== 'Storniert'));
 
 const drucken = () => window.print();
 
@@ -69,13 +72,18 @@ function angelegt(auftrag) {
             <button class="btn w-full justify-center" @click="b.angebotSenden(angebot.id)"><Send :size="16" /> Als gesendet markieren</button>
             <button class="btn w-full justify-center" @click="bearbeiten"><Pencil :size="16" /> In Workbench bearbeiten</button>
           </template>
-          <template v-else-if="angebot.status === 'Gesendet'">
+          <template v-else-if="angebot.status === 'Gesendet' && !beauftragt">
             <button class="btn btn-primary w-full justify-center" @click="dialog = true"><ShoppingCart :size="16" /> In Auftrag übernehmen</button>
             <button class="btn w-full justify-center" @click="mailDialog = true"><Mail :size="16" /> Erneut per Mail senden</button>
           </template>
+          <template v-else-if="angebot.status === 'Gesendet'">
+            <RouterLink v-if="auftraegeDazu.length === 1" :to="`/auftraege/${auftraegeDazu[0].id}`" class="btn btn-primary w-full justify-center"><ClipboardList :size="16" /> Zum Auftrag {{ auftraegeDazu[0].id }}</RouterLink>
+            <button v-if="status === 'Teilweise bestellt'" class="btn w-full justify-center" :class="auftraegeDazu.length === 1 ? '' : 'btn-primary'" @click="dialog = true"><ShoppingCart :size="16" /> Weitere Bauteile in Auftrag übernehmen</button>
+            <button v-else class="btn w-full justify-center" title="Dasselbe Angebot noch einmal beauftragen, z. B. für einen Abruf" @click="dialog = true"><ShoppingCart :size="16" /> Weiteren Auftrag (Abruf) anlegen</button>
+          </template>
           <button class="btn w-full justify-center" @click="pdfAnsehen"><FileText :size="16" /> PDF ansehen</button>
           <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken</button>
-          <button v-if="angebot.status === 'Gesendet'" class="btn w-full justify-center !text-mute" @click="b.angebotAblehnen(angebot.id)"><XCircle :size="16" /> Als abgelehnt markieren</button>
+          <button v-if="angebot.status === 'Gesendet' && !beauftragt" class="btn w-full justify-center !text-mute" @click="b.angebotAblehnen(angebot.id)"><XCircle :size="16" /> Als abgelehnt markieren</button>
           <button v-if="angebot.status === 'Entwurf'" class="btn w-full justify-center !text-mute" @click="loeschen"><Trash2 :size="16" /> Entwurf löschen</button>
         </div>
       </section>

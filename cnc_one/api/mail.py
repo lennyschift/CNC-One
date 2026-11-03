@@ -413,6 +413,8 @@ def angebot_senden(angebot, an, cc="", betreff="", text="", zitieren=1):
 	a.check_permission("write")
 	if a.status == "Abgelehnt":
 		frappe.throw(_("Ein abgelehntes Angebot wird nicht verschickt."))
+	if angebot_api.beauftragt(a.name):
+		frappe.throw(_("Zu diesem Angebot gibt es schon einen Auftrag, es wird nicht noch einmal verschickt."))
 	if not a.kunde or not a.positionen:
 		frappe.throw(_("Das Angebot braucht einen Kunden und mindestens ein Bauteil."))
 	an_liste, cc_liste = _adressliste(an), _adressliste(cc)
