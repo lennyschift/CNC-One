@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
-import { Calculator, FileText, ClipboardList, Factory, Truck, Receipt, Database, Send, Warehouse, Inbox } from '@lucide/vue';
+import { Calculator, FileText, ClipboardList, Factory, Truck, Receipt, Database, Send, Warehouse, Inbox, FolderOpen } from '@lucide/vue';
 import { useMail } from '../stores/mail.js';
 import { onClickOutside } from '@vueuse/core';
 import { useRoute } from 'vue-router';
@@ -27,6 +27,7 @@ const punkte = [
   { id: 'lieferscheine', label: 'Lieferscheine', icon: Truck, to: '/lieferscheine' },
   { id: 'lager', label: 'Lager', icon: Warehouse, to: '/lager' },
   { id: 'rechnungen', label: 'Rechnungen', icon: Receipt, to: '/rechnungen' },
+  { id: 'dokumente', label: 'Dokumente', icon: FolderOpen, to: '/dokumente' },
 ];
 </script>
 

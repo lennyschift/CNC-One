@@ -28,6 +28,7 @@ import MaterialienView from './views/MaterialienView.vue';
 import ArbeitsgaengeView from './views/ArbeitsgaengeView.vue';
 import PosteingangView from './views/PosteingangView.vue';
 import MailEinstellungenView from './views/MailEinstellungenView.vue';
+import DokumenteView from './views/DokumenteView.vue';
 import { ladeStammdaten } from './data/repo.js';
 import './style.css';
 
@@ -49,6 +50,7 @@ const router = createRouter({
     { path: '/rechnungen/:id', component: RechnungDetailView, meta: { titel: 'Rechnung', bereich: 'rechnungen', unterbereich: 'rechnungen' } },
     { path: '/mahnwesen', component: MahnwesenView, meta: { titel: 'Mahnwesen', bereich: 'rechnungen', unterbereich: 'mahnwesen' } },
     { path: '/mahnungen/:id', component: MahnungDetailView, meta: { titel: 'Mahnung', bereich: 'rechnungen', unterbereich: 'mahnwesen' } },
+    { path: '/dokumente/:id?', component: DokumenteView, meta: { titel: 'Dokumente', bereich: 'dokumente' } },
     { path: '/stammdaten/mail', component: MailEinstellungenView, meta: { titel: 'Stammdaten: Mail-Anbindung', bereich: 'stammdaten' } },
     { path: '/stammdaten/firma', component: FirmaView, meta: { titel: 'Stammdaten: Firma', bereich: 'stammdaten' } },
     { path: '/lager', component: LagerView, meta: { titel: 'Lager', bereich: 'lager' } },
