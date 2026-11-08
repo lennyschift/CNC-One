@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 import frappe
 from frappe import _
-from frappe.utils import get_system_timezone, now_datetime
+from frappe.utils import get_system_timezone, getdate, now_datetime
 
 # Bei diesen Anbietern sagt die Domain nichts über den Kunden
 FREEMAIL = {
@@ -93,6 +93,8 @@ def ordnername(name):
 
 
 def _imap_datum(d):
+	"""Datum für IMAP SINCE („01-Nov-2026“). Frappe liefert gespeicherte Datumsfelder auch als Text („2026-11-01“)."""
+	d = getdate(d)
 	return f"{d.day:02d}-{MONATE[d.month - 1]}-{d.year}"
 
 

@@ -149,6 +149,19 @@ class TestMailAnfragen(IntegrationTestCase):
 		self.assertFalse(frappe.db.exists("Mail Nachricht", {"message_id": "<zz-r@zz>"}))
 		self.assertTrue(frappe.get_single("Mail Einstellungen").letzter_abruf)
 
+	def test_abholen_ab_als_datum_oder_text(self):
+		from datetime import date
+
+		self.assertEqual(mail._imap_datum("2026-11-01"), "01-Nov-2026")  # so kommt es aus den gespeicherten Einstellungen
+		self.assertEqual(mail._imap_datum(date(2026, 3, 9)), "09-Mar-2026")
+		m = FakeImap([zz_mail()])
+		befehle = []
+		original = m.uid
+		m.uid = lambda *a: (befehle.append(a), original(*a))[1]
+		frappe.db.set_single_value("Mail Einstellungen", "abholen_ab", "2026-10-15")
+		self.assertEqual(mail.suchen(m, ["Anfrage"], mail.einstellungen().abholen_ab), [1])
+		self.assertEqual(befehle[0][1:3], ("SINCE", "15-Oct-2026"))
+
 	def test_einstellungen_ohne_passwort_zurueck_und_ordnername(self):
 		ui = mail_api.einstellungen_speichern({"stichwoerter": " Anfrage \n\n RFQ ", "imapPort": "993", "aktiv": True})
 		self.assertEqual((ui["stichwoerter"], ui["imapPort"], ui["aktiv"], ui["passwortGesetzt"]), ("Anfrage\nRFQ", 993, True, True))
