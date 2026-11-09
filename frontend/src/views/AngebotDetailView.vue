@@ -10,6 +10,7 @@ import AuftragDialog from '../components/AuftragDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
 import WorkflowSteps from '../components/WorkflowSteps.vue';
 import StatusBadge from '../components/StatusBadge.vue';
+import ProjektFeld from '../components/ProjektFeld.vue';
 import PartImage from '../components/PartImage.vue';
 import { useBelege } from '../stores/belege.js';
 import { useAngebot } from '../stores/angebot.js';
@@ -61,6 +62,7 @@ function angelegt(auftrag) {
 
       <section class="card p-5">
         <div class="flex items-center justify-between"><h2 class="font-semibold tnum">{{ angebot.id }}</h2><StatusBadge :status="status" /></div>
+        <ProjektFeld class="mt-4" :projekt="angebot.kopf.projekt" :kontakt-name="angebot.kopf.kontaktName" :kontakt-email="angebot.kopf.kontaktEmail" @speichern="b.projektSetzen('Angebot', angebot.id, $event)" />
         <div class="mt-5"><WorkflowSteps :stand="stand" :schritte="['Angebot', 'Auftrag']" /></div>
         <RouterLink v-if="angebot.mailAnfrage" :to="`/posteingang/${angebot.mailAnfrage.id}`" class="mt-4 flex items-center gap-2 rounded-xl bg-surface2 px-3 py-2 text-xs hover:text-accent">
           <Inbox :size="14" class="shrink-0 text-accent" /><span class="truncate">Anfrage per Mail von {{ angebot.mailAnfrage.vonName || angebot.mailAnfrage.vonEmail }}</span>

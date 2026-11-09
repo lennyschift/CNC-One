@@ -78,7 +78,7 @@ function demoTeile() {
   return [a, b, c];
 }
 
-const leererKopf = () => ({ kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache' });
+const leererKopf = () => ({ kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache', projekt: '', kontaktName: '', kontaktEmail: '' });
 
 // Das Angebot, an dem gerade gearbeitet wird. Es liegt als Entwurf in Frappe und wird nach jeder Änderung
 // kurz verzögert gespeichert. In Frappe merkt sich die Workbench je Benutzer, welches Angebot offen war.
@@ -142,7 +142,10 @@ export const useAngebot = defineStore('angebot', () => {
   function ausAngebot(record) {
     unterdrueckt = true;
     const k = JSON.parse(JSON.stringify(record.kopf));
-    kopf.value = { kundeId: k.kundeId, anfrageNr: k.anfrageNr, gueltigWochen: k.gueltigWochen, lieferzeit: k.lieferzeit };
+    kopf.value = {
+      kundeId: k.kundeId, anfrageNr: k.anfrageNr, gueltigWochen: k.gueltigWochen, lieferzeit: k.lieferzeit,
+      projekt: k.projekt ?? '', kontaktName: k.kontaktName ?? '', kontaktEmail: k.kontaktEmail ?? '',
+    };
     teile.value = record.positionen.map((p) => JSON.parse(JSON.stringify(p.teil)));
     auswahlId.value = teile.value.find((t) => t.id === sitzung.auswahlId)?.id ?? teile.value[0]?.id ?? null;
     angebotId.value = record.id;

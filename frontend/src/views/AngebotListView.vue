@@ -2,9 +2,10 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, FileText, Send } from '@lucide/vue';
+import { Plus, FileText, Send, Search } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import StatusBadge from '../components/StatusBadge.vue';
+import ProjektMarke from '../components/ProjektMarke.vue';
 import { useBelege } from '../stores/belege.js';
 import { useAngebot } from '../stores/angebot.js';
 import { useAnfragen } from '../stores/anfragen.js';
@@ -18,9 +19,15 @@ const anfragenZu = (x) => anfragen.fuerAngebot({ angebotId: x.id });
 
 const filter = ref('Alle');
 const filterListe = ['Alle', 'Entwurf', 'Gesendet', 'Bestellt'];
-const zeilen = computed(() => b.angebote
-  .map((x) => ({ ...x, anzeige: b.statusVon(x) }))
-  .filter((x) => filter.value === 'Alle' || x.anzeige.includes(filter.value) || (filter.value === 'Bestellt' && x.anzeige === 'Teilweise bestellt')));
+const suche = ref('');
+const ansprechpartner = (x) => x.kopf.kontaktName || x.mailAnfrage?.vonName || x.mailAnfrage?.vonEmail || '';
+const zeilen = computed(() => {
+  const q = suche.value.trim().toLowerCase();
+  return b.angebote
+    .map((x) => ({ ...x, anzeige: b.statusVon(x) }))
+    .filter((x) => filter.value === 'Alle' || x.anzeige.includes(filter.value) || (filter.value === 'Bestellt' && x.anzeige === 'Teilweise bestellt'))
+    .filter((x) => !q || `${x.id} ${x.kopf.projekt} ${x.kopf.kundeName} ${ansprechpartner(x)} ${x.kopf.anfrageNr} ${x.positionen.map((p) => `${p.teil.name} ${p.teil.teilenummer}`).join(' ')}`.toLowerCase().includes(q));
+});
 
 async function neu() {
   await a.neu();
@@ -35,6 +42,10 @@ const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
       <div class="flex gap-1 rounded-xl border border-line bg-surface p-1">
         <button v-for="f in filterListe" :key="f" class="rounded-lg px-3 py-1.5 text-sm transition" :class="filter === f ? 'bg-accent-soft font-medium text-accent' : 'text-mute hover:text-ink'" @click="filter = f">{{ f }}</button>
       </div>
+      <label class="relative mr-auto">
+        <Search :size="15" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
+        <input v-model="suche" class="field !w-64 !pl-9" placeholder="Nummer, Projekt, Kunde, Kontakt …" />
+      </label>
       <button class="btn btn-primary" @click="neu"><Plus :size="16" /> Neues Angebot</button>
     </div>
 
@@ -45,10 +56,10 @@ const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
           <div v-if="x.positionen.length > 3" class="grid h-[46px] w-[46px] place-items-center rounded-xl border border-line bg-surface2 text-xs font-medium text-mute ring-2 ring-surface">+{{ x.positionen.length - 3 }}</div>
         </div>
         <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-3"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.anzeige" />
+          <div class="flex items-center gap-3"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.anzeige" /><ProjektMarke :projekt="x.kopf.projekt" />
             <span v-if="anfragenZu(x).length" class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[11px]" :class="anfragenZu(x).every((z) => z.status !== 'Gesendet') ? 'text-ok' : 'text-warn'" title="Lieferantenanfragen zu diesem Angebot"><Send :size="11" />{{ anfragenZu(x).length }}</span>
           </div>
-          <div class="mt-0.5 truncate text-sm text-mute">{{ x.kopf.kundeName }} · {{ x.positionen.length }} Position{{ x.positionen.length === 1 ? '' : 'en' }}<template v-if="x.kopf.anfrageNr"> · Anfrage {{ x.kopf.anfrageNr }}</template></div>
+          <div class="mt-0.5 truncate text-sm text-mute">{{ x.kopf.kundeName }}<template v-if="ansprechpartner(x)"> · {{ ansprechpartner(x) }}</template> · {{ x.positionen.length }} Position{{ x.positionen.length === 1 ? '' : 'en' }}<template v-if="x.kopf.anfrageNr"> · Anfrage {{ x.kopf.anfrageNr }}</template></div>
         </div>
         <div class="text-right">
           <div class="font-semibold tnum">{{ eur(x.netto) }}</div>

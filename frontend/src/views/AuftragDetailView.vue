@@ -10,6 +10,8 @@ import { useRechnung } from '../stores/rechnung.js';
 import { bereichText } from '../lib/serien.js';
 import WorkflowSteps from '../components/WorkflowSteps.vue';
 import StatusBadge from '../components/StatusBadge.vue';
+import ProjektMarke from '../components/ProjektMarke.vue';
+import ProjektFeld from '../components/ProjektFeld.vue';
 import PartImage from '../components/PartImage.vue';
 import { useBelege } from '../stores/belege.js';
 import { useFertigung } from '../stores/fertigung.js';
@@ -43,7 +45,7 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
     <section class="card p-6">
       <div class="flex flex-wrap items-start justify-between gap-6">
         <div>
-          <div class="flex items-center gap-3"><h2 class="text-xl font-semibold tnum">{{ auftrag.id }}</h2><StatusBadge :status="auftrag.status" /></div>
+          <div class="flex items-center gap-3"><h2 class="text-xl font-semibold tnum">{{ auftrag.id }}</h2><StatusBadge :status="auftrag.status" /><ProjektMarke :projekt="auftrag.projekt" /></div>
           <p class="mt-1 text-sm text-mute">aus <RouterLink :to="`/angebote/${auftrag.angebotId}`" class="text-accent hover:underline tnum">{{ auftrag.angebotId }}</RouterLink> · angelegt am {{ de(auftrag.datum) }}</p>
           <button v-if="!fbs.length" class="btn btn-primary mt-4" @click="f.ausAuftrag(auftrag.id)"><Factory :size="16" /> Fertigung starten</button>
           <RouterLink v-else to="/fertigung" class="btn mt-4"><Factory :size="16" /> Zur Fertigung</RouterLink>
@@ -58,10 +60,11 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
         </div>
         <div class="w-full max-w-xl"><WorkflowSteps :stand="stand" /></div>
       </div>
-      <div class="mt-5 grid gap-3 text-sm md:grid-cols-3">
+      <div class="mt-5 grid gap-3 text-sm md:grid-cols-4">
         <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><MapPin :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div class="font-medium">{{ auftrag.kundeName }}</div><div v-for="z in auftrag.kunde.adresse" :key="z" class="text-mute">{{ z }}</div></div></div>
-        <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><UserRound :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div>{{ auftrag.kunde.kontakt?.name }}</div><div class="text-xs text-mute">{{ auftrag.kunde.kontakt?.email }}</div></div></div>
+        <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><UserRound :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div class="text-xs text-mute">Ansprechpartner</div><div>{{ auftrag.kontaktName || auftrag.kunde.kontakt?.name || '–' }}</div><div class="text-xs text-mute">{{ auftrag.kontaktName || auftrag.kontaktEmail ? auftrag.kontaktEmail : auftrag.kunde.kontakt?.email }}</div></div></div>
         <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><Hash :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div class="text-xs text-mute">Bestellnummer des Kunden</div><div>{{ auftrag.kundenbestellnr || '–' }}</div></div></div>
+        <ProjektFeld :projekt="auftrag.projekt" @speichern="b.projektSetzen('Auftrag', auftrag.id, $event)" />
       </div>
     </section>
 

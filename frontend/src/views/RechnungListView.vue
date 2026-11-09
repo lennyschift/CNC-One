@@ -4,10 +4,14 @@ import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Search, Receipt } from '@lucide/vue';
 import RechnungNav from '../components/RechnungNav.vue';
 import StatusBadge from '../components/StatusBadge.vue';
+import ProjektMarke from '../components/ProjektMarke.vue';
+import { useBelege } from '../stores/belege.js';
 import { useRechnung } from '../stores/rechnung.js';
 import { eur } from '../lib/format.js';
 
 const store = useRechnung();
+const belege = useBelege();
+const projektVon = (r) => belege.auftrag(r.auftragId)?.projekt ?? '';
 onMounted(() => store.neuLaden().catch(() => {}));
 
 const filter = ref('Alle');
@@ -30,7 +34,7 @@ const passt = (r) => {
 };
 const zeilen = computed(() => {
   const q = suche.value.trim().toLowerCase();
-  return store.rechnungen.filter((r) => passt(r) && (!q || `${r.nummer} ${r.id} ${r.kundeName} ${r.auftragId} ${r.kundenbestellnr}`.toLowerCase().includes(q)));
+  return store.rechnungen.filter((r) => passt(r) && (!q || `${r.nummer} ${r.id} ${r.kundeName} ${r.auftragId} ${r.kundenbestellnr} ${projektVon(r)}`.toLowerCase().includes(q)));
 });
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
 </script>
@@ -49,7 +53,7 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
       </div>
       <label class="relative">
         <Search :size="15" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
-        <input v-model="suche" class="field !w-64 !pl-9" placeholder="Nummer, Kunde, Auftrag …" />
+        <input v-model="suche" class="field !w-64 !pl-9" placeholder="Nummer, Projekt, Kunde, Auftrag …" />
       </label>
     </div>
 
@@ -58,7 +62,7 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
         <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-surface2 text-mute"><Receipt :size="20" /></span>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span class="font-semibold tnum">{{ r.nummer || 'Entwurf' }}</span><StatusBadge :status="r.status" />
+            <span class="font-semibold tnum">{{ r.nummer || 'Entwurf' }}</span><StatusBadge :status="r.status" /><ProjektMarke :projekt="projektVon(r)" />
             <span v-if="r.art === 'Teilrechnung'" class="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-mute">Teilrechnung</span>
             <span v-if="r.tageUeberfaellig > 0" class="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">{{ r.tageUeberfaellig }} Tage überfällig</span>
           </div>

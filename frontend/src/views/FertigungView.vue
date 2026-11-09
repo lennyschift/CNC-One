@@ -5,10 +5,12 @@ import { Search, LayoutGrid, Cog, Truck, Factory, Flame } from '@lucide/vue';
 import FertigungKarte from '../components/FertigungKarte.vue';
 import PartImage from '../components/PartImage.vue';
 import { useFertigung } from '../stores/fertigung.js';
+import { useBelege } from '../stores/belege.js';
 import { STATUS, lasten, produziert, restMinuten } from '../lib/fertigung.js';
 import { zahl } from '../lib/format.js';
 
 const f = useFertigung();
+const b = useBelege();
 const ansicht = ref('board');
 const suche = ref('');
 const nurEilig = ref(false);
@@ -17,7 +19,7 @@ let ziehend = '';
 
 const gefiltert = computed(() => f.liste.filter((x) => {
   const q = suche.value.trim().toLowerCase();
-  const text = `${x.teil.name} ${x.teil.teilenummer} ${x.auftragId} ${x.kundeName} ${x.id}`.toLowerCase();
+  const text = `${x.teil.name} ${x.teil.teilenummer} ${x.auftragId} ${x.kundeName} ${x.id} ${b.auftrag(x.auftragId)?.projekt ?? ''}`.toLowerCase();
   return (!q || text.includes(q)) && (!nurEilig.value || x.prioritaet !== 'Normal');
 }));
 const spalten = computed(() => STATUS.map((s) => ({ name: s, items: gefiltert.value.filter((x) => x.status === s) })));

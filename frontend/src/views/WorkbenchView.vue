@@ -50,6 +50,21 @@ async function neuesAngebot() {
 const kunden = ref([]);
 onMounted(async () => { kunden.value = await repo.kunden.liste(); });
 const kunde = computed(() => kunden.value.find((k) => k.id === a.kopf.kundeId) ?? null);
+// Ansprechpartner (Einkäufer) je Angebot aus den Kontakten des Kunden; leer = Rechnungskontakt des Kunden
+const kontakte = computed(() => kunde.value?.kontakte ?? []);
+const kontaktWahl = computed({
+  get: () => {
+    if (!a.kopf.kontaktName && !a.kopf.kontaktEmail) return '';
+    const i = kontakte.value.findIndex((k) => (a.kopf.kontaktEmail ? k.email === a.kopf.kontaktEmail : k.name === a.kopf.kontaktName));
+    return i >= 0 ? String(i) : 'eigen';
+  },
+  set: (v) => {
+    if (v === 'eigen') return;
+    const k = v === '' ? null : kontakte.value[Number(v)];
+    a.kopf.kontaktName = k?.name ?? '';
+    a.kopf.kontaktEmail = k?.email ?? '';
+  },
+});
 const mwst = computed(() => a.netto * 0.19);
 </script>
 
@@ -68,11 +83,19 @@ const mwst = computed(() => a.netto * 0.19);
           <label class="block"><span class="label mb-1 block">Anfrage-Nr. des Kunden</span><input v-model="a.kopf.anfrageNr" class="field" placeholder="z. B. RFQ-2026-118" /></label>
           <NumField v-model="a.kopf.gueltigWochen" label="Gültig" unit="Wo." :decimals="0" :min="1" />
           <label class="block"><span class="label mb-1 block">Lieferzeit</span><input v-model="a.kopf.lieferzeit" class="field" :disabled="!!a.fruehesterTermin" :title="a.fruehesterTermin ? 'Frühester Liefertermin der Bauteile' : ''" /></label>
+          <label class="block md:col-span-2"><span class="label mb-1 block">Projekt <span class="font-normal normal-case text-mute">(optional, nur intern)</span></span><input v-model="a.kopf.projekt" class="field" placeholder="z. B. Prüfstand 2027" /></label>
+          <label class="block md:col-span-2"><span class="label mb-1 block">Ansprechpartner (Einkäufer)</span>
+            <select v-model="kontaktWahl" class="field" :disabled="!kunde">
+              <option value="">{{ kunde?.kontakt ? `Rechnungskontakt: ${kunde.kontakt.name}` : '– wie beim Kunden –' }}</option>
+              <option v-for="(k, i) in kontakte" :key="i" :value="String(i)">{{ k.name || k.email }}{{ k.name && k.email ? ` · ${k.email}` : '' }}</option>
+              <option v-if="kontaktWahl === 'eigen'" value="eigen">{{ a.kopf.kontaktName || a.kopf.kontaktEmail }}{{ a.kopf.kontaktName && a.kopf.kontaktEmail ? ` · ${a.kopf.kontaktEmail}` : '' }}</option>
+            </select>
+          </label>
 
           <Transition name="fade">
             <div v-if="kunde" class="grid gap-3 text-sm md:col-span-4 md:grid-cols-3">
               <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><MapPin :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div v-for="z in kunde.adresse" :key="z">{{ z }}</div></div></div>
-              <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><UserRound :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div>{{ kunde.kontakt.name }}</div><div class="text-xs text-mute">{{ kunde.kontakt.email }}</div></div></div>
+              <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><UserRound :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div>{{ a.kopf.kontaktName || kunde.kontakt?.name || '–' }}</div><div class="text-xs text-mute">{{ a.kopf.kontaktName || a.kopf.kontaktEmail ? a.kopf.kontaktEmail : kunde.kontakt?.email }}</div></div></div>
               <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><Hash :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div class="text-xs text-mute">Lieferanten-Nr. bei Kunde</div><div>{{ kunde.lieferantennr || '–' }}</div></div></div>
             </div>
           </Transition>

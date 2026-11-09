@@ -90,10 +90,21 @@ export const useBelege = defineStore('belege', () => {
     if (i >= 0) auftraege.value[i] = rec;
     else auftraege.value.unshift(rec);
   }
+  // Projektname (intern) von Angebot oder Auftrag ändern, auch nach dem Senden
+  async function projektSetzen(art, id, projekt) {
+    try {
+      const rec = await call(`cnc_one.api.${art === 'Auftrag' ? 'auftrag' : 'angebot'}.projekt_setzen`, { id, projekt });
+      if (art === 'Auftrag') auftragEinsetzen(rec);
+      else einsetzen(rec);
+      ui.toast(projekt ? `Projekt „${projekt}“ gespeichert` : 'Projekt entfernt', 'ok');
+    } catch (e) {
+      ui.toast(e.message, 'warn');
+    }
+  }
   function auftragStatusSetzen(id, status) {
     const a = auftrag(id);
     if (a && status) a.status = status;
   }
 
-  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, einsetzen, angebotSpeichern, angebotSenden, angebotAblehnen, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen, auftraegeNeuLaden };
+  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, einsetzen, angebotSpeichern, angebotSenden, angebotAblehnen, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen, projektSetzen, auftraegeNeuLaden };
 });

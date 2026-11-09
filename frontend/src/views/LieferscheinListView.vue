@@ -5,6 +5,7 @@ import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Plus, Search, Truck } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import StatusBadge from '../components/StatusBadge.vue';
+import ProjektMarke from '../components/ProjektMarke.vue';
 import LieferscheinDialog from '../components/LieferscheinDialog.vue';
 import { useLieferung } from '../stores/lieferung.js';
 import { useBelege } from '../stores/belege.js';
@@ -22,10 +23,11 @@ const filterListe = ['Alle', 'Bereit', 'Geliefert', 'Storniert'];
 const zeilen = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return l.lieferscheine.filter((x) => (filter.value === 'Alle' || x.status === filter.value)
-    && (!q || `${x.id} ${x.kundeName} ${x.kundenbestellnr} ${x.positionen.map((p) => `${p.teil.name} ${p.teil.teilenummer} ${p.auftragId}`).join(' ')}`.toLowerCase().includes(q)));
+    && (!q || `${x.id} ${x.kundeName} ${x.kundenbestellnr} ${projekteVon(x).join(' ')} ${x.positionen.map((p) => `${p.teil.name} ${p.teil.teilenummer} ${p.auftragId}`).join(' ')}`.toLowerCase().includes(q)));
 });
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
 const auftraegeVon = (x) => [...new Set(x.positionen.map((p) => p.auftragId).filter(Boolean))];
+const projekteVon = (x) => [...new Set(auftraegeVon(x).map((id) => belege.auftrag(id)?.projekt).filter(Boolean))];
 const stueck = (x) => x.positionen.reduce((n, p) => n + p.menge, 0);
 function angelegt(rec) { dialog.value = false; router.push(`/lieferscheine/${rec.id}`); }
 </script>
@@ -38,7 +40,7 @@ function angelegt(rec) { dialog.value = false; router.push(`/lieferscheine/${rec
       </div>
       <label class="relative">
         <Search :size="15" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
-        <input v-model="suche" class="field !w-64 !pl-9" placeholder="Nummer, Kunde, Bauteil, Auftrag …" />
+        <input v-model="suche" class="field !w-64 !pl-9" placeholder="Nummer, Projekt, Kunde, Bauteil …" />
       </label>
       <span class="ml-auto text-sm text-mute tnum">{{ zeilen.length }} von {{ l.lieferscheine.length }}</span>
       <button class="btn btn-primary" @click="dialog = true"><Plus :size="16" /> Neuer Lieferschein</button>
@@ -51,7 +53,7 @@ function angelegt(rec) { dialog.value = false; router.push(`/lieferscheine/${rec
           <div v-if="x.positionen.length > 3" class="grid h-[46px] w-[46px] place-items-center rounded-xl border border-line bg-surface2 text-xs font-medium text-mute ring-2 ring-surface">+{{ x.positionen.length - 3 }}</div>
         </div>
         <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.status" /></div>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.status" /><ProjektMarke v-for="pr in projekteVon(x)" :key="pr" :projekt="pr" /></div>
           <div class="mt-0.5 truncate text-sm text-mute">{{ x.kundeName }} · {{ x.positionen.map((p) => p.teil.name).join(', ') }}</div>
           <div class="mt-0.5 truncate text-xs text-mute">{{ auftraegeVon(x).length ? `aus ${auftraegeVon(x).join(', ')}` : 'ohne Auftrag' }}</div>
         </div>

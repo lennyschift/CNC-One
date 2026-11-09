@@ -2,12 +2,15 @@
 import { computed } from 'vue';
 import { Truck, Cog, CalendarClock, Flame } from '@lucide/vue';
 import PartImage from './PartImage.vue';
+import ProjektMarke from './ProjektMarke.vue';
+import { useBelege } from '../stores/belege.js';
 import { bereichText } from '../lib/serien.js';
 import { produziert, fortschritt, ueberproduktion, tageBis } from '../lib/fertigung.js';
 
 const props = defineProps({ fb: { type: Object, required: true } });
 defineEmits(['drag']);
 
+const projekt = computed(() => useBelege().auftrag(props.fb.auftragId)?.projekt ?? '');
 const fertig = computed(() => produziert(props.fb));
 const anteil = computed(() => fortschritt(props.fb));
 const ueber = computed(() => ueberproduktion(props.fb));
@@ -39,6 +42,7 @@ const weg = computed(() => props.fb.arbeitsgaenge.some((a) => a.typ === 'fremd' 
         </div>
         <div class="truncate text-xs text-mute">{{ fb.teil.teilenummer || 'ohne Teilenummer' }}</div>
         <div class="mt-0.5 truncate text-[11px] text-mute tnum">{{ fb.auftragId }} · {{ fb.kundeName }}</div>
+        <ProjektMarke v-if="projekt" :projekt="projekt" class="mt-1" />
         <div v-if="fb.serienVon" class="mt-0.5 truncate text-[11px] text-mute tnum"># {{ bereichText(fb.serienVon, fb.serienBis, fb.serienStellen) }}</div>
       </div>
     </div>
