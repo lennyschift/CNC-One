@@ -11,6 +11,9 @@
   "netto",
   "sb_kopf",
   "kundenbestellnr",
+  "projekt",
+  "kontakt_name",
+  "kontakt_email",
   "sb_pos",
   "positionen",
   "kosten"
@@ -68,6 +71,25 @@
    "fieldname": "kundenbestellnr",
    "fieldtype": "Data",
    "label": "Bestellnummer des Kunden"
+  },
+  {
+   "fieldname": "projekt",
+   "fieldtype": "Data",
+   "label": "Projekt",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Interner Name zum Wiedererkennen, steht nicht auf den Belegen"
+  },
+  {
+   "fieldname": "kontakt_name",
+   "fieldtype": "Data",
+   "label": "Ansprechpartner",
+   "description": "Einkäufer beim Kunden (z. Hd. im Angebot)"
+  },
+  {
+   "fieldname": "kontakt_email",
+   "fieldtype": "Data",
+   "label": "E-Mail des Ansprechpartners"
   },
   {
    "fieldname": "sb_pos",
@@ -142,5 +164,5 @@
  "track_changes": 1,
  "allow_rename": 0,
  "icon": "clipboard-list",
- "search_fields": "kunde_name,kundenbestellnr"
+ "search_fields": "kunde_name,kundenbestellnr,projekt"
 }

@@ -190,13 +190,16 @@ DOCTYPES += [
         Json("kalkulation", "Kalkulation (Eingaben)"),
         Json("ergebnis", "Ergebnis (vom Server berechnet)", read_only=1),
     ]),
-    dict(name="Angebot", autoname="ANG-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="file-text", extra={"search_fields": "kunde_name,anfrage_nr"}, fields=[
+    dict(name="Angebot", autoname="ANG-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="file-text", extra={"search_fields": "kunde_name,anfrage_nr,projekt"}, fields=[
         Link("kunde", "Kunde", "Kunde", in_list_view=1, in_standard_filter=1),
         Data("kunde_name", "Kundenname", read_only=1, in_list_view=1),
         Select("status", ["Entwurf", "Gesendet", "Abgelehnt"], "Status", default="Entwurf", read_only=1, in_list_view=1, in_standard_filter=1),
         Money("netto", "Netto", read_only=1, in_list_view=1),
         Section("sb_kopf", "Angaben"),
         Data("anfrage_nr", "Anfrage-Nr. des Kunden"),
+        Data("projekt", "Projekt", in_list_view=1, in_standard_filter=1, description="Interner Name zum Wiedererkennen, steht nicht auf den Belegen"),
+        Data("kontakt_name", "Ansprechpartner", description="Einkäufer beim Kunden (z. Hd. im Angebot)"),
+        Data("kontakt_email", "E-Mail des Ansprechpartners"),
         Int("gueltig_wochen", "Gültig (Wochen)", default="4"),
         Data("lieferzeit", "Lieferzeit", default="Nach Absprache"),
         F("versandt_am", "Datetime", "Gesendet am", read_only=1),
@@ -233,7 +236,7 @@ DOCTYPES += [
         Money("betrag", "Betrag", in_list_view=1),
         Data("abgerechnet_in", "Abgerechnet in Rechnung", read_only=1, description="Sonderkosten werden in der ersten Rechnung vollständig abgerechnet"),
     ]),
-    dict(name="Auftrag", autoname="AUF-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="clipboard-list", extra={"search_fields": "kunde_name,kundenbestellnr"}, fields=[
+    dict(name="Auftrag", autoname="AUF-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="clipboard-list", extra={"search_fields": "kunde_name,kundenbestellnr,projekt"}, fields=[
         Link("kunde", "Kunde", "Kunde", reqd=1, in_list_view=1, in_standard_filter=1),
         Data("kunde_name", "Kundenname", read_only=1, in_list_view=1),
         Link("angebot", "Angebot", "Angebot", reqd=1, in_list_view=1, in_standard_filter=1),
@@ -241,6 +244,9 @@ DOCTYPES += [
         Money("netto", "Netto", read_only=1, in_list_view=1),
         Section("sb_kopf", "Angaben"),
         Data("kundenbestellnr", "Bestellnummer des Kunden"),
+        Data("projekt", "Projekt", in_list_view=1, in_standard_filter=1, description="Interner Name zum Wiedererkennen, steht nicht auf den Belegen"),
+        Data("kontakt_name", "Ansprechpartner", description="Einkäufer beim Kunden (z. Hd. im Angebot)"),
+        Data("kontakt_email", "E-Mail des Ansprechpartners"),
         Section("sb_pos", "Positionen"),
         Table("positionen", "Auftragsposition", "Positionen"),
         Table("kosten", "Auftragskosten", "Kosten (Sonderkosten je Position)"),
@@ -356,7 +362,7 @@ DOCTYPES += [
         Int("serien_bis", "Seriennummer bis"),
         Int("serien_stellen", "Stellen der Seriennummer"),
     ]),
-    dict(name="Lieferschein", autoname="LS-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung")), icon="truck", extra={"search_fields": "kunde_name,kundenbestellnr"}, fields=[
+    dict(name="Lieferschein", autoname="LS-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung")), icon="truck", extra={"search_fields": "kunde_name,kundenbestellnr,projekt"}, fields=[
         Link("kunde", "Kunde", "Kunde", reqd=1, in_list_view=1, in_standard_filter=1),
         Data("kunde_name", "Kundenname", read_only=1, in_list_view=1),
         Select("status", ["Bereit", "Geliefert", "Storniert"], "Status", default="Bereit", read_only=1, in_list_view=1, in_standard_filter=1),

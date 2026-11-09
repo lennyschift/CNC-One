@@ -44,6 +44,9 @@ def angebot_ui(d):
 			"anfrageNr": d.anfrage_nr or "",
 			"gueltigWochen": d.gueltig_wochen or 4,
 			"lieferzeit": d.lieferzeit or "",
+			"projekt": d.projekt or "",
+			"kontaktName": d.kontakt_name or "",
+			"kontaktEmail": d.kontakt_email or "",
 			"kundeName": d.kunde_name or "",
 			"kunde": kunde_ui(kunde) if kunde else None,
 		},
@@ -94,6 +97,9 @@ def entwurf_speichern(angebot):
 	doc.anfrage_nr = kopf.get("anfrageNr") or ""
 	doc.gueltig_wochen = int(kopf.get("gueltigWochen") or 4)
 	doc.lieferzeit = kopf.get("lieferzeit") or ""
+	doc.projekt = (kopf.get("projekt") or "").strip()
+	doc.kontakt_name = (kopf.get("kontaktName") or "").strip()
+	doc.kontakt_email = (kopf.get("kontaktEmail") or "").strip().lower()
 
 	# Was dieses Angebot an Bauteilen schon verknüpft hat: Position -> (Bauteil, mit diesem Angebot neu angelegt)
 	alt = {z.position_key: (z.bauteil, bool(z.bauteil_neu)) for z in doc.positionen if z.bauteil}
@@ -142,6 +148,16 @@ def senden(id):
 	doc.status = "Gesendet"
 	doc.versandt_am = now_datetime()
 	doc.save()
+	return angebot_ui(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def projekt_setzen(id, projekt=""):
+	"""Projektname (intern) auch nach dem Senden ändern; er steht nicht auf dem Angebot."""
+	nur_cnc()
+	doc = _geladen(id)
+	doc.check_permission("write")
+	doc.db_set("projekt", (projekt or "").strip())
 	return angebot_ui(doc)
 
 
@@ -207,7 +223,7 @@ def pdf_erzeugen(doc, zu_haenden=""):
 	kunde = a["kopf"]["kunde"] or {"adresse": [], "kontakt": None}
 	firma = firma_ui()
 	kontext = {
-		"a": a, "f": firma, "kunde": kunde, "zu_haenden": zu_haenden or (kunde.get("kontakt") or {}).get("name", ""),
+		"a": a, "f": firma, "kunde": kunde, "zu_haenden": zu_haenden or doc.kontakt_name or (kunde.get("kontakt") or {}).get("name", ""),
 		"datum": datum, "gueltig_bis": add_days(datum, 7 * int(doc.gueltig_wochen or 4)), "mwst": round((doc.netto or 0) * 0.19, 2),
 		"staffel": any(p["teil"]["staffel"].get("aktiv") for p in a["positionen"]), "de": _de, "eur": _eur,
 		"rahmen": briefbogen.rahmen(firma),

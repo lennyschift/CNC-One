@@ -118,6 +118,11 @@ def kunde_ui(d):
 			"name": " ".join(x for x in (kontakt.anrede, kontakt.vorname, kontakt.nachname) if x),
 			"email": kontakt.email or "",
 		} if kontakt else None,
+		# alle Kontakte, zur Wahl des Ansprechpartners (Einkäufer) je Angebot
+		"kontakte": [
+			{"name": " ".join(x for x in (k.anrede, k.vorname, k.nachname) if x), "email": (k.email or "").lower()}
+			for k in d.kontakte
+		],
 	}
 
 

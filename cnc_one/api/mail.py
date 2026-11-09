@@ -178,7 +178,13 @@ def angebot_anlegen(id):
 		return {"angebot": angebot_ui(frappe.get_doc("Angebot", d.angebot)), "dateien": [], "text": "", "neu": False}
 	if not d.kunde:
 		frappe.throw(_("Bitte zuerst den Kunden zuordnen."))
-	a = frappe.get_doc({"doctype": "Angebot", "kunde": d.kunde, "anfrage_nr": anfrage_nummer(d.betreff)})
+	# Ansprechpartner = Absender der Anfrage (Name wie beim Kunden hinterlegt, sonst aus der Mail)
+	von = (d.von_email or "").lower()
+	k = next((x for x in frappe.get_doc("Kunde", d.kunde).kontakte if (x.email or "").lower() == von), None)
+	kontakt_name = " ".join(x for x in (k.anrede, k.vorname, k.nachname) if x) if k else (d.von_name or "")
+	a = frappe.get_doc({
+		"doctype": "Angebot", "kunde": d.kunde, "anfrage_nr": anfrage_nummer(d.betreff), "kontakt_name": kontakt_name, "kontakt_email": von,
+	})
 	a.insert()
 	dateien = _dateien_ans_angebot(d, a.name)
 	d.angebot = a.name
@@ -361,6 +367,8 @@ def _empfaenger_aus_angebot(a, s):
 		an = letzte.von_email
 		cc = [x for x in dict.fromkeys(_adressliste(letzte.an, letzte.cc)) if x not in (eigene, an)]
 		return d, letzte, an, ", ".join(cc)
+	if a.kontakt_email:
+		return d, None, a.kontakt_email, ""
 	kontakt = (kunde_ui(frappe.get_doc("Kunde", a.kunde)).get("kontakt") or {}) if a.kunde else {}
 	return d, None, kontakt.get("email", ""), ""
 

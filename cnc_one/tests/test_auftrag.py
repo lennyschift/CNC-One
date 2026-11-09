@@ -57,6 +57,15 @@ class TestAuftrag(IntegrationTestCase):
 		self.assertNotEqual(eins["id"], zwei["id"])
 		self.assertEqual({x["id"] for x in auftrag.liste() if x["angebotId"] == a["id"]}, {eins["id"], zwei["id"]})
 
+	def test_projekt_und_ansprechpartner_wandern_in_den_auftrag(self):
+		a = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde, "projekt": " ZZ Prüfstand 2027 ", "kontaktName": "Max Einkauf", "kontaktEmail": "Max@ZZ-Kunde.invalid"}, "teile": [teil("t1")]})
+		self.assertEqual((a["kopf"]["projekt"], a["kopf"]["kontaktName"], a["kopf"]["kontaktEmail"]), ("ZZ Prüfstand 2027", "Max Einkauf", "max@zz-kunde.invalid"))
+		angebot.senden(a["id"])
+		self.assertEqual(angebot.projekt_setzen(a["id"], "ZZ Prüfstand 2028")["kopf"]["projekt"], "ZZ Prüfstand 2028")  # auch nach dem Senden
+		r = auftrag.aus_angebot(a["id"], "", [{"angebotKey": "t1", "menge": 4}])
+		self.assertEqual((r["projekt"], r["kontaktName"], r["kontaktEmail"]), ("ZZ Prüfstand 2028", "Max Einkauf", "max@zz-kunde.invalid"))
+		self.assertEqual(auftrag.projekt_setzen(r["id"], "ZZ Abruf 1")["projekt"], "ZZ Abruf 1")
+
 	def test_beauftragtes_angebot_nicht_mehr_ablehnen_oder_senden(self):
 		from cnc_one.api import mail as mail_api
 

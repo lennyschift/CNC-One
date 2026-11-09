@@ -30,6 +30,9 @@ def auftrag_ui(d):
 		"kundeName": d.kunde_name or "",
 		"kunde": kunde_ui(kunde) if kunde else None,
 		"kundenbestellnr": d.kundenbestellnr or "",
+		"projekt": d.projekt or "",
+		"kontaktName": d.kontakt_name or "",
+		"kontaktEmail": d.kontakt_email or "",
 		"datum": iso(d.creation),
 		"status": d.status,
 		"netto": d.netto or 0,
@@ -96,6 +99,7 @@ def aus_angebot(angebot, kundenbestellnr="", positionen=None):
 	doc.angebot = ang.name
 	doc.status = "Offen"
 	doc.kundenbestellnr = (kundenbestellnr or "").strip()
+	doc.projekt, doc.kontakt_name, doc.kontakt_email = ang.projekt or "", ang.kontakt_name or "", ang.kontakt_email or ""
 	zu_speichern = []
 	serien = []
 	vergeben = []
@@ -198,3 +202,13 @@ def plan_fuer_position(auftrag, pos):
 	ang = frappe.get_doc("Angebot", auftrag.angebot)
 	ap = next((z for z in ang.positionen if z.position_key == pos.angebot_position_key), None)
 	return (als_json(ap.kalkulation).get("arbeitsgaenge") or []) if ap else []
+
+
+@frappe.whitelist(methods=["POST"])
+def projekt_setzen(id, projekt=""):
+	"""Projektname (intern) des Auftrags ändern; Fertigung, Lieferschein und Rechnung zeigen ihn über den Auftrag."""
+	nur_cnc()
+	doc = frappe.get_doc("Auftrag", id)
+	doc.check_permission("write")
+	doc.db_set("projekt", (projekt or "").strip())
+	return auftrag_ui(doc)

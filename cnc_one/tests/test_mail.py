@@ -184,6 +184,7 @@ class TestMailAnfragen(IntegrationTestCase):
 		a = r["angebot"]
 		self.assertTrue(r["neu"])
 		self.assertEqual((a["kopf"]["kundeId"], a["kopf"]["anfrageNr"], a["mailAnfrage"]["id"]), (self.kunde, "4711-B", d.name))
+		self.assertEqual((a["kopf"]["kontaktName"], a["kopf"]["kontaktEmail"]), ("Einkauf", "einkauf@zz-kunde.de"))  # Absender, Name wie beim Kunden
 		self.assertEqual([(x["name"], x["art"]) for x in r["dateien"]], [("zz-a.pdf", "Zeichnung"), ("zz-a.step", "STEP")])
 		self.assertIn("Bitte um Angebot", r["text"])
 		for x in r["dateien"]:
