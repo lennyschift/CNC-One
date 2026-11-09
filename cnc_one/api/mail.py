@@ -161,7 +161,7 @@ def _dateien_ans_angebot(d, angebot):
 			if not quelle:
 				continue
 			f = frappe.get_doc("File", quelle).create_attachment_copy("Angebot", angebot, ignore_permissions=True)
-			out.append({"id": f.name, "name": a["name"], "art": _art(a["name"]), "groesse": a.get("groesse") or 0, "url": f.file_url, "ordner": a.get("ordner") or ""})
+			out.append({"id": f.name, "name": a["name"], "art": _art(a["name"]), "groesse": a.get("groesse") or 0, "url": f.file_url, "ordner": a.get("ordner") or "", "aus": a.get("aus") or ""})
 	return out
 
 

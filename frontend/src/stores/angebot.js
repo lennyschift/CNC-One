@@ -301,6 +301,23 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast(`„${weg.name}“ entfernt`);
   }
 
+  // Zeichnung und Modell lagen in zwei Bauteilen (Namen passten nicht zusammen): die Dateien von „quelle“ kommen zu „ziel“,
+  // leere Angaben wie Teilenummer werden ergänzt, „quelle“ entfällt
+  function zusammenfuehren(zielId, quelleId) {
+    const ziel = teile.value.find((t) => t.id === zielId);
+    const quelle = teile.value.find((t) => t.id === quelleId);
+    if (!ziel || !quelle || ziel === quelle) return;
+    const ohneZeichnung = !ziel.dateien.some((d) => d.art === 'Zeichnung');
+    for (const d of quelle.dateien) if (!ziel.dateien.some((x) => x.url && x.url === d.url)) ziel.dateien.push(d);
+    for (const k of ['teilenummer', 'zeichnungsnr', 'revision']) if (!ziel[k] && quelle[k]) ziel[k] = quelle[k];
+    if (!ziel.vorschaubild && quelle.vorschaubild) ziel.vorschaubild = quelle.vorschaubild;
+    teile.value.splice(teile.value.indexOf(quelle), 1);
+    auswahlId.value = ziel.id;
+    const z = ohneZeichnung && ziel.dateien.find((d) => d.art === 'Zeichnung' && d.url);
+    if (z) erkennenFuer(ziel, z);
+    ui.toast(`„${quelle.name}“ mit „${ziel.name}“ zusammengeführt`, 'ok');
+  }
+
   function verschieben(id, richtung) {
     const i = teile.value.findIndex((t) => t.id === id);
     const j = i + richtung;
@@ -310,29 +327,26 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   // Dateien hinzufügen und sofort hochladen (am Angebotsentwurf; beim Anlegen des Bauteils wandern sie dorthin).
-  // Ohne Ziel werden sie nach Namen gruppiert: Zeichnung.pdf + Zeichnung.step ergeben ein Bauteil.
+  // Ohne Ziel ordnet lib/zuordnung.js zu: Zeichnung und Modell eines Bauteils (auch bei verschiedenen Namen) ergeben ein
+  // Bauteil, das fehlende Gegenstück eines schon vorhandenen Bauteils kommt dorthin.
   async function dateienHinzufuegen(files, zielTeil = null) {
     const auftraege = [];
     if (zielTeil) {
       for (const f of files) auftraege.push({ teil: zielTeil, datei: f });
     } else {
-      const gruppen = new Map();
-      for (const f of files) {
-        const basis = (/^(.*?)(\.[^.]+)?$/.exec(f.name)?.[1] ?? f.name).trim();
-        const schluessel = basis.toLowerCase().replace(/[\s_-]+/g, '');
-        if (!gruppen.has(schluessel)) gruppen.set(schluessel, { basis, dateien: [] });
-        gruppen.get(schluessel).dateien.push(f);
-      }
+      const { gruppieren } = await import('../lib/zuordnung.js');
+      const vorhandene = teile.value.map((t) => ({ id: t.id, name: t.name, dateien: t.dateien }));
+      const gruppen = gruppieren(files.map((f) => ({ name: f.name, art: dateiArt(f.name), paket: 'ablage', datei: f })), { vorhandene });
       let neu = 0;
-      for (const g of gruppen.values()) {
-        let ziel = teile.value.find((t) => t.name.toLowerCase().replace(/[\s_-]+/g, '') === g.basis.toLowerCase().replace(/[\s_-]+/g, ''));
+      for (const g of gruppen) {
+        // über das reaktive Array holen, sonst bemerkt das Speichern die hochgeladenen Dateien nicht
+        let ziel = g.teilId ? teile.value.find((t) => t.id === g.teilId) : null;
         if (!ziel) {
-          // über das reaktive Array holen, sonst bemerkt das Speichern die hochgeladenen Dateien nicht
-          const id = hinzufuegen(g.basis.replace(/_/g, ' ')).id;
+          const id = hinzufuegen(g.basis).id;
           ziel = teile.value.find((t) => t.id === id);
           neu++;
         }
-        for (const f of g.dateien) auftraege.push({ teil: ziel, datei: f });
+        for (const d of g.dateien) auftraege.push({ teil: ziel, datei: d.datei });
       }
       ui.toast(`${files.length} Datei${files.length === 1 ? '' : 'en'} → ${neu} neue${neu === 1 ? 's' : ''} Bauteil${neu === 1 ? '' : 'e'}`, 'ok');
     }
@@ -366,7 +380,7 @@ export const useAngebot = defineStore('angebot', () => {
     const [{ gruppieren, mengenAusText, dateiPfad }, { passtZu }] = await Promise.all([import('../lib/mailanfrage.js'), import('../lib/mailtabelle.js')]);
     const gruppen = gruppieren(dateien);
     for (const g of gruppen) {
-      const id = hinzufuegen(g.basis.replace(/_/g, ' ')).id;
+      const id = hinzufuegen(g.basis).id;
       const t = teile.value.find((x) => x.id === id);
       t.dateien = g.dateien.map((d) => ({ id: d.id, name: d.name, art: d.art, groesse: d.groesse, url: d.url }));
       // bestätigte Zeile der Tabelle (Menge, Liefertermin), sonst Mengen aus dem Text
@@ -566,5 +580,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, zuordnung, fruehesterTermin, mailAnfrage, ausMailAnfrage, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
+  return { kopf, teile, zuordnung, fruehesterTermin, mailAnfrage, ausMailAnfrage, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, zusammenfuehren, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
 });

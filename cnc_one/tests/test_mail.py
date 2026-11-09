@@ -471,7 +471,7 @@ class TestZipAnhang(IntegrationTestCase):
 		)
 		self.assertEqual(n["hinweis"], "zz-anfrage.zip: in der ZIP belassen: stueckliste.xlsx")
 		abgelegt = frappe.get_all("File", filters={"attached_to_doctype": "Mail Anfrage", "attached_to_name": d.name}, pluck="file_name", order_by="creation")
-		self.assertEqual(sorted(abgelegt), ["4711-A Modell.stp", "4711-A Zeichnung.pdf", "4712-B Zeichnung.pdf", "zz-anfrage.zip"])
+		self.assertEqual(sorted(abgelegt), ["4711-A Zeichnung.pdf", "4712-B Zeichnung.pdf", "Modell.stp", "zz-anfrage.zip"])  # Ordner nur bei gleichen Namen
 
 		r = mail_api.angebot_anlegen(d.name)
 		self.assertEqual([(x["name"], x["ordner"]) for x in r["dateien"]], [("Zeichnung.pdf", "4711-A"), ("Modell.stp", "4711-A"), ("Zeichnung.pdf", "4712-B")])
@@ -491,6 +491,15 @@ class TestZipAnhang(IntegrationTestCase):
 			dateien, hinweise = mail.zip_auspacken("zz-gross.zip", zz_zip([("a.pdf", b"a"), ("b.pdf", b"b")]))
 		self.assertEqual(dateien, [])
 		self.assertIn("zu groß zum Auspacken", hinweise[0])
+
+	def test_rahmenordner_der_zip_zaehlt_nicht(self):
+		# wie bei Bosch: alles liegt in einem Ordner, der so heißt wie die ZIP
+		rahmen = "F03.912.101.Q_K1_SAP_Released_20261109094445"
+		dateien, _h = mail.zip_auspacken(f"{rahmen}.zip", zz_zip([(f"{rahmen}/F03_912_101_Q__COVER.pdf", b"%PDF zz"), (f"{rahmen}/step_F03_912_101_Q__COVER.stp", b"ISO zz")]))
+		self.assertEqual([(n, o) for n, o, _x in dateien], [("F03_912_101_Q__COVER.pdf", ""), ("step_F03_912_101_Q__COVER.stp", "")])
+		# echte Unterordner je Bauteil bleiben
+		dateien, _h = mail.zip_auspacken("zz.zip", zz_zip([("Rahmen/A/z.pdf", b"%PDF"), ("Rahmen/B/z.pdf", b"%PDF")]))
+		self.assertEqual([(n, o) for n, o, _x in dateien], [("z.pdf", "A"), ("z.pdf", "B")])
 
 	def test_pfade_und_umlaute_im_zip(self):
 		from types import SimpleNamespace

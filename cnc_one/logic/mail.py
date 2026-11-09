@@ -419,7 +419,8 @@ def zip_auspacken(name, inhalt, tiefe=0):
 	"""Dateien aus einem ZIP-Anhang: ([(dateiname, ordner, inhalt)], [hinweise]).
 
 	Pfade aus dem Archiv werden nie als Pfad benutzt: Es zählt nur der Dateiname, dazu der letzte Ordner (oft die
-	Teilenummer, wenn die Dateien nur „Zeichnung.pdf“ und „Modell.stp“ heißen). Eine ZIP in der ZIP wird eine Ebene
+	Teilenummer, wenn die Dateien nur „Zeichnung.pdf“ und „Modell.stp“ heißen). Liegt alles in einem einzigen obersten
+	Ordner (oft so benannt wie die ZIP), ist das nur ein Rahmen und zählt nicht. Eine ZIP in der ZIP wird eine Ebene
 	tief mit ausgepackt; ihr Name gilt dann als Ordner."""
 	try:
 		z = zipfile.ZipFile(io.BytesIO(inhalt))
@@ -428,14 +429,18 @@ def zip_auspacken(name, inhalt, tiefe=0):
 		return [], [_("{0}: kein gültiges ZIP-Archiv, nicht ausgepackt").format(name)]
 	if len(infos) > ZIP_MAX_DATEIEN or sum(i.file_size for i in infos) > ZIP_MAX_MB * 1024 * 1024:
 		return [], [_("{0}: zu groß zum Auspacken (höchstens {1} Dateien und {2} MB)").format(name, ZIP_MAX_DATEIEN, ZIP_MAX_MB)]
-	out, hinweise, rest = [], [], []
+	eintraege = []
 	for i in infos:
 		teile = [t for t in _zip_name(i).replace("\\", "/").split("/") if t not in ("", ".", "..")]
-		if not teile or any(t.lower() == "__macosx" for t in teile):
+		if not teile or any(t.lower() == "__macosx" for t in teile) or teile[-1].startswith("._") or teile[-1].lower() in ZIP_BALLAST:
 			continue
+		eintraege.append((i, teile))
+	# ein gemeinsamer oberster Ordner ist nur ein Rahmen
+	if eintraege and all(len(t) > 1 for _i, t in eintraege) and len({t[0] for _i, t in eintraege}) == 1:
+		eintraege = [(i, t[1:]) for i, t in eintraege]
+	out, hinweise, rest = [], [], []
+	for i, teile in eintraege:
 		datei, ordner = teile[-1], teile[-2] if len(teile) > 1 else ""
-		if datei.startswith("._") or datei.lower() in ZIP_BALLAST:
-			continue
 		endung = datei.rsplit(".", 1)[-1].lower() if "." in datei else ""
 		if i.flag_bits & 0x1:
 			hinweise.append(_("{0}: {1} ist verschlüsselt, nicht ausgepackt").format(name, datei))
@@ -531,10 +536,12 @@ def verarbeiten(roh):
 			ausgepackt, h = zip_auspacken(name, inhalt)
 			hinweise += h
 			dateien += [(n, x, {"aus": name, "ordner": o}) for n, o, x in ausgepackt]
+		namen = [n.lower() for n, _x, _h in dateien]
 		for dateiname, daten, herkunft in dateien:
-			# abgelegt mit dem Ordner im Namen: "4711-A Zeichnung.pdf" statt vieler gleicher "Zeichnung.pdf"
+			# Originalname; nur bei gleichen Namen aus verschiedenen Ordnern mit dem Ordner davor ("4711-A Zeichnung.pdf"),
+			# sonst hängt Frappe eine Zeichenfolge an
 			ordner = herkunft.get("ordner") or ""
-			ablage = f"{ordner} {dateiname}" if ordner and ordner.lower() not in dateiname.lower() else dateiname
+			ablage = f"{ordner} {dateiname}" if ordner and namen.count(dateiname.lower()) > 1 else dateiname
 			try:
 				f = frappe.get_doc({"doctype": "File", "file_name": ablage, "attached_to_doctype": "Mail Anfrage", "attached_to_name": doc.name, "is_private": 1, "content": daten})
 				f.insert(ignore_permissions=True)

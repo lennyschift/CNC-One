@@ -2,7 +2,7 @@
 // Zeichnung und 3D-Modell eines Workbench-Bauteils nebeneinander. Dateien lassen sich direkt auf die Fläche ziehen oder auswählen;
 // sie werden sofort hochgeladen. Aus dem ersten gelesenen Modell entsteht automatisch das Vorschaubild des Bauteils.
 import { ref, computed, defineAsyncComponent, onMounted } from 'vue';
-import { Box, FileText, Loader, UploadCloud, X, FileWarning, ScanText } from '@lucide/vue';
+import { Box, FileText, Loader, UploadCloud, X, FileWarning, ScanText, Merge } from '@lucide/vue';
 import ErkennungsHinweis from './ErkennungsHinweis.vue';
 import { useAngebot } from '../stores/angebot.js';
 import { useUi } from '../stores/ui.js';
@@ -68,6 +68,19 @@ async function modellGeladen(netze) {
 const vorschauUebernehmen = (blob) => angebot.vorschaubildSetzen(props.teil, blob, true);
 
 const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)} KB`);
+
+// Zeichnung und Modell sind auf zwei Bauteile verteilt (Namen passten nicht): das andere hierher holen
+const fehlt = computed(() => (zeichnungen.value.length && !modelle.value.length ? 'STEP' : modelle.value.length && !zeichnungen.value.length ? 'Zeichnung' : ''));
+const gegenstuecke = computed(() => {
+  if (!fehlt.value) return [];
+  const hat = fehlt.value === 'STEP' ? 'Zeichnung' : 'STEP';
+  return angebot.teile.filter((t) => t.id !== props.teil.id && t.dateien.some((d) => d.art === fehlt.value && d.url) && !t.dateien.some((d) => d.art === hat));
+});
+const zusammenMit = ref('');
+function zusammenfuehren() {
+  if (zusammenMit.value) angebot.zusammenfuehren(props.teil.id, zusammenMit.value);
+  zusammenMit.value = '';
+}
 </script>
 
 <template>
@@ -78,6 +91,17 @@ const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b
     </div>
 
     <ErkennungsHinweis :teil="teil" class="mb-4" />
+
+    <div v-if="gegenstuecke.length" class="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-surface2 px-3 py-2 text-xs">
+      <Merge :size="14" class="shrink-0 text-accent" />
+      <span>{{ fehlt === 'STEP' ? 'Das 3D-Modell' : 'Die Zeichnung' }} liegt in einem anderen Bauteil? Gehört zusammen mit</span>
+      <select v-model="zusammenMit" class="field !w-auto !py-1 !text-xs">
+        <option value="">Bauteil wählen …</option>
+        <option v-for="t in gegenstuecke" :key="t.id" :value="t.id">{{ t.name }}</option>
+      </select>
+      <button class="btn !py-1 !text-xs" :disabled="!zusammenMit" @click="zusammenfuehren">Zusammenführen</button>
+      <span class="text-mute">Dateien kommen hierher, das andere Bauteil entfällt.</span>
+    </div>
 
     <div class="grid gap-4 xl:grid-cols-2">
       <!-- Zeichnung -->

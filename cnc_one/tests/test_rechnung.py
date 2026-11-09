@@ -311,7 +311,7 @@ class TestRechnung(IntegrationTestCase):
 		r = rechnung.festschreiben(self.gesamt(self.auftrag())["id"])
 		with self.assertRaises(frappe.ValidationError):
 			mahnung.anlegen(r["id"])
-		self.assertEqual(mahnung.vorschlag(), [])
+		self.assertEqual([x for x in mahnung.vorschlag() if x["rechnungId"] == r["id"]], [])  # echte überfällige Rechnungen zählen hier nicht
 
 	def test_mahnstufen_der_reihe_nach_mit_frist(self):
 		r = rechnung.festschreiben(self.gesamt(self.auftrag())["id"])
@@ -348,7 +348,7 @@ class TestRechnung(IntegrationTestCase):
 		x = rechnung.zahlung_erfassen(r["id"], 309.4)
 		self.assertEqual(x["status"], "Bezahlt")
 		self.assertEqual(next(a for a in mahnung.liste() if a["id"] == m2["id"])["status"], "Erledigt")
-		self.assertEqual(mahnung.vorschlag(), [])
+		self.assertEqual([x for x in mahnung.vorschlag() if x["rechnungId"] == r["id"]], [])  # echte überfällige Rechnungen zählen hier nicht
 
 	def test_mahnung_als_pdf_beim_versenden_festgeschrieben(self):
 		from pypdf import PdfReader

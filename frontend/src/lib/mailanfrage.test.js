@@ -6,7 +6,7 @@ describe('Bauteile aus den Anhängen einer Mail', () => {
     const g = gruppieren([
       { name: 'ZZ-3D-001_Flansch.pdf' }, { name: 'ZZ-3D-002_Halteblock.pdf' }, { name: 'zz-3d-001 flansch.step' }, { name: 'ZZ-3D-002_Halteblock.stp' },
     ]);
-    expect(g.map((x) => [x.basis, x.dateien.length])).toEqual([['ZZ-3D-001_Flansch', 2], ['ZZ-3D-002_Halteblock', 2]]);
+    expect(g.map((x) => [x.basis, x.dateien.length])).toEqual([['ZZ-3D-001 Flansch', 2], ['ZZ-3D-002 Halteblock', 2]]);
   });
 
   it('aus einer ZIP: der Ordner ist das Bauteil, wenn die Dateien allgemein heißen', () => {

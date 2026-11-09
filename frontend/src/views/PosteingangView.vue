@@ -229,9 +229,10 @@ const kurzZeit = (iso) => {
             <span class="mr-1 inline-flex w-full items-center gap-1 text-[11px] text-mute"><FileArchive :size="12" /> Ausgepackt aus {{ z.zip }} · {{ z.dateien.length }} Datei{{ z.dateien.length === 1 ? '' : 'en' }}</span>
             <component
               :is="ansehbar(a) ? 'button' : 'a'" v-for="a in z.dateien" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
-              class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" :title="a.ordner ? `${a.ordner}/${a.name}` : a.name" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
+              class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" :title="a.ordner ? `${a.name}
+im Ordner ${a.ordner}` : a.name" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
             >
-              <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate"><span v-if="a.ordner" class="opacity-60">{{ a.ordner }} / </span>{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
+              <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
             </component>
           </div>
           <p v-if="n.hinweis" class="mt-2 flex items-start gap-1.5 text-xs text-warn"><MailWarning :size="13" class="mt-0.5 shrink-0" /> {{ n.hinweis }}</p>
