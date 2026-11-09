@@ -3,9 +3,9 @@
 // Liefertermin) per Auswahl oder per Klick in die Spalte, Kopfzeile wählen, je Zeile die Zeichnung wählen und Werte
 // ändern. Übernommen werden nur Zeilen mit Zeichnung/Modell. Die Spalten werden für den Kontakt (und als Standard des
 // Kunden) gemerkt.
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, defineAsyncComponent } from 'vue';
 import { useEventListener } from '@vueuse/core';
-import { X, Table2, Check, Sparkles, AlertTriangle, MousePointerClick, Heading } from '@lucide/vue';
+import { X, Table2, Check, Sparkles, AlertTriangle, MousePointerClick, Heading, Mail } from '@lucide/vue';
 import { ROLLEN, tabelleDeuten, rollenMitKopf, zeileWerte, passtZu, vorlageAus } from '../lib/mailtabelle.js';
 import { dateiPfad } from '../lib/mailanfrage.js';
 import { call } from '../data/api.js';
@@ -14,6 +14,12 @@ import { useUi } from '../stores/ui.js';
 const props = defineProps({ anfrage: { type: Object, required: true } });
 const emit = defineEmits(['schliessen', 'uebernehmen']);
 const ui = useUi();
+
+// Die Mail links daneben, damit sich die Werte mit dem Original vergleichen lassen (ein- und ausblendbar, gemerkt)
+const MailHtml = defineAsyncComponent(() => import('./MailHtml.vue'));
+const eingaenge = computed(() => props.anfrage.nachrichten.filter((n) => n.richtung === 'Eingang'));
+const mailZeigen = ref((() => { try { return localStorage.getItem('cnc_one_tabelle_mail') !== '0'; } catch { return true; } })());
+watch(mailZeigen, (v) => { try { localStorage.setItem('cnc_one_tabelle_mail', v ? '1' : '0'); } catch { /* ohne Speicher */ } });
 
 const FARBE = { teilenummer: 'rolle-teil', menge: 'rolle-menge', liefertermin: 'rolle-termin' };
 const QUELLE = { vorlage: 'angelernt', stichwort: 'Überschrift', inhalt: 'Inhalt' };
@@ -110,16 +116,27 @@ function uebernehmen() {
   <Teleport to="body">
     <div class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4 backdrop-blur-[2px]" @mousedown.self="emit('schliessen')">
       <Transition name="pop" appear>
-        <div class="card flex max-h-[94vh] w-[min(1250px,97vw)] flex-col overflow-hidden shadow-2xl">
+        <div class="card flex max-h-[94vh] flex-col overflow-hidden shadow-2xl" :class="mailZeigen ? 'h-[94vh] w-[98vw] max-w-[1900px]' : 'w-[min(1250px,97vw)]'">
           <header class="flex items-center justify-between border-b border-line px-6 py-4">
             <div>
               <h2 class="flex items-center gap-2 text-base font-semibold"><Table2 :size="17" class="text-accent" /> Tabelle aus der Mail übernehmen</h2>
               <p class="text-xs text-mute">{{ anfrage.betreff }} · {{ anfrage.kundeName }}</p>
             </div>
-            <button class="grid h-8 w-8 place-items-center rounded-lg text-mute hover:bg-surface2" @click="emit('schliessen')"><X :size="18" /></button>
+            <div class="flex items-center gap-2">
+              <button class="btn !py-1 !text-xs" :class="mailZeigen ? '!border-accent !bg-accent-soft !text-accent' : ''" :title="mailZeigen ? 'Mail ausblenden' : 'Mail links daneben anzeigen'" @click="mailZeigen = !mailZeigen"><Mail :size="14" /> {{ mailZeigen ? 'Mail ausblenden' : 'Mail anzeigen' }}</button>
+              <button class="grid h-8 w-8 place-items-center rounded-lg text-mute hover:bg-surface2" @click="emit('schliessen')"><X :size="18" /></button>
+            </div>
           </header>
 
-          <div class="space-y-3 overflow-auto px-6 py-5">
+          <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
+          <aside v-if="mailZeigen" class="max-h-[35vh] shrink-0 overflow-auto border-b border-line bg-white px-5 py-4 text-[#1c1c1c] lg:max-h-none lg:w-[42%] lg:border-b-0 lg:border-r">
+            <div v-for="(n, i) in eingaenge" :key="i" :class="i ? 'mt-5 border-t border-neutral-200 pt-4' : ''">
+              <p class="mb-2 text-[11px] text-neutral-500">{{ n.vonName || n.vonEmail }} · {{ new Date(n.datum).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) }}</p>
+              <MailHtml v-if="n.html" :html="n.html" />
+              <div v-else class="whitespace-pre-wrap break-words text-sm">{{ n.text }}</div>
+            </div>
+          </aside>
+          <div class="min-w-0 flex-1 space-y-3 overflow-auto px-6 py-5">
             <div class="flex flex-wrap items-center gap-2 text-xs">
               <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1" :class="erkannt && !geaendert ? 'bg-accent-soft text-accent' : 'bg-surface2 text-mute'"><Sparkles :size="13" /> {{ quelleText }}</span>
               <button v-if="vorlageDa" class="text-mute underline hover:text-ink" @click="vorlageVergessen">angelernte Spalten zurücksetzen</button>
@@ -185,6 +202,7 @@ function uebernehmen() {
             </div>
             <p class="text-xs text-mute">Die Zeichnung je Zeile ist vorgeschlagen, wenn die Teilenummer zum Dateinamen passt; sonst hier wählen. Zeilen ohne Zeichnung werden nicht übernommen.</p>
             <p v-if="!hatTeilenummer" class="flex items-center gap-1.5 text-xs text-warn"><AlertTriangle :size="13" /> Bitte die Spalte mit der Teilenummer zuordnen.</p>
+          </div>
           </div>
 
           <footer class="flex flex-wrap items-center justify-end gap-2 border-t border-line px-6 py-4">
