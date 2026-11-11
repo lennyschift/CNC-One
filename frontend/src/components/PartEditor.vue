@@ -12,7 +12,7 @@ import TeilDateien from './TeilDateien.vue';
 import { useAngebot } from '../stores/angebot.js';
 import { repo } from '../data/repo.js';
 import { eur } from '../lib/format.js';
-import { ruestKosten, stueckKosten, fremdProStueck, hatPlan, materialProStueck } from '../lib/calc.js';
+import { ruestKosten, stueckKosten, fremdProStueck, hatPlan, materialProStueck, festerPreis } from '../lib/calc.js';
 
 const props = defineProps({ teil: { type: Object, required: true }, ergebnis: { type: Object, required: true } });
 const emit = defineEmits(['anfrage']);
@@ -59,6 +59,14 @@ const kosten = [
 ];
 
 const staffelModus = computed(() => props.teil.staffel.aktiv);
+// Fester Stückpreis: ohne Kalkulation, Zeiten, Material und Rüstkosten zählen dann nicht
+const fest = computed(() => festerPreis(props.teil));
+// Kachel „Stückpreis“: beim festen Preis genau der eingegebene (ohne anteilige einmalige Kosten)
+const anzeigePreis = computed(() => (fest.value && !staffelModus.value ? props.ergebnis.zeilen.find((z) => z.typ === 'teil')?.einzel ?? 0 : props.ergebnis.stueckpreis));
+const preisart = computed({
+  get: () => (fest.value ? 'fest' : 'kalkuliert'),
+  set: (v) => { props.teil.preisart = v; if (props.teil.festpreis == null) props.teil.festpreis = 0; },
+});
 const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)} KB`);
 </script>
 
@@ -92,7 +100,7 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
         <div class="flex gap-3">
           <div class="min-w-[130px] rounded-2xl bg-surface2 px-4 py-3">
             <div class="label">Stückpreis</div>
-            <div class="mt-1 text-xl font-semibold"><AnimatedNumber :value="ergebnis.stueckpreis" :format="eur" /></div>
+            <div class="mt-1 text-xl font-semibold"><AnimatedNumber :value="anzeigePreis" :format="eur" /></div>
           </div>
           <div class="min-w-[150px] rounded-2xl bg-accent-soft px-4 py-3">
             <div class="label !text-accent">Gesamt netto</div>
@@ -107,10 +115,16 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
     <div class="grid gap-4 xl:grid-cols-2">
       <!-- Menge & Maschine -->
       <section class="card p-5">
-        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Cog :size="16" class="text-accent" /> Menge und Maschine</h3>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h3 class="flex items-center gap-2 text-sm font-semibold"><Cog :size="16" class="text-accent" /> Menge und Preis</h3>
+          <div class="flex gap-0.5 rounded-xl border border-line bg-surface2 p-0.5 text-xs" role="radiogroup" aria-label="Preis">
+            <button v-for="o in [['kalkuliert', 'Kalkulieren'], ['fest', 'Fester Stückpreis']]" :key="o[0]" type="button" role="radio" :aria-checked="preisart === o[0]" class="rounded-lg px-2.5 py-1 transition" :class="preisart === o[0] ? 'bg-surface font-medium text-ink shadow-sm' : 'text-mute hover:text-ink'" @click="preisart = o[0]">{{ o[1] }}</button>
+          </div>
+        </div>
         <div class="grid grid-cols-2 gap-3">
           <NumField v-model="teil.menge" label="Stückzahl" unit="Stk" :decimals="0" :min="1" />
           <label class="block"><span class="label mb-1 block">Liefertermin</span><input v-model="teil.liefertermin" type="date" class="field" /></label>
+          <NumField v-if="fest" v-model="teil.festpreis" :label="staffelModus ? 'Stückpreis (Staffeln ohne eigenen Preis)' : 'Stückpreis'" unit="€" class="col-span-2" />
           <template v-if="!ausPlan">
             <label class="block">
               <span class="label mb-1 block">Maschine</span>
@@ -123,12 +137,13 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
             <NumField v-model="teil.satzStueck" label="Stundensatz Fertigung" unit="€/h" />
           </template>
         </div>
-        <p v-if="ausPlan" class="mt-3 rounded-xl bg-surface2 px-3.5 py-2.5 text-xs text-mute">Maschinen und Stundensätze kommen aus den Arbeitsgängen weiter unten.</p>
+        <p v-if="fest" class="mt-3 rounded-xl bg-accent-soft/60 px-3.5 py-2.5 text-xs text-accent">Fester Stückpreis ohne Kalkulation: Zeiten, Material, Rüstkosten und Fremdvergabe zählen nicht. Mess-, Sonder- und Expresskosten kommen als eigene Zeilen dazu.</p>
+        <p v-else-if="ausPlan" class="mt-3 rounded-xl bg-surface2 px-3.5 py-2.5 text-xs text-mute">Maschinen und Stundensätze kommen aus den Arbeitsgängen weiter unten.</p>
       </section>
 
       <!-- Zeiten -->
-      <section class="card p-5">
-        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Clock :size="16" class="text-accent" /> Zeiten</h3>
+      <section class="card p-5" :class="fest ? 'opacity-60' : ''">
+        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Clock :size="16" class="text-accent" /> Zeiten<span v-if="fest" class="text-[11px] font-normal text-mute">· zählt beim festen Stückpreis nicht</span></h3>
         <div v-if="!ausPlan" class="grid grid-cols-2 gap-3">
           <NumField v-model="teil.ruestMin" label="Rüstzeit" unit="min" :step="5" :hint="'= ' + eur(ruestKosten(teil))" />
           <NumField v-model="teil.stueckMin" label="Stückzeit" unit="min" :step="0.5" :hint="'= ' + eur(stueckKosten(teil)) + ' / Stk'" />
@@ -143,7 +158,7 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
 
       <!-- Material -->
       <section class="card p-5">
-        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Layers :size="16" class="text-accent" /> Rohmaterial</h3>
+        <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Layers :size="16" class="text-accent" /> Rohmaterial<span v-if="fest" class="text-[11px] font-normal text-mute">· Kosten zählen beim festen Stückpreis nicht</span></h3>
         <div class="grid grid-cols-2 gap-3">
           <div class="col-span-2 flex items-end gap-3">
             <PartImage art="material" :groesse="42" />
@@ -168,13 +183,14 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
         <div class="space-y-3">
           <div v-for="k in kosten" :key="k.key" class="grid grid-cols-[1fr_auto] items-end gap-3">
             <NumField v-model="teil[k.key]" :label="k.label" unit="€" />
-            <div class="pb-2.5"><Toggle v-model="teil.inStueckpreis[k.flag]" klein label="im Stückpreis" /></div>
+            <div class="pb-2.5"><Toggle v-model="teil.inStueckpreis[k.flag]" klein label="im Stückpreis" :class="fest ? 'pointer-events-none opacity-40' : ''" /></div>
           </div>
-          <div class="grid grid-cols-[1fr_auto] items-center gap-3 border-t border-line pt-3">
+          <p v-if="fest" class="text-xs text-mute">Beim festen Stückpreis stehen diese Kosten immer als eigene Zeilen im Angebot.</p>
+          <div v-else class="grid grid-cols-[1fr_auto] items-center gap-3 border-t border-line pt-3">
             <span class="text-sm text-mute">Rüstkosten</span>
             <Toggle v-model="teil.inStueckpreis.ruest" klein label="im Stückpreis" :class="staffelModus ? 'pointer-events-none opacity-40' : ''" />
           </div>
-          <p v-if="staffelModus" class="text-xs text-mute">Bei Staffelpreisen sind Rüstkosten immer im Stückpreis enthalten.</p>
+          <p v-if="staffelModus && !fest" class="text-xs text-mute">Bei Staffelpreisen sind Rüstkosten immer im Stückpreis enthalten.</p>
         </div>
       </section>
     </div>
@@ -199,8 +215,11 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
         </div>
         <div>
           <div class="label mb-1">Stückpreis nach Menge</div>
-          <PriceChart :teil="teil" />
-          <p class="mt-1 text-xs text-mute">Zeigt, wie stark die Rüstkosten mit der Menge verschwinden.</p>
+          <template v-if="!fest">
+            <PriceChart :teil="teil" />
+            <p class="mt-1 text-xs text-mute">Zeigt, wie stark die Rüstkosten mit der Menge verschwinden.</p>
+          </template>
+          <p v-else class="rounded-xl bg-surface2 px-4 py-6 text-center text-sm text-mute">Fester Stückpreis: hängt nicht von der Menge ab{{ staffelModus ? ', außer den Preisen je Staffel' : '' }}.</p>
         </div>
       </div>
     </section>

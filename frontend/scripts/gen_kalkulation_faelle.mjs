@@ -39,6 +39,11 @@ const faelle = {
   'zahlen als text': basis({ menge: '12', gewichtKg: '0.75', materialPreisKg: '6.4', stueckMin: '3.5' }),
   'rundung grenzfall': basis({ menge: 3, ruestMin: 7, satzRuest: 33.33, stueckMin: 1.1, satzStueck: 17.77, gewichtKg: 0.333, materialPreisKg: 6.99 }),
   'viele nachkommastellen': basis({ menge: 7, ruestMin: 13, satzRuest: 94.37, stueckMin: 2.27, satzStueck: 111.11, messkosten: 12.345 }),
+  'fester stueckpreis mit messkosten als zeile': basis({ preisart: 'fest', festpreis: 12.5 }),
+  'fester stueckpreis ohne zusatzkosten': basis({ preisart: 'fest', festpreis: 7.99, messkosten: 0, menge: 3 }),
+  'fester stueckpreis ignoriert rechenwerte': basis({ preisart: 'fest', festpreis: 3, pauschalMaterial: 90, inStueckpreis: { ruest: true, mess: true }, arbeitsgaenge: [fremd('c', 'Härten', 0.6, 80)] }),
+  'fester stueckpreis mit staffel': basis({ preisart: 'fest', festpreis: 10, sonderkosten: 35.5, staffel: staffel([{ menge: 50, extra: 0, preis: 8.4 }, { menge: 10, extra: 0, preis: 0 }]) }),
+  'kalkuliert mit gespeichertem festpreis': basis({ preisart: 'kalkuliert', festpreis: 99 }),
 };
 
 const ausgabe = Object.entries(faelle).map(([name, eingabe]) => ({

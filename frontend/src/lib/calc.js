@@ -5,6 +5,10 @@
 // Hat ein Bauteil einen Arbeitsplan (arbeitsgaenge), kommen Rüst- und Stückkosten aus den internen
 // Arbeitsgängen (Zeit × Satz der jeweiligen Maschine). Fremdvergaben liefern Kosten je Stück und einmalig.
 // Ohne Arbeitsplan gelten die einfachen Felder (ruestMin, stueckMin, satzRuest, satzStueck).
+//
+// Fester Stückpreis (preisart 'fest'): ohne Kalkulation. Zeiten, Material, Rüstkosten und Fremdvergabe zählen nicht,
+// Mess-, Sonder- und Expresskosten kommen als eigene Zeilen dazu. Bei Staffeln gilt je Stufe der eingegebene Preis
+// (leer = der feste Stückpreis).
 
 export const num = (v) => {
   const n = Number(v);
@@ -18,6 +22,7 @@ const internAg = (p) => alle(p).filter((a) => a.typ === 'intern');
 const fremdAg = (p) => alle(p).filter((a) => a.typ === 'fremd');
 
 export const hatPlan = (p) => internAg(p).length > 0;
+export const festerPreis = (p) => p.preisart === 'fest';
 
 export const ruestKosten = (p) => (hatPlan(p)
   ? r2(internAg(p).reduce((s, a) => s + (num(a.ruestMin) / 60) * num(a.satz), 0))
@@ -69,7 +74,7 @@ function fixAufteilung(liste) {
 
 export function gueltigeStufen(p) {
   return (p.staffel?.stufen || [])
-    .map((s) => ({ menge: Math.floor(num(s.menge)), extra: num(s.extra) }))
+    .map((s) => ({ menge: Math.floor(num(s.menge)), extra: num(s.extra), preis: num(s.preis) }))
     .filter((s) => s.menge > 0)
     .sort((a, b) => a.menge - b.menge);
 }
@@ -90,6 +95,28 @@ export function berechne(p) {
   const f = p.inStueckpreis || {};
   const out = { menge: q, ...b, stufen: [], zeilen: [], gesamt: 0, stueckpreis: 0 };
   const kostenZeilen = () => liste.filter((x) => !x.eingerechnet && x.betrag > 0).map((x) => ({ typ: 'kosten', label: x.label, menge: 1, betrag: x.betrag }));
+
+  if (festerPreis(p)) {
+    const preis = r2(p.festpreis);
+    const zusatz = [['Messkosten', b.mess], ['Sonderkosten', b.sonder], ['Expresskosten', b.express]]
+      .filter(([, betrag]) => betrag > 0)
+      .map(([label, betrag]) => ({ typ: 'kosten', label, menge: 1, betrag }));
+    const einzeln = zusatz.reduce((s, z) => s + z.betrag, 0);
+    if (p.staffel?.aktiv) {
+      out.stufen = gueltigeStufen(p).map((s) => {
+        const stueck = r2(s.preis > 0 ? s.preis : preis);
+        return { menge: s.menge, extra: s.extra, stueckpreis: stueck, gesamt: r2(stueck * s.menge + einzeln) };
+      });
+      out.gesamt = out.stufen[0]?.gesamt ?? 0;
+      out.stueckpreis = out.stufen[0]?.stueckpreis ?? 0;
+      out.zeilen.push(...zusatz);
+      return out;
+    }
+    out.zeilen.push({ typ: 'teil', label: p.name || 'Bauteil', menge: q, einzel: preis, betrag: r2(preis * q) }, ...zusatz);
+    out.gesamt = r2(out.zeilen.reduce((s, z) => s + z.betrag, 0));
+    out.stueckpreis = r2(out.gesamt / q);
+    return out;
+  }
 
   if (p.staffel?.aktiv) {
     out.stufen = gueltigeStufen(p).map((s) => {

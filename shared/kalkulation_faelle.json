@@ -1363,5 +1363,330 @@
    "gesamt": 90.2,
    "stueckpreis": 12.89
   }
+ },
+ {
+  "name": "fester stueckpreis mit messkosten als zeile",
+  "eingabe": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": false,
+    "stufen": []
+   },
+   "arbeitsgaenge": [],
+   "preisart": "fest",
+   "festpreis": 12.5
+  },
+  "erwartet": {
+   "menge": 10,
+   "setup": 100,
+   "unit": 10,
+   "mat": 4,
+   "pauschal": 0,
+   "mess": 20,
+   "sonder": 0,
+   "express": 0,
+   "stufen": [],
+   "zeilen": [
+    {
+     "typ": "teil",
+     "label": "Testteil",
+     "menge": 10,
+     "einzel": 12.5,
+     "betrag": 125
+    },
+    {
+     "typ": "kosten",
+     "label": "Messkosten",
+     "menge": 1,
+     "betrag": 20
+    }
+   ],
+   "gesamt": 145,
+   "stueckpreis": 14.5
+  }
+ },
+ {
+  "name": "fester stueckpreis ohne zusatzkosten",
+  "eingabe": {
+   "name": "Testteil",
+   "menge": 3,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 0,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": false,
+    "stufen": []
+   },
+   "arbeitsgaenge": [],
+   "preisart": "fest",
+   "festpreis": 7.99
+  },
+  "erwartet": {
+   "menge": 3,
+   "setup": 100,
+   "unit": 10,
+   "mat": 4,
+   "pauschal": 0,
+   "mess": 0,
+   "sonder": 0,
+   "express": 0,
+   "stufen": [],
+   "zeilen": [
+    {
+     "typ": "teil",
+     "label": "Testteil",
+     "menge": 3,
+     "einzel": 7.99,
+     "betrag": 23.97
+    }
+   ],
+   "gesamt": 23.97,
+   "stueckpreis": 7.99
+  }
+ },
+ {
+  "name": "fester stueckpreis ignoriert rechenwerte",
+  "eingabe": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 90,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": true,
+    "mess": true
+   },
+   "staffel": {
+    "aktiv": false,
+    "stufen": []
+   },
+   "arbeitsgaenge": [
+    {
+     "id": "c",
+     "name": "Härten",
+     "typ": "fremd",
+     "lieferant": "L",
+     "fremdProStk": 0.6,
+     "fremdEinmal": 80
+    }
+   ],
+   "preisart": "fest",
+   "festpreis": 3
+  },
+  "erwartet": {
+   "menge": 10,
+   "setup": 100,
+   "unit": 10.6,
+   "mat": 4,
+   "pauschal": 90,
+   "mess": 20,
+   "sonder": 0,
+   "express": 0,
+   "stufen": [],
+   "zeilen": [
+    {
+     "typ": "teil",
+     "label": "Testteil",
+     "menge": 10,
+     "einzel": 3,
+     "betrag": 30
+    },
+    {
+     "typ": "kosten",
+     "label": "Messkosten",
+     "menge": 1,
+     "betrag": 20
+    }
+   ],
+   "gesamt": 50,
+   "stueckpreis": 5
+  }
+ },
+ {
+  "name": "fester stueckpreis mit staffel",
+  "eingabe": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 35.5,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": true,
+    "stufen": [
+     {
+      "menge": 50,
+      "extra": 0,
+      "preis": 8.4
+     },
+     {
+      "menge": 10,
+      "extra": 0,
+      "preis": 0
+     }
+    ]
+   },
+   "arbeitsgaenge": [],
+   "preisart": "fest",
+   "festpreis": 10
+  },
+  "erwartet": {
+   "menge": 10,
+   "setup": 100,
+   "unit": 10,
+   "mat": 4,
+   "pauschal": 0,
+   "mess": 20,
+   "sonder": 35.5,
+   "express": 0,
+   "stufen": [
+    {
+     "menge": 10,
+     "extra": 0,
+     "stueckpreis": 10,
+     "gesamt": 155.5
+    },
+    {
+     "menge": 50,
+     "extra": 0,
+     "stueckpreis": 8.4,
+     "gesamt": 475.5
+    }
+   ],
+   "zeilen": [
+    {
+     "typ": "kosten",
+     "label": "Messkosten",
+     "menge": 1,
+     "betrag": 20
+    },
+    {
+     "typ": "kosten",
+     "label": "Sonderkosten",
+     "menge": 1,
+     "betrag": 35.5
+    }
+   ],
+   "gesamt": 155.5,
+   "stueckpreis": 10
+  }
+ },
+ {
+  "name": "kalkuliert mit gespeichertem festpreis",
+  "eingabe": {
+   "name": "Testteil",
+   "menge": 10,
+   "ruestMin": 60,
+   "satzRuest": 100,
+   "stueckMin": 6,
+   "satzStueck": 100,
+   "gewichtKg": 0.5,
+   "materialPreisKg": 8,
+   "pauschalMaterial": 0,
+   "pauschalAlsZeile": false,
+   "messkosten": 20,
+   "sonderkosten": 0,
+   "expresskosten": 0,
+   "inStueckpreis": {
+    "ruest": false,
+    "mess": false,
+    "sonder": false,
+    "express": false
+   },
+   "staffel": {
+    "aktiv": false,
+    "stufen": []
+   },
+   "arbeitsgaenge": [],
+   "preisart": "kalkuliert",
+   "festpreis": 99
+  },
+  "erwartet": {
+   "menge": 10,
+   "setup": 100,
+   "unit": 10,
+   "mat": 4,
+   "pauschal": 0,
+   "mess": 20,
+   "sonder": 0,
+   "express": 0,
+   "stufen": [],
+   "zeilen": [
+    {
+     "typ": "teil",
+     "label": "Testteil",
+     "menge": 10,
+     "einzel": 14,
+     "betrag": 140
+    },
+    {
+     "typ": "kosten",
+     "label": "Rüstkosten",
+     "menge": 1,
+     "betrag": 100
+    },
+    {
+     "typ": "kosten",
+     "label": "Messkosten",
+     "menge": 1,
+     "betrag": 20
+    }
+   ],
+   "gesamt": 260,
+   "stueckpreis": 26
+  }
  }
 ]

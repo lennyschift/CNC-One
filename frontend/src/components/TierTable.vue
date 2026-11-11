@@ -4,10 +4,13 @@ import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Plus, X } from '@lucide/vue';
 import NumField from './NumField.vue';
 import { eur } from '../lib/format.js';
+import { festerPreis } from '../lib/calc.js';
 
 const props = defineProps({ teil: { type: Object, required: true }, ergebnis: { type: Object, required: true } });
 
 const stufen = computed(() => props.teil.staffel.stufen);
+// fester Stückpreis: je Stufe der Preis direkt (leer = der feste Stückpreis), sonst ein Aufschlag auf die Kalkulation
+const fest = computed(() => festerPreis(props.teil));
 const kleinste = computed(() => Math.min(...stufen.value.map((s) => Math.floor(Number(s.menge)) || Infinity)));
 
 function werte(s) {
@@ -25,12 +28,13 @@ function weg(i) {
 <template>
   <div>
     <div class="grid grid-cols-[1fr_1fr_1fr_1fr_28px] items-center gap-2 px-1 pb-1.5">
-      <span class="label">Menge</span><span class="label">Aufschlag / Stk</span><span class="label text-right">Stückpreis</span><span class="label text-right">Gesamt</span><span />
+      <span class="label">Menge</span><span class="label">{{ fest ? 'Stückpreis' : 'Aufschlag / Stk' }}</span><span class="label text-right">Stückpreis</span><span class="label text-right">Gesamt</span><span />
     </div>
     <div v-auto-animate class="space-y-2">
       <div v-for="(s, i) in stufen" :key="i" class="grid grid-cols-[1fr_1fr_1fr_1fr_28px] items-center gap-2">
         <NumField v-model="s.menge" :decimals="0" :min="1" />
-        <NumField v-model="s.extra" unit="€" />
+        <NumField v-if="fest" v-model="s.preis" unit="€" />
+        <NumField v-else v-model="s.extra" unit="€" />
         <div class="text-right text-sm tnum">{{ werte(s) ? eur(werte(s).stueckpreis) : '–' }}</div>
         <div class="text-right text-sm font-medium tnum">
           {{ werte(s) ? eur(werte(s).gesamt) : '–' }}
@@ -41,6 +45,7 @@ function weg(i) {
         </button>
       </div>
     </div>
+    <p v-if="fest" class="mt-2 text-xs text-mute">Stückpreis je Staffel direkt; 0 € = der feste Stückpreis oben.</p>
     <button class="btn mt-3" @click="hinzu"><Plus :size="15" /> Staffel</button>
   </div>
 </template>

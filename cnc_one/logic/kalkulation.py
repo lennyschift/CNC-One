@@ -49,6 +49,11 @@ def _fremd(p):
 	return [a for a in _alle(p) if a.get("typ") == "fremd"]
 
 
+def fester_preis(p):
+	"""Fester Stückpreis ohne Kalkulation (siehe berechne)."""
+	return p.get("preisart") == "fest"
+
+
 def hat_plan(p):
 	return len(_intern(p)) > 0
 
@@ -114,14 +119,15 @@ def _fix(liste):
 def gueltige_stufen(p):
 	staffel = p.get("staffel") or {}
 	stufen = [
-		{"menge": math.floor(num(s.get("menge"))), "extra": num(s.get("extra"))}
+		{"menge": math.floor(num(s.get("menge"))), "extra": num(s.get("extra")), "preis": num(s.get("preis"))}
 		for s in (staffel.get("stufen") or [])
 	]
 	return sorted((s for s in stufen if s["menge"] > 0), key=lambda s: s["menge"])
 
 
 def berechne(p):
-	"""Liefert dasselbe Ergebnis wie berechne() in calc.js (Schlüssel und Reihenfolge der Zeilen)."""
+	"""Liefert dasselbe Ergebnis wie berechne() in calc.js (Schlüssel und Reihenfolge der Zeilen).
+	Mit preisart 'fest' gilt der feste Stückpreis ohne Kalkulation; bei Staffeln je Stufe der eingegebene Preis."""
 	menge = max(1, math.floor(num(p.get("menge"))) or 1)
 	b = _basis(p)
 	liste = _extras(p, b)
@@ -135,6 +141,29 @@ def berechne(p):
 			for x in liste
 			if not x["eingerechnet"] and x["betrag"] > 0
 		]
+
+	if fester_preis(p):
+		# fester Stückpreis: nur Mess-, Sonder- und Expresskosten kommen als eigene Zeilen dazu
+		preis = r2(p.get("festpreis"))
+		zusatz = [
+			{"typ": "kosten", "label": label, "menge": 1, "betrag": betrag}
+			for label, betrag in (("Messkosten", b["mess"]), ("Sonderkosten", b["sonder"]), ("Expresskosten", b["express"]))
+			if betrag > 0
+		]
+		zusatz_summe = _summe(z["betrag"] for z in zusatz)
+		if (p.get("staffel") or {}).get("aktiv"):
+			for s in gueltige_stufen(p):
+				stueck = r2(s["preis"] if s["preis"] > 0 else preis)
+				out["stufen"].append({"menge": s["menge"], "extra": s["extra"], "stueckpreis": stueck, "gesamt": r2(stueck * s["menge"] + zusatz_summe)})
+			out["gesamt"] = out["stufen"][0]["gesamt"] if out["stufen"] else 0
+			out["stueckpreis"] = out["stufen"][0]["stueckpreis"] if out["stufen"] else 0
+			out["zeilen"].extend(zusatz)
+			return out
+		out["zeilen"].append({"typ": "teil", "label": p.get("name") or "Bauteil", "menge": menge, "einzel": preis, "betrag": r2(preis * menge)})
+		out["zeilen"].extend(zusatz)
+		out["gesamt"] = r2(_summe(z["betrag"] for z in out["zeilen"]))
+		out["stueckpreis"] = r2(out["gesamt"] / menge)
+		return out
 
 	if (p.get("staffel") or {}).get("aktiv"):
 		for s in gueltige_stufen(p):

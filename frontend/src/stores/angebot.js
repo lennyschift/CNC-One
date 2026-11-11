@@ -32,6 +32,8 @@ export function neuesTeil(name = 'Neues Bauteil') {
     sonderkosten: 0,
     expresskosten: 0,
     inStueckpreis: { ruest: false, mess: false, sonder: false, express: false },
+    preisart: 'kalkuliert', // oder 'fest': Stückpreis ohne Kalkulation (festpreis, bei Staffeln je Stufe `preis`)
+    festpreis: 0,
     staffel: { aktiv: false, stufen: [{ menge: 5, extra: 0 }, { menge: 25, extra: 0 }, { menge: 100, extra: 0 }] },
     seriennummern: false,
     arbeitsgaenge: [],
