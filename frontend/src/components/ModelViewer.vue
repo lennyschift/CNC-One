@@ -7,7 +7,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { useEventListener } from '@vueuse/core';
+import { useEventListener, useResizeObserver } from '@vueuse/core';
 import { Maximize2, Minimize2, Scan, ImagePlus, Loader, AlertTriangle, Spline, Download, Ruler, Box, Scissors, ScanEye, MousePointerClick, X, Check } from '@lucide/vue';
 import { stepNetze } from '../lib/step.js';
 import { ANSICHTEN, modellGruppe, abmessungen, kameraAusrichten, lichter, flaecheHervorheben, rohteilLinien } from '../lib/modell3d.js';
@@ -227,6 +227,11 @@ const rohteil = computed(() => {
 });
 const rohteilText = (r) => (r.art === 'Quader' ? `Quader ${mm(r.x)} × ${mm(r.y)} × ${mm(r.z)}` : `Rund ⌀${mm(r.durchmesser)} × ${mm(r.laenge)}`);
 const fertigGewicht = computed(() => (kennwerte.value && props.dichte ? gewichtKg(kennwerte.value.volumen, props.dichte) : 0));
+// Das Rohteil steht als Leiste unter dem Modell (nicht darüber): das Modell rückt um ihre Höhe nach oben
+const leiste = ref(null);
+const leisteHoehe = ref(0);
+useResizeObserver(leiste, (e) => { leisteHoehe.value = Math.ceil(e[0]?.borderBoxSize?.[0]?.blockSize ?? e[0]?.contentRect.height ?? 0); });
+watch(() => rohteilAn.value && !!rohteil.value, (an) => { if (!an) leisteHoehe.value = 0; });
 const rohGewicht = computed(() => (rohteil.value && props.dichte ? gewichtKg(rohteil.value.volumen, props.dichte) : 0));
 
 function rohteilZeichnen() {
@@ -333,8 +338,8 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
 <template>
   <div class="h-full">
     <Teleport to="body" :disabled="!vollbild">
-      <div class="modell-flaeche overflow-hidden border border-line" :class="vollbild ? 'fixed inset-3 z-50 rounded-3xl shadow-2xl' : 'relative h-full rounded-2xl'">
-        <div ref="huelle" class="absolute inset-0" :class="werkzeug === 'messen' ? 'cursor-crosshair' : ''" />
+      <div class="modell-flaeche overflow-hidden border border-line" :class="vollbild ? 'fixed inset-3 z-50 rounded-3xl shadow-2xl' : 'relative h-full rounded-2xl'" :style="{ '--unten': `${leisteHoehe}px` }">
+        <div ref="huelle" class="absolute inset-x-0 top-0" :style="{ bottom: `${leisteHoehe}px` }" :class="werkzeug === 'messen' ? 'cursor-crosshair' : ''" />
 
         <!-- Ansichten und Werkzeuge -->
         <div v-if="stand === 'bereit'" class="werkzeug left-3 top-3 flex-wrap">
@@ -365,7 +370,7 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
         </div>
 
         <!-- Angeklickte Fläche -->
-        <div v-if="flaechenInfo" class="karte bottom-3 right-3 max-w-[16rem]">
+        <div v-if="flaechenInfo" class="karte unten right-3 max-w-[16rem]">
           <button class="absolute right-1.5 top-1.5 text-mute hover:text-ink" title="Schließen (Esc)" @click="flaechenInfo = null; hervorhebungZeichnen()"><X :size="13" /></button>
           <template v-if="flaechenInfo.art === 'Zylinder'">
             <div class="text-[11px] text-mute">{{ flaechenInfo.bohrung ? 'Bohrung' : 'Welle / Außendurchmesser' }}</div>
@@ -384,7 +389,7 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
         </div>
 
         <!-- Messung -->
-        <div v-if="werkzeug === 'messen' && stand === 'bereit'" class="karte bottom-3 right-3 max-w-[17rem]">
+        <div v-if="werkzeug === 'messen' && stand === 'bereit'" class="karte unten right-3 max-w-[17rem]">
           <div class="flex items-center gap-1 text-xs font-medium"><Ruler :size="13" class="text-accent" /> Abstand messen</div>
           <p v-if="!messErgebnis" class="mt-0.5 text-[11px] text-mute">{{ messung.length ? 'Zweite Stelle anklicken …' : 'Erste Stelle anklicken. Auf einer Bohrung oder Welle zählt die Mittelachse.' }}</p>
           <template v-else>
@@ -394,26 +399,22 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
           </template>
         </div>
 
-        <!-- Rohteil oder Abmessungen -->
-        <div v-if="rohteilAn && rohteil" class="karte bottom-3 left-3 w-[17.5rem]">
-          <div class="flex items-center gap-1 text-xs font-medium"><Box :size="13" class="text-accent" /> Rohteil
-            <span class="ml-auto text-[10px] text-mute">{{ rohteilWahl ? '' : 'Vorschlag' }}</span>
-          </div>
-          <div class="mt-1 flex flex-wrap gap-0.5">
+        <!-- Rohteil als Leiste unter dem Modell, sonst die Abmessungen -->
+        <div v-if="rohteilAn && rohteil" ref="leiste" class="rohleiste absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line px-3 py-2 text-xs">
+          <span class="flex items-center gap-1 font-medium"><Box :size="13" class="text-accent" /> Rohteil<span v-if="!rohteilWahl" class="text-[10px] font-normal text-mute">(Vorschlag)</span></span>
+          <span class="flex flex-wrap gap-0.5">
             <button class="knopf !h-6" :class="rohteilWahl === '' ? 'aktiv' : ''" title="Kleinstes Rohteil" @click="rohteilWahl = ''">Auto</button>
             <button class="knopf !h-6" :class="rohteilWahl === 'Quader' ? 'aktiv' : ''" @click="rohteilWahl = 'Quader'">Quader</button>
             <button v-for="a in ['X', 'Y', 'Z']" :key="a" class="knopf !h-6" :class="rohteilWahl === a ? 'aktiv' : ''" :title="`Rundmaterial, Achse ${a}`" @click="rohteilWahl = a">⌀ {{ a }}</button>
             <button v-if="eigeneAchse" class="knopf !h-6" :class="rohteilWahl === 'Fläche' ? 'aktiv' : ''" title="Rundmaterial um die Achse der angeklickten Zylinderfläche" @click="rohteilWahl = 'Fläche'">⌀ Fläche</button>
-          </div>
-          <div class="mt-1.5 text-sm font-semibold tnum">{{ rohteilText(rohteil) }} mm</div>
-          <label class="mt-1 flex items-center gap-1.5 text-[11px] text-mute">Aufmaß je Seite <input v-model.lazy="aufmassText" class="field !w-14 !px-1.5 !py-0.5 text-right text-xs" /> mm</label>
-          <dl class="mt-1.5 grid grid-cols-2 gap-x-2 text-[11px] tnum">
-            <dt class="text-mute">Fertigteil</dt><dd class="text-right">{{ cm3(kennwerte.volumen) }}<template v-if="dichte"> · {{ kg(fertigGewicht) }}</template></dd>
-            <dt class="text-mute">Rohteil</dt><dd class="text-right">{{ cm3(rohteil.volumen) }}<template v-if="dichte"> · {{ kg(rohGewicht) }}</template></dd>
-          </dl>
-          <button v-if="dichte && !nurAnsehen" class="btn mt-2 w-full justify-center !py-1 text-xs" @click="emit('gewicht', Math.round(rohGewicht * 1000) / 1000)"><Check :size="13" /> Rohteilgewicht übernehmen</button>
-          <p v-if="dichte && dichteGeschaetzt" class="mt-1 text-[10px] text-mute">Dichte geschätzt ({{ zahl(dichte, 2) }} kg/dm³), bitte am Rohmaterial in den Stammdaten pflegen.</p>
-          <p v-else-if="!dichte" class="mt-1.5 text-[11px] text-mute">Für das Gewicht ein Rohmaterial mit Dichte wählen.</p>
+          </span>
+          <span class="text-sm font-semibold tnum">{{ rohteilText(rohteil) }} mm</span>
+          <label class="flex items-center gap-1 text-mute">Aufmaß <input v-model.lazy="aufmassText" class="field !w-12 !px-1.5 !py-0.5 text-right text-xs" /> mm</label>
+          <span class="text-mute tnum" :title="dichte && dichteGeschaetzt ? `Dichte geschätzt (${zahl(dichte, 2)} kg/dm³), bitte am Rohmaterial in den Stammdaten pflegen` : ''">
+            Fertig {{ cm3(kennwerte.volumen) }}<template v-if="dichte"> · {{ kg(fertigGewicht) }}</template> · Roh {{ cm3(rohteil.volumen) }}<template v-if="dichte"> · <strong class="text-ink">{{ kg(rohGewicht) }}</strong><template v-if="dichteGeschaetzt">*</template></template>
+          </span>
+          <span v-if="!dichte" class="text-mute">Für das Gewicht ein Rohmaterial mit Dichte wählen.</span>
+          <button v-if="dichte && !nurAnsehen" class="btn ml-auto !py-0.5 text-xs" @click="emit('gewicht', Math.round(rohGewicht * 1000) / 1000)"><Check :size="13" /> Gewicht übernehmen</button>
         </div>
         <div v-else-if="masse" class="absolute bottom-3 left-3 rounded-lg bg-surface/85 px-2.5 py-1 text-xs shadow-sm backdrop-blur tnum" title="Größe des umschließenden Quaders (X × Y × Z)">
           {{ mm(masse.x) }} × {{ mm(masse.y) }} × {{ mm(masse.z) }} mm
@@ -435,6 +436,8 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
 .modell-flaeche { background: radial-gradient(ellipse at 30% 15%, var(--surface), var(--surface-2) 70%); }
 .werkzeug { position: absolute; display: flex; gap: 0.15rem; border-radius: 0.8rem; padding: 0.2rem; background: color-mix(in srgb, var(--surface) 85%, transparent); box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); backdrop-filter: blur(6px); }
 .left-3.werkzeug { max-width: calc(100% - 9rem); }
+.karte.unten { bottom: calc(var(--unten, 0px) + 0.75rem); }
+.rohleiste { background: color-mix(in srgb, var(--surface) 96%, transparent); backdrop-filter: blur(6px); }
 .karte { position: absolute; border-radius: 0.8rem; padding: 0.55rem 0.7rem; background: color-mix(in srgb, var(--surface) 92%, transparent); box-shadow: 0 2px 8px rgb(0 0 0 / 0.1); backdrop-filter: blur(6px); }
 .knopf { display: grid; place-items: center; height: 1.85rem; min-width: 1.85rem; padding: 0 0.5rem; border-radius: 0.6rem; font-size: 0.72rem; color: var(--mute); }
 .knopf:hover { background: var(--surface-2); color: var(--ink); }
