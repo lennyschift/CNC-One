@@ -7,6 +7,7 @@
   "materialname",
   "preis_kg",
   "dichte",
+  "iso_gruppe",
   "aktiv",
   "schreibweisen"
  ],
@@ -30,6 +31,13 @@
    "fieldname": "dichte",
    "fieldtype": "Float",
    "label": "Dichte (kg/dm³)"
+  },
+  {
+   "fieldname": "iso_gruppe",
+   "fieldtype": "Select",
+   "label": "ISO-Gruppe (Zerspanung)",
+   "options": "\nP\nM\nK\nN\nS\nH",
+   "description": "P Stahl, M rostfreier Stahl, K Guss, N NE-Metalle, S Superlegierungen/Titan, H harte Werkstoffe; leer = aus dem Namen abgeleitet"
   },
   {
    "fieldname": "aktiv",

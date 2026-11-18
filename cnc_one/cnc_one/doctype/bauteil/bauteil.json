@@ -11,6 +11,7 @@
   "revision",
   "material",
   "status",
+  "notiz_intern",
   "sb_serie",
   "seriennummern",
   "serien_stellen",
@@ -70,6 +71,12 @@
    "options": "Aktiv\nGesperrt",
    "default": "Aktiv",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "notiz_intern",
+   "fieldtype": "Small Text",
+   "label": "Interne Notiz",
+   "description": "Aus der Workbench; steht nicht auf Belegen"
   },
   {
    "fieldname": "sb_serie",

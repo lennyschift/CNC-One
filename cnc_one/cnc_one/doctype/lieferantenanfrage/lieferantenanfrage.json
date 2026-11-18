@@ -6,16 +6,24 @@
  "field_order": [
   "lieferant",
   "angebot",
+  "art",
   "kunde_name",
   "status",
   "sb_notiz",
+  "vorgang",
   "notiz",
+  "versendet_am",
+  "neue_antwort",
   "sb_antwort",
   "lieferantenangebot_nr",
   "gueltig_bis",
+  "lieferzeit",
+  "zuschlag",
   "sb_pos",
   "positionen",
-  "preise"
+  "preise",
+  "sb_mail",
+  "nachrichten"
  ],
  "fields": [
   {
@@ -32,7 +40,16 @@
    "fieldtype": "Link",
    "label": "Angebot",
    "options": "Angebot",
-   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Leer bei einer freien Anfrage, z. B. für Material"
+  },
+  {
+   "fieldname": "art",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Fremdvergabe\nMaterial\nSonstiges",
+   "default": "Fremdvergabe",
    "in_list_view": 1,
    "in_standard_filter": 1
   },
@@ -58,9 +75,29 @@
    "label": "Anfrage"
   },
   {
+   "fieldname": "vorgang",
+   "fieldtype": "Data",
+   "label": "Vorgang",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Gemeinsame Nummer aller Anfragen, die zusammen (eine Mail, Lieferanten in BCC) verschickt wurden; Grundlage für den Vergleich"
+  },
+  {
    "fieldname": "notiz",
    "fieldtype": "Small Text",
    "label": "Hinweis an den Lieferanten"
+  },
+  {
+   "fieldname": "versendet_am",
+   "fieldtype": "Datetime",
+   "label": "Per Mail versendet am",
+   "read_only": 1
+  },
+  {
+   "fieldname": "neue_antwort",
+   "fieldtype": "Check",
+   "label": "Neue Antwort",
+   "read_only": 1
   },
   {
    "fieldname": "sb_antwort",
@@ -78,6 +115,17 @@
    "label": "Gültig bis"
   },
   {
+   "fieldname": "lieferzeit",
+   "fieldtype": "Data",
+   "label": "Lieferzeit",
+   "description": "z. B. 2 Wochen oder KW 50"
+  },
+  {
+   "fieldname": "zuschlag",
+   "fieldtype": "Check",
+   "label": "Zuschlag erteilt"
+  },
+  {
    "fieldname": "sb_pos",
    "fieldtype": "Section Break",
    "label": "Positionen und Preise"
@@ -93,6 +141,17 @@
    "fieldtype": "Table",
    "label": "Preise des Lieferanten",
    "options": "Anfragepreis"
+  },
+  {
+   "fieldname": "sb_mail",
+   "fieldtype": "Section Break",
+   "label": "Mails"
+  },
+  {
+   "fieldname": "nachrichten",
+   "fieldtype": "Table",
+   "label": "Mails zur Anfrage",
+   "options": "Mail Nachricht"
   }
  ],
  "links": [],

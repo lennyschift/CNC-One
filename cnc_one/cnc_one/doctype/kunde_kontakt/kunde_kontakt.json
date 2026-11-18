@@ -9,6 +9,7 @@
   "nachname",
   "email",
   "telefon",
+  "telefonnummern",
   "ist_rechnungskontakt"
  ],
  "fields": [
@@ -41,7 +42,14 @@
   {
    "fieldname": "telefon",
    "fieldtype": "Data",
-   "label": "Telefon"
+   "label": "Telefon",
+   "description": "Erste Nummer der Liste, für Anzeigen und E-Rechnung"
+  },
+  {
+   "fieldname": "telefonnummern",
+   "fieldtype": "JSON",
+   "label": "Telefonnummern",
+   "description": "Liste [{art, nummer}], z. B. Arbeit, Mobil"
   },
   {
    "fieldname": "ist_rechnungskontakt",

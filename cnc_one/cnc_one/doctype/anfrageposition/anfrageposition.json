@@ -13,6 +13,8 @@
   "material",
   "ag_id",
   "ag_name",
+  "abmessung",
+  "einheit",
   "mengen"
  ],
  "fields": [
@@ -68,6 +70,18 @@
    "fieldtype": "Data",
    "label": "Arbeitsgang",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "abmessung",
+   "fieldtype": "Data",
+   "label": "Abmessung",
+   "description": "z. B. Ø 50 x 3000 mm (freie Anfrage)"
+  },
+  {
+   "fieldname": "einheit",
+   "fieldtype": "Data",
+   "label": "Einheit",
+   "default": "Stk"
   },
   {
    "fieldname": "mengen",

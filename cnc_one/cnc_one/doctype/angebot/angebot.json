@@ -15,6 +15,7 @@
   "kontakt_email",
   "gueltig_wochen",
   "lieferzeit",
+  "material_drucken",
   "versandt_am",
   "sb_pos",
   "positionen"
@@ -93,6 +94,12 @@
    "fieldtype": "Data",
    "label": "Lieferzeit",
    "default": "Nach Absprache"
+  },
+  {
+   "fieldname": "material_drucken",
+   "fieldtype": "Check",
+   "label": "Werkstoff auf dem Angebot",
+   "description": "Werkstoff je Position im Angebots-PDF nennen"
   },
   {
    "fieldname": "versandt_am",

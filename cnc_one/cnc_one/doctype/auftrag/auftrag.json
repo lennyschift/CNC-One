@@ -16,7 +16,10 @@
   "kontakt_email",
   "sb_pos",
   "positionen",
-  "kosten"
+  "kosten",
+  "sb_ab",
+  "ab_gesendet_am",
+  "ab_gesendet_an"
  ],
  "fields": [
   {
@@ -107,6 +110,23 @@
    "fieldtype": "Table",
    "label": "Kosten (Sonderkosten je Position)",
    "options": "Auftragskosten"
+  },
+  {
+   "fieldname": "sb_ab",
+   "fieldtype": "Section Break",
+   "label": "Auftragsbestätigung"
+  },
+  {
+   "fieldname": "ab_gesendet_am",
+   "fieldtype": "Datetime",
+   "label": "Auftragsbestätigung gesendet am",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ab_gesendet_an",
+   "fieldtype": "Data",
+   "label": "Auftragsbestätigung gesendet an",
+   "read_only": 1
   }
  ],
  "links": [],
