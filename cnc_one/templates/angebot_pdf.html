@@ -6,11 +6,6 @@
 <meta name="author" content="{{ f.firmenname }}">
 <style>
 {{ rahmen.css | safe }}
-  .einleitung { color: #555; margin-bottom: 4mm; }
-  table.staffel { border-collapse: collapse; margin-top: 1.5mm; width: 80mm; font-size: 7.8pt; }
-  table.staffel th { text-align: left; font-weight: normal; color: #999; font-size: 6.5pt; text-transform: uppercase; letter-spacing: 0.6pt; border-bottom: 0.5pt solid #ccc; padding: 0.6mm 0; }
-  table.staffel td { padding: 0.6mm 0; border-bottom: 0.3pt solid #eee; }
-  table.staffel .r { text-align: right; }
 </style>
 </head>
 <body>
@@ -36,30 +31,7 @@
 <h1>Angebot</h1>
 <div class="einleitung">Vielen Dank für Ihre Anfrage. Gerne bieten wir Ihnen wie folgt an:</div>
 
-{% for p in a.positionen %}
-<div class="pos">
-  <div class="nr">{{ loop.index }}</div>
-  {% if p.bild %}<img class="bild" src="{{ p.bild }}">{% endif %}
-  <div class="inhalt">
-    <div class="zeile">
-      <div class="name">{{ p.teil.name }}</div>
-      {% if not p.teil.staffel.aktiv and p.ergebnis.zeilen %}
-      <div class="preis">{{ p.ergebnis.menge }} Stk × {{ eur(p.ergebnis.zeilen[0].einzel) }} = <strong>{{ eur(p.ergebnis.zeilen[0].betrag) }}</strong></div>
-      {% endif %}
-    </div>
-    {% if p.angaben %}<div class="klein">{{ p.angaben }}</div>{% endif %}
-    {% if p.teil.staffel.aktiv %}
-    <table class="staffel">
-      <tr><th>Menge</th><th class="r">Stückpreis</th><th class="r">Gesamt</th></tr>
-      {% for s in p.ergebnis.stufen %}<tr><td>{{ s.menge }} Stk</td><td class="r">{{ eur(s.stueckpreis) }}</td><td class="r">{{ eur(s.gesamt) }}</td></tr>{% endfor %}
-    </table>
-    {% endif %}
-    {% for z in p.ergebnis.zeilen if z.typ == 'kosten' %}
-    <div class="kosten"><span>↳ {{ z.label }}</span><span>{{ eur(z.betrag) }}</span></div>
-    {% endfor %}
-  </div>
-</div>
-{% endfor %}
+{{ posten | safe }}
 
 <div class="summen"><table>
   <tr><td>Summe netto{% if staffel %} (kleinste Staffel){% endif %}</td><td class="r"><strong>{{ eur(a.netto) }}</strong></td></tr>

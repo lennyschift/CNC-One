@@ -32,6 +32,18 @@ class TestStammdaten(IntegrationTestCase):
 		self.assertEqual((neu["id"], neu["name"], neu["aktiv"], neu["adressen"]), (k["id"], "ZZ Neukunde GmbH", False, []))
 		self.assertIn(k["id"], [x["id"] for x in stammdaten.liste("kunde")])
 
+	def test_mehrere_telefonnummern_am_kunden_und_je_kontakt(self):
+		k = stammdaten.speichern("kunde", {
+			"name": "ZZ Telefonkunde", "telefonnummern": [{"art": "Zentrale", "nummer": " 07431 1 "}, {"art": "Fax", "nummer": ""}],
+			"kontakte": [{"nachname": "Mobil", "telefonnummern": [{"art": "Arbeit", "nummer": "07431 2"}, {"art": "Quatsch", "nummer": "0170 3"}]},
+				{"nachname": "Alt", "telefon": "0711 4"}],
+		})
+		self.assertEqual(k["telefonnummern"], [{"art": "Zentrale", "nummer": "07431 1"}])
+		self.assertEqual(k["kontakte"][0]["telefonnummern"], [{"art": "Arbeit", "nummer": "07431 2"}, {"art": "Sonstige", "nummer": "0170 3"}])
+		self.assertEqual(k["kontakte"][0]["telefon"], "07431 2")
+		# ältere Kontakte mit nur einer Nummer
+		self.assertEqual(k["kontakte"][1]["telefonnummern"], [{"art": "Arbeit", "nummer": "0711 4"}])
+
 	def test_deaktivierte_kunden_stehen_nicht_in_den_auswahllisten(self):
 		k = stammdaten.speichern("kunde", {"name": "ZZ Inaktiv", "aktiv": False})
 		self.assertNotIn(k["id"], [x["id"] for x in stammdaten.aktuell()["kunden"]])
@@ -45,11 +57,13 @@ class TestStammdaten(IntegrationTestCase):
 		self.assertEqual(stammdaten.speichern("lieferant", l)["leistung"], "Härten und Anlassen")
 		m = stammdaten.speichern("maschine", {"name": "ZZ Fräse", "satz": 99.5, "bemerkung": "5-Achs"})
 		self.assertEqual((m["id"], m["satz"]), ("ZZ Fräse", 99.5))
-		w = stammdaten.speichern("material", {"name": "ZZ Stahl", "preisKg": 4.2, "dichte": 7.85})
-		self.assertEqual((w["preisKg"], w["dichte"]), (4.2, 7.85))
+		w = stammdaten.speichern("material", {"name": "ZZ Stahl", "preisKg": 4.2, "dichte": 7.85, "isoGruppe": "H"})
+		self.assertEqual((w["preisKg"], w["dichte"], w["isoGruppe"]), (4.2, 7.85, "H"))
+		self.assertEqual(stammdaten.speichern("material", {**w, "isoGruppe": "X"})["isoGruppe"], "")  # unbekannte Gruppe = automatisch
+		stammdaten.speichern("material", {**w, "isoGruppe": "H"})
 		aktuell = stammdaten.aktuell()
 		self.assertIn({"name": "ZZ Fräse", "satz": 99.5}, aktuell["maschinen"])
-		self.assertIn({"name": "ZZ Stahl", "preisKg": 4.2, "dichte": 7.85, "schreibweisen": []}, aktuell["materialien"])
+		self.assertIn({"name": "ZZ Stahl", "preisKg": 4.2, "dichte": 7.85, "schreibweisen": [], "isoGruppe": "H"}, aktuell["materialien"])
 
 	def test_name_ist_pflicht(self):
 		with self.assertRaises(frappe.ValidationError):

@@ -208,7 +208,8 @@ def abholen(s=None):
 			typ, _antwort = m.select(ordnername(s.postfach_ordner or "INBOX"), readonly=True)
 			if typ != "OK":
 				frappe.throw(_("Den Ordner {0} gibt es im Postfach nicht.").format(s.postfach_ordner or "INBOX"))
-			kandidaten = kopfzeilen(m, suchen(m, woerter, s.abholen_ab))
+			# dazu Antworten der Lieferanten auf unsere Anfragen (Anfragenummer LA-… im Betreff)
+			kandidaten = kopfzeilen(m, suchen(m, [*woerter, "LA-"], s.abholen_ab))
 			bekannt = set(frappe.get_all("Mail Nachricht", filters={"message_id": ["in", [mid for mid, _v in kandidaten.values() if mid] or [""]]}, pluck="message_id"))
 			eigene = (s.benutzer or "").lower()
 			for uid, (mid, von) in kandidaten.items():
@@ -507,6 +508,14 @@ def verarbeiten(roh):
 		"referenzen": referenzen, "text": _text(msg),
 	}
 
+	la = lieferantenanfrage_zur_mail(betreff, von, _ids(in_reply_to, referenzen))
+	if la:
+		la.neue_antwort = 1
+		la.append("nachrichten", zeile)
+		la.save(ignore_permissions=True)
+		_dateien_ablegen(msg, la, mid)
+		return la
+
 	bestehend = _verlauf(_ids(in_reply_to, referenzen))
 	if bestehend:
 		doc = frappe.get_doc("Mail Anfrage", bestehend)
@@ -528,6 +537,41 @@ def verarbeiten(roh):
 		doc.append("nachrichten", zeile)
 		doc.insert(ignore_permissions=True)
 
+	_dateien_ablegen(msg, doc, mid)
+	return doc
+
+
+LA_NUMMER = re.compile(r"\bLA-\d{4}-\d{3,}\b", re.I)
+
+
+def lieferantenanfrage_zur_mail(betreff, von, ids):
+	"""Lieferantenanfrage, zu der eine eingehende Mail gehört (oder None): Antwort auf unsere Anfrage-Mail (Message-ID im
+	Verlauf) oder Anfragenummer LA-… im Betreff. Gingen mehrere Anfragen zusammen raus (Vorgang), entscheidet der Absender:
+	gleiche Adresse wie beim Lieferanten, sonst gleiche Domain; passt keiner, die erste Anfrage des Vorgangs."""
+	namen = []
+	if ids:
+		namen = frappe.get_all("Mail Nachricht", filters={"message_id": ["in", ids], "parenttype": "Lieferantenanfrage"}, pluck="parent")
+	if not namen:
+		nummern = [n.upper() for n in LA_NUMMER.findall(betreff or "")]
+		if not nummern:
+			return None
+		namen = frappe.get_all("Lieferantenanfrage", filters={"vorgang": ["in", nummern]}, pluck="name") or frappe.get_all("Lieferantenanfrage", filters={"name": ["in", nummern]}, pluck="name")
+	if not namen:
+		return None
+	vorgaenge = {frappe.db.get_value("Lieferantenanfrage", n, "vorgang") or n for n in namen}
+	kandidaten = frappe.get_all("Lieferantenanfrage", filters={"vorgang": ["in", list(vorgaenge)]}, fields=["name", "lieferant"], order_by="name asc") or [frappe._dict(name=n, lieferant=frappe.db.get_value("Lieferantenanfrage", n, "lieferant")) for n in sorted(set(namen))]
+	von = (von or "").lower()
+	domain = von.rsplit("@", 1)[-1] if "@" in von else ""
+	adressen = {k.name: (frappe.db.get_value("Lieferant", k.lieferant, "email") or "").lower() for k in kandidaten}
+	treffer = next((k.name for k in kandidaten if adressen[k.name] and adressen[k.name] == von), None)
+	if not treffer and domain and domain not in FREEMAIL:
+		treffer = next((k.name for k in kandidaten if adressen[k.name].endswith("@" + domain)), None)
+	return frappe.get_doc("Lieferantenanfrage", treffer or kandidaten[0].name)
+
+
+def _dateien_ablegen(msg, doc, mid):
+	"""Anhänge (ZIPs ausgepackt), eingebettete Bilder und das bereinigte HTML einer eingegangenen Mail am Beleg ablegen
+	(Mail Anfrage oder Lieferantenanfrage); vermerkt an der Nachricht `mid`."""
 	anhaenge, hinweise = [], []
 	for name, inhalt in _anhaenge(msg):
 		# Die ZIP bleibt als Original erhalten, ihre Zeichnungen und Modelle kommen als eigene Anhänge dazu (mit Herkunft)
@@ -543,7 +587,7 @@ def verarbeiten(roh):
 			ordner = herkunft.get("ordner") or ""
 			ablage = f"{ordner} {dateiname}" if ordner and namen.count(dateiname.lower()) > 1 else dateiname
 			try:
-				f = frappe.get_doc({"doctype": "File", "file_name": ablage, "attached_to_doctype": "Mail Anfrage", "attached_to_name": doc.name, "is_private": 1, "content": daten})
+				f = frappe.get_doc({"doctype": "File", "file_name": ablage, "attached_to_doctype": doc.doctype, "attached_to_name": doc.name, "is_private": 1, "content": daten})
 				f.insert(ignore_permissions=True)
 				anhaenge.append({"name": dateiname, "url": f.file_url, "groesse": len(daten), **herkunft})
 			except Exception as e:  # zu groß, beschädigtes PDF usw.: die Anfrage kommt trotzdem
@@ -556,7 +600,7 @@ def verarbeiten(roh):
 			if f"cid:{cid}" not in roh:
 				continue
 			try:
-				f = frappe.get_doc({"doctype": "File", "file_name": name, "attached_to_doctype": "Mail Anfrage", "attached_to_name": doc.name, "is_private": 1, "content": inhalt})
+				f = frappe.get_doc({"doctype": "File", "file_name": name, "attached_to_doctype": doc.doctype, "attached_to_name": doc.name, "is_private": 1, "content": inhalt})
 				bilder[cid] = f.insert(ignore_permissions=True).file_url
 			except Exception:
 				frappe.clear_messages()
@@ -564,4 +608,3 @@ def verarbeiten(roh):
 	if anhaenge or hinweise or html:
 		z = next(x for x in doc.nachrichten if x.message_id == mid)
 		z.db_set({"anhaenge": json.dumps(anhaenge, ensure_ascii=False), "hinweis": "\n".join(hinweise), "html": html}, update_modified=False)
-	return doc

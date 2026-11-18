@@ -103,6 +103,22 @@ class TestBauteilDateien(IntegrationTestCase):
 		self.assertEqual(bauteil.vorschau(a["positionen"][0]["bauteilId"]), bild)
 		self.assertEqual(bauteil.vorschau(None), "")
 
+	def test_bild_ohne_teilenummer_kommt_aus_dem_angebot(self):
+		"""Ohne Teilenummer entsteht kein Bauteil; das Bild aus dem 3D-Modell erscheint trotzdem in Auftrag und Folgebelegen."""
+		from cnc_one.api import auftrag
+
+		t = teil("t1", "Flansch", "")
+		a = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde}, "teile": [t]})
+		bild = self.hochladen(a["id"], "zz-datei-ohne-nr.png", kleines_png())
+		t["vorschaubild"] = bild
+		angebot.entwurf_speichern({"id": a["id"], "kopf": {"kundeId": self.kunde}, "teile": [t]})
+		self.assertFalse(frappe.db.get_value("Angebotsposition", {"parent": a["id"]}, "bauteil"))
+		angebot.senden(a["id"])
+		r = auftrag.aus_angebot(a["id"], "PO-ZZ", [{"angebotKey": "t1", "menge": 5, "termin": "2026-12-01"}])
+		self.assertEqual(r["positionen"][0]["teil"]["vorschaubild"], bild)
+		self.assertEqual(bauteil.bild_zur_auftragsposition(r["id"], r["positionen"][0]["key"]), bild)
+		self.assertEqual(bauteil.bild_zur_auftragsposition(None, None), "")
+
 
 class TestBauteilErkennung(IntegrationTestCase):
 	"""Vorhandene Bauteile zu den aus der Zeichnung erkannten Nummern finden; Revision aus der Workbench."""

@@ -303,6 +303,56 @@ class TestAngebotPerMail(IntegrationTestCase):
 			mail_api.angebot_senden(a["id"], "einkauf@zz-kunde.de", "", "Betreff", "Text")
 		self.assertEqual(frappe.db.get_value("Angebot", a["id"], "status"), "Entwurf")
 
+	def test_auftragsbestaetigung_per_mail(self):
+		from cnc_one.api import angebot, auftrag, belegdruck
+		from cnc_one.tests.test_angebot import teil
+
+		t = teil("t1", "Flansch", "ZZ-AB-1", infoKunde="Gleitgeschliffen")
+		a = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde}, "teile": [t]})
+		angebot.senden(a["id"])
+		au = auftrag.aus_angebot(a["id"], "PO-77", [{"angebotKey": "t1", "menge": 10, "termin": "2026-12-01"}])
+		self.assertEqual(au["ab"], {"gesendetAm": "", "gesendetAn": ""})
+		v = mail_api.ab_vorschlag(au["id"])
+		self.assertEqual((v["an"], v["betreff"], v["bereit"]), ("einkauf@zz-kunde.de", f"Auftragsbestätigung {au['id']} zu Ihrer Bestellung PO-77", True))
+		self.assertTrue(v["text"].startswith("Sehr geehrter Herr Einkauf,\n\nvielen Dank für Ihren Auftrag PO-77."))
+		# Ansehen: frisch erzeugt, nichts abgelegt
+		name, inhalt = belegdruck.ansehen_pdf("Auftrag", au["id"])
+		self.assertEqual(name, f"Auftragsbestätigung {au['id']}.pdf")
+		self.assertTrue(inhalt.startswith(b"%PDF"))
+		self.assertEqual(frappe.db.count("File", {"attached_to_doctype": "Auftrag", "attached_to_name": au["id"]}), 0)
+		with patch.object(mail.smtplib, "SMTP_SSL", FakeSmtp), patch.object(mail, "gesendet_ablegen", return_value=""):
+			r = mail_api.ab_senden(au["id"], v["an"], "", v["betreff"], v["text"])
+			mail_api.ab_senden(au["id"], v["an"], "", v["betreff"], v["text"])  # erneut: das PDF wird ersetzt
+		msg = FakeSmtp.gesendet[0]["msg"]
+		self.assertEqual([x.get_filename() for x in msg.iter_attachments()], [f"Auftragsbestätigung {au['id']}.pdf"])
+		self.assertEqual(r["auftrag"]["ab"]["gesendetAn"], "einkauf@zz-kunde.de")
+		self.assertTrue(r["auftrag"]["ab"]["gesendetAm"])
+		self.assertEqual(frappe.db.count("File", {"attached_to_doctype": "Auftrag", "attached_to_name": au["id"]}), 1)
+		with self.assertRaises(frappe.ValidationError):
+			mail_api.ab_senden(au["id"], "kein-empfaenger", "", "Betreff", "Text")
+
+	def test_auftragsbestaetigung_html_mit_kosten_kundeninfo_und_termin(self):
+		from unittest.mock import patch as p2
+
+		from cnc_one.api import angebot, auftrag, belegdruck
+		from cnc_one.logic import pdf
+		from cnc_one.tests.test_angebot import teil
+
+		t = teil("t1", "Flansch", "ZZ-AB-2", material="ZZ-Werkstoff-AB", infoKunde="Gleitgeschliffen")
+		a = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde}, "teile": [t]})
+		angebot.senden(a["id"])
+		au = auftrag.aus_angebot(a["id"], "PO-78", [{"angebotKey": "t1", "menge": 10, "termin": "2026-12-01"}])
+		g = {}
+		with p2.object(pdf, "pdf_a3", side_effect=lambda html, **kw: g.setdefault("h", html) and b""):
+			belegdruck.ab_pdf_erzeugen(frappe.get_doc("Auftrag", au["id"]))
+		h = g["h"]
+		self.assertIn("Auftragsbestätigung", h)
+		self.assertIn("PO-78", h)
+		self.assertIn("Gleitgeschliffen", h)
+		self.assertIn("Liefertermin 01.12.2026", h)
+		self.assertIn("Summe Position", h)
+		self.assertNotIn("ZZ-Werkstoff-AB", h)  # Werkstoff nur, wenn am Angebot gewünscht
+
 
 def zz_html_mail(mid="<zz-h1@zz-kunde.de>"):
 	m = EmailMessage()

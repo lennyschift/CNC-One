@@ -4,6 +4,8 @@ Eine Schnittstelle für alle Arten: `liste(art)`, `speichern(art, daten)`, `loes
 Doctype-Berechtigungen. Was schon in Belegen verwendet wird, lässt sich nicht löschen, nur deaktivieren.
 """
 
+import json
+
 import frappe
 from frappe import _
 
@@ -17,12 +19,39 @@ def _text(v):
 
 
 # ----------------------------------------------------------------- Kunde
+TELEFON_ARTEN = ("Arbeit", "Mobil", "Zentrale", "Fax", "Privat", "Sonstige")
+
+
+def _nummern_ui(wert, alt=""):
+	"""Telefonnummern als Liste [{art, nummer}]; ältere Datensätze haben nur eine Nummer im Feld telefon."""
+	try:
+		liste = json.loads(wert) if isinstance(wert, str) and wert else (wert or [])
+	except ValueError:
+		liste = []
+	out = [{"art": x.get("art") or "Arbeit", "nummer": x.get("nummer") or ""} for x in liste if isinstance(x, dict) and (x.get("nummer") or "").strip()]
+	if not out and (alt or "").strip():
+		out = [{"art": "Arbeit", "nummer": alt.strip()}]
+	return out
+
+
+def _nummern(liste):
+	"""Leere Zeilen weg, unbekannte Arten werden „Sonstige“."""
+	out = []
+	for x in liste or []:
+		nummer = _text((x or {}).get("nummer"))
+		if nummer:
+			art = (x or {}).get("art")
+			out.append({"art": art if art in TELEFON_ARTEN else "Sonstige", "nummer": nummer})
+	return out
+
+
 def kunde_voll_ui(d):
 	return {
 		"id": d.name,
 		"name": d.kundenname,
 		"kuerzel": d.kuerzel or "",
 		"aktiv": bool(d.aktiv),
+		"telefonnummern": _nummern_ui(d.telefonnummern),
 		"ustId": d.ust_id or "",
 		"steuernummer": d.steuernummer or "",
 		"zahlungsbedingung": d.zahlungsbedingung or "",
@@ -36,7 +65,7 @@ def kunde_voll_ui(d):
 		"kontakte": [
 			{
 				"anrede": k.anrede or "", "vorname": k.vorname or "", "nachname": k.nachname or "", "email": k.email or "",
-				"telefon": k.telefon or "", "rechnungskontakt": bool(k.ist_rechnungskontakt),
+				"telefon": k.telefon or "", "telefonnummern": _nummern_ui(k.telefonnummern, k.telefon), "rechnungskontakt": bool(k.ist_rechnungskontakt),
 			}
 			for k in d.kontakte
 		],
@@ -47,6 +76,7 @@ def kunde_setzen(doc, d):
 	doc.kundenname = _text(d.get("name"))
 	doc.kuerzel = _text(d.get("kuerzel"))
 	doc.aktiv = 1 if d.get("aktiv", True) else 0
+	doc.telefonnummern = json.dumps(_nummern(d.get("telefonnummern")), ensure_ascii=False)
 	doc.ust_id = _text(d.get("ustId"))
 	doc.steuernummer = _text(d.get("steuernummer"))
 	doc.zahlungsbedingung = _text(d.get("zahlungsbedingung"))
@@ -63,9 +93,11 @@ def kunde_setzen(doc, d):
 	doc.set("kontakte", [])
 	kontakte = [k for k in d.get("kontakte") or [] if _text(k.get("nachname")) or _text(k.get("vorname")) or _text(k.get("email"))]
 	for k in kontakte:
+		nummern = _nummern(k.get("telefonnummern")) if "telefonnummern" in k else _nummern([{"art": "Arbeit", "nummer": k.get("telefon")}])
 		doc.append("kontakte", {
 			"anrede": k.get("anrede") or "", "vorname": _text(k.get("vorname")), "nachname": _text(k.get("nachname")) or _text(k.get("vorname")) or _text(k.get("email")),
-			"email": _text(k.get("email")), "telefon": _text(k.get("telefon")), "ist_rechnungskontakt": 1 if k.get("rechnungskontakt") else 0,
+			"email": _text(k.get("email")), "telefon": nummern[0]["nummer"] if nummern else "",
+			"telefonnummern": json.dumps(nummern, ensure_ascii=False), "ist_rechnungskontakt": 1 if k.get("rechnungskontakt") else 0,
 		})
 
 
@@ -96,8 +128,11 @@ def maschine_setzen(doc, d):
 	doc.aktiv = 1 if d.get("aktiv", True) else 0
 
 
+ISO_GRUPPEN = ("P", "M", "K", "N", "S", "H")
+
+
 def material_ui(d):
-	return {"id": d.name, "name": d.materialname, "preisKg": d.preis_kg or 0, "dichte": d.dichte or 0, "aktiv": bool(d.aktiv), "schreibweisen": d.schreibweisen or ""}
+	return {"id": d.name, "name": d.materialname, "preisKg": d.preis_kg or 0, "dichte": d.dichte or 0, "aktiv": bool(d.aktiv), "schreibweisen": d.schreibweisen or "", "isoGruppe": d.iso_gruppe or ""}
 
 
 def material_setzen(doc, d):
@@ -106,6 +141,8 @@ def material_setzen(doc, d):
 	doc.preis_kg = d.get("preisKg") or 0
 	doc.dichte = d.get("dichte") or 0
 	doc.aktiv = 1 if d.get("aktiv", True) else 0
+	if "isoGruppe" in d:
+		doc.iso_gruppe = d.get("isoGruppe") if d.get("isoGruppe") in ISO_GRUPPEN else ""
 	if "schreibweisen" in d:
 		doc.schreibweisen = "\n".join(z.strip() for z in (d.get("schreibweisen") or "").splitlines() if z.strip())
 
@@ -126,6 +163,8 @@ def bauteil_setzen(doc, d):
 	material = _text(d.get("material"))
 	doc.material = material if material and frappe.db.exists("Material", material) else None
 	doc.status = d.get("status") if d.get("status") in ("Aktiv", "Gesperrt") else "Aktiv"
+	if "notizIntern" in d:
+		doc.notiz_intern = (d.get("notizIntern") or "").strip()
 	doc.seriennummern = 1 if d.get("seriennummern") else 0
 	stellen = min(9, max(1, int(d.get("serienStellen") or 4)))
 	letzte = max(0, int(d.get("letzteSeriennummer") or 0))
@@ -144,7 +183,14 @@ ARTEN = {
 	"maschine": ("Maschine", maschine_ui, maschine_setzen),
 	"material": ("Material", material_ui, material_setzen),
 	"bauteil": ("Bauteil", bauteil_voll_ui, bauteil_setzen),
+	"anfragevorlage": ("Anfragevorlage", lambda d: _anfrage().vorlage_ui(d), lambda doc, d: _anfrage().vorlage_setzen(doc, d)),
 }
+
+
+def _anfrage():
+	from cnc_one.api import anfrage
+
+	return anfrage
 
 
 def _art(art):

@@ -74,6 +74,44 @@ class TestAngebot(IntegrationTestCase):
 		self.assertEqual(w["positionen"][0]["ergebnis"]["menge"], 3)
 		self.assertEqual(w["kopf"]["anfrageNr"], "RFQ-2")
 
+	def test_preisspalten_mit_kosten_und_summe_der_position(self):
+		t = teil("t1")
+		e = berechne(t)
+		pr = angebot._preiszeilen(e, t)
+		self.assertEqual(len(pr["haupt"]), 1)
+		self.assertEqual([k["label"] for k in pr["kosten"]], ["Rüstkosten", "Messkosten"])
+		self.assertEqual(pr["summen"], [{"menge": None, "betrag": e["gesamt"]}])
+		self.assertAlmostEqual(pr["haupt"][0]["betrag"] + sum(k["betrag"] for k in pr["kosten"]), pr["summen"][0]["betrag"], places=2)
+		# ohne Zusatzkosten keine Summenzeile
+		ohne = teil("t2", messkosten=0, inStueckpreis={"ruest": True, "mess": False, "sonder": False, "express": False})
+		self.assertEqual(angebot._preiszeilen(berechne(ohne), ohne)["summen"], [])
+		# Staffel: je Stufe eine Zeile, die Kosten darunter, keine Summenzeile
+		st = teil("t3", staffel={"aktiv": True, "stufen": [{"menge": 5, "extra": 0}, {"menge": 50, "extra": 0}]})
+		ps = angebot._preiszeilen(berechne(st), st)
+		self.assertEqual([h["menge"] for h in ps["haupt"]], [5, 50])
+		self.assertTrue(ps["kosten"])
+		self.assertEqual(ps["summen"], [])
+
+	def test_werkstoff_und_kundeninfo_im_pdf_nur_wenn_gewuenscht(self):
+		t = teil("t1", material="ZZ-Werkstoff-Test", infoKunde="Gleitgeschliffen, entgratet")
+		ohne = self.speichern([t])
+		self.assertFalse(ohne["kopf"]["materialDrucken"])
+		html = self._pdf_html(ohne["id"])
+		self.assertNotIn("ZZ-Werkstoff-Test", html)
+		self.assertIn("Gleitgeschliffen, entgratet", html)
+		mit = self.speichern([t], ohne["id"], materialDrucken=True)
+		self.assertTrue(mit["kopf"]["materialDrucken"])
+		self.assertIn("Werkstoff ZZ-Werkstoff-Test", self._pdf_html(mit["id"]))
+
+	def _pdf_html(self, id):
+		"""Das HTML, aus dem das PDF entsteht (ohne den PDF-Druck selbst)."""
+		from unittest.mock import patch
+		from cnc_one.logic import pdf
+		gesehen = {}
+		with patch.object(pdf, "pdf_a3", side_effect=lambda html, **kw: gesehen.setdefault("html", html) and b""):
+			angebot.pdf_erzeugen(frappe.get_doc("Angebot", id))
+		return gesehen["html"]
+
 	def test_entwurf_ohne_kunde_ist_moeglich(self):
 		r = self.speichern([teil("t1")], kunde="")
 		self.assertEqual(r["kopf"]["kundeId"], "")
@@ -222,6 +260,15 @@ class TestBauteilZuordnung(IntegrationTestCase):
 		self.assertEqual(r2["positionen"][0]["herkunft"], "neu")
 		b.reload()
 		self.assertEqual((b.bezeichnung, b.seriennummern), ("Flansch neu", 0))
+
+	def test_interne_notiz_kommt_ans_bauteil_auch_beim_bestand(self):
+		vorhanden = bauteil.sicherstellen(self.kunde, "ZZ-NZ", "Altes Bauteil", "Z-1", "")
+		r = self.speichern([teil("t1", "Anderer Name", "ZZ-NZ", notizIntern="Spannt schlecht, weiche Backen"), teil("t2", "Neu", "ZZ-NZ2", notizIntern="Neu intern")])
+		self.assertEqual(frappe.db.get_value("Bauteil", vorhanden.name, "notiz_intern"), "Spannt schlecht, weiche Backen")
+		self.assertEqual(frappe.db.get_value("Bauteil", r["positionen"][1]["bauteilId"], "notiz_intern"), "Neu intern")
+		# eine leere Notiz im Angebot löscht die am Bauteil nicht
+		self.speichern([teil("t1", "Anderer Name", "ZZ-NZ", notizIntern="")], r["id"])
+		self.assertEqual(frappe.db.get_value("Bauteil", vorhanden.name, "notiz_intern"), "Spannt schlecht, weiche Backen")
 
 	def test_bestandsbauteil_wird_wiedergefunden_und_nicht_veraendert(self):
 		vorhanden = bauteil.sicherstellen(self.kunde, "ZZ-B1", "Altes Bauteil", "Z-1", "")

@@ -62,3 +62,54 @@ class TestRohmaterialSchreibweisen(IntegrationTestCase):
 		self.assertEqual(zeichnung.rohmaterial_anlegen(self.m, "V2A")["schreibweisen"], ["V2A"])
 		with self.assertRaises(frappe.ValidationError):
 			zeichnung.rohmaterial_anlegen("  ")
+
+
+class TestZeichnungMarkierungen(IntegrationTestCase):
+	"""Drehung und Markierungen je Zeichnung (eigene Ebene, die PDF bleibt unverändert)."""
+
+	def setUp(self):
+		from cnc_one.tests.dateischutz import dateien_vorher
+		from cnc_one.tests.test_dateien import leeres_pdf
+
+		self._dateien = dateien_vorher()
+		frappe.set_user("Administrator")
+		f = frappe.get_doc({"doctype": "File", "file_name": "zz-markierung.pdf", "is_private": 1, "content": leeres_pdf("ZZ Markierung")})
+		f.insert(ignore_permissions=True)
+		self.url = f.file_url
+
+	def tearDown(self):
+		from cnc_one.tests.dateischutz import eigene_dateien_loeschen
+
+		frappe.set_user("Administrator")
+		eigene_dateien_loeschen(self._dateien)
+		frappe.db.rollback()
+
+	def test_ohne_gespeichertes_leer(self):
+		self.assertEqual(zeichnung.markierungen(self.url), {"drehung": 0, "markierungen": []})
+
+	def test_speichern_bereinigt_und_ersetzt(self):
+		r = zeichnung.markierungen_speichern(self.url, 90, [
+			{"typ": "marker", "seite": 1, "x": 0.1, "y": 0.2, "b": 0.3, "h": 1.7, "farbe": "gelb"},
+			{"typ": "pfeil", "seite": 2, "x1": 0, "y1": 0, "x2": 0.5, "y2": 0.5, "farbe": "lila"},
+			{"typ": "freihand", "seite": 1, "punkte": [[0.1, 0.1], [0.2, 0.25]]},
+			{"typ": "notiz", "seite": 1, "x": 0.4, "y": 0.4, "text": "  "},
+			{"typ": "notiz", "seite": 1, "x": 0.4, "y": 0.4, "text": "Maß prüfen"},
+		])
+		self.assertEqual(r["drehung"], 90)
+		m = r["markierungen"]
+		self.assertEqual(len(m), 4)  # leere Notiz fällt weg
+		self.assertEqual(m[0]["h"], 1.0)
+		self.assertEqual(m[1]["farbe"], "rot")
+		self.assertEqual(m[3]["text"], "Maß prüfen")
+		self.assertEqual(zeichnung.markierungen(self.url), r)
+		zeichnung.markierungen_speichern(self.url, 180, [])
+		self.assertEqual(zeichnung.markierungen(self.url), {"drehung": 180, "markierungen": []})
+		self.assertEqual(frappe.db.count("Zeichnung Markierung", {"datei": self.url}), 1)
+
+	def test_ungueltiges(self):
+		with self.assertRaises(frappe.ValidationError):
+			zeichnung.markierungen_speichern(self.url, 45, [])
+		with self.assertRaises(frappe.ValidationError):
+			zeichnung.markierungen_speichern(self.url, 0, [{"typ": "kreis"}])
+		with self.assertRaises(frappe.PermissionError):
+			zeichnung.markierungen("/private/files/gibt-es-nicht.pdf")

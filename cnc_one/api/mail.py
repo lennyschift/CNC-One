@@ -491,6 +491,94 @@ def angebot_senden(angebot, an, cc="", betreff="", text="", zitieren=1):
 	return {"angebot": angebot_api.angebot_ui(frappe.get_doc("Angebot", a.name)), "hinweis": hinweis, "mailAnfrage": d.name if d else ""}
 
 
+# ----------------------------------------------------------------- Auftragsbestätigung per Mail
+AB_VORLAGE = (
+	"{anrede},\n\nvielen Dank für Ihren Auftrag{bestellung}. Anbei erhalten Sie unsere Auftragsbestätigung {auftrag}.\n\n"
+	"Bitte prüfen Sie die Angaben und geben Sie uns Bescheid, falls etwas nicht stimmt.\n\nMit freundlichen Grüßen\n{absender}"
+)
+
+
+def _ab_empfaenger(d):
+	if d.kontakt_email:
+		return d.kontakt_email
+	kontakt = (kunde_ui(frappe.get_doc("Kunde", d.kunde)).get("kontakt") or {}) if d.kunde else {}
+	return kontakt.get("email", "")
+
+
+@frappe.whitelist(methods=["POST"])
+def ab_vorschlag(auftrag):
+	"""Vorschlag für die Mail mit der Auftragsbestätigung: an den Ansprechpartner des Auftrags, sonst an den Kontakt des Kunden."""
+	nur_cnc()
+	from cnc_one.api.firma import firma_ui
+
+	d = frappe.get_doc("Auftrag", auftrag)
+	d.check_permission("read")
+	s = mail.einstellungen()
+	an = _ab_empfaenger(d)
+	firma = firma_ui().get("firmenname", "")
+	werte = _Platzhalter(
+		anrede=_anrede(d.kunde, (an or "").lower()), auftrag=d.name, bestellung=f" {d.kundenbestellnr}" if d.kundenbestellnr else "",
+		absender=s.absender_name or firma, firma=firma,
+	)
+	betreff = f"Auftragsbestätigung {d.name}" + (f" zu Ihrer Bestellung {d.kundenbestellnr}" if d.kundenbestellnr else "")
+	bereit = bool(s.smtp_server and s.benutzer and s.get_password("passwort", raise_exception=False))
+	return {
+		"an": an, "cc": "", "betreff": betreff, "text": AB_VORLAGE.format_map(werte), "anhang": f"Auftragsbestätigung {d.name}.pdf",
+		"bereit": bereit, "absender": s.benutzer or "", "gesendetAm": _iso(d.ab_gesendet_am) if d.ab_gesendet_am else "",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def ab_senden(auftrag, an, cc="", betreff="", text=""):
+	"""Schickt die Auftragsbestätigung als PDF per Mail (Text und HTML), legt eine Kopie in „Gesendet“ ab, das PDF am
+	Auftrag und vermerkt, wann und an wen sie ging."""
+	nur_cnc()
+	from email.message import EmailMessage
+	from email.utils import formataddr, formatdate, make_msgid
+
+	from frappe.utils import now_datetime, validate_email_address
+
+	from cnc_one.api import belegdruck
+	from cnc_one.api.auftrag import auftrag_ui
+	from cnc_one.api.firma import firma_ui
+
+	d = frappe.get_doc("Auftrag", auftrag)
+	d.check_permission("write")
+	if d.status == "Storniert":
+		frappe.throw(_("Ein stornierter Auftrag wird nicht bestätigt."))
+	an_liste, cc_liste = _adressliste(an), _adressliste(cc)
+	if not an_liste:
+		frappe.throw(_("Bitte einen Empfänger eintragen."))
+	for x in an_liste + cc_liste:
+		validate_email_address(x, throw=True)
+	if not (betreff or "").strip():
+		frappe.throw(_("Bitte einen Betreff eintragen."))
+
+	s = mail.einstellungen()
+	d.ab_gesendet_am = now_datetime()
+	datei = belegdruck.ab_pdf_ablegen(d)
+	with open(datei.get_full_path(), "rb") as fh:
+		inhalt = fh.read()
+
+	msg = EmailMessage()
+	msg["From"] = formataddr((s.absender_name or firma_ui().get("firmenname", ""), s.benutzer or ""))
+	msg["To"] = ", ".join(an_liste)
+	if cc_liste:
+		msg["Cc"] = ", ".join(cc_liste)
+	msg["Subject"] = betreff.strip()
+	msg["Date"] = formatdate(localtime=True)
+	msg["Message-ID"] = make_msgid(domain=(s.benutzer or "cnc-one.local").rsplit("@", 1)[-1])
+	msg.set_content(text or "")
+	msg.add_alternative(antwort_html(text), subtype="html")
+	msg.add_attachment(inhalt, maintype="application", subtype="pdf", filename=datei.file_name)
+
+	mail.smtp_senden(s, msg, an_liste + cc_liste)
+	hinweis = mail.gesendet_ablegen(s, msg)
+	d.ab_gesendet_an = msg["To"]
+	d.save()
+	return {"auftrag": auftrag_ui(d), "hinweis": hinweis}
+
+
 # ----------------------------------------------------------------- Tabellen in Anfragen
 TABELLEN_ROLLEN = ("teilenummer", "menge", "liefertermin")
 
@@ -551,3 +639,33 @@ def tabellenvorlage_vergessen(id):
 		v["kunde"] = {}
 	frappe.db.set_value("Kunde", d.kunde, "tabellenvorlage", json.dumps(v, ensure_ascii=False))
 	return tabellenvorlage(d.kunde, d.von_email)
+
+
+@frappe.whitelist(methods=["POST"])
+def angelernt(kunde):
+	"""Alles, was für einen Kunden angelernt ist, zum Ansehen in den Stammdaten: Spalten der Tabellen in Anfrage-Mails
+	(je Absender und der Standard des Kunden) und die Regeln der Zeichnungserkennung."""
+	nur_cnc()
+	from cnc_one.api import zeichnung
+
+	if not kunde or not frappe.db.exists("Kunde", kunde):
+		frappe.throw(_("Den Kunden {0} gibt es nicht.").format(kunde or ""))
+	v = _tabellenvorlage_roh(kunde)
+	return {
+		"tabellen": {"kontakte": v["kontakte"], "kunde": v["kunde"]},
+		"zeichnung": zeichnung._lesen(kunde),
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def tabellenvorlage_entfernen(kunde, kontakt=""):
+	"""Angelernte Tabellenspalten aus den Stammdaten löschen: eines Absenders (`kontakt`) oder den Standard des Kunden."""
+	nur_cnc()
+	frappe.get_doc("Kunde", kunde).check_permission("write")
+	v = _tabellenvorlage_roh(kunde)
+	if kontakt:
+		v["kontakte"].pop(kontakt.lower(), None)
+	else:
+		v["kunde"] = {}
+	frappe.db.set_value("Kunde", kunde, "tabellenvorlage", json.dumps(v, ensure_ascii=False))
+	return angelernt(kunde)

@@ -36,6 +36,7 @@ def auftrag_ui(d):
 		"datum": iso(d.creation),
 		"status": d.status,
 		"netto": d.netto or 0,
+		"ab": {"gesendetAm": iso(d.ab_gesendet_am) if d.ab_gesendet_am else "", "gesendetAn": d.ab_gesendet_an or ""},
 		"positionen": [
 			{
 				"key": p.position_key,
@@ -43,6 +44,7 @@ def auftrag_ui(d):
 				"teil": {
 					"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "",
 					"material": p.material or "", "bauteilId": p.bauteil or "", **bauteil_api.dateien_fuer(p.bauteil, p.revision),
+					"vorschaubild": bauteil_api.bild(p.bauteil, p.revision, d.angebot, p.angebot_position_key),
 				},
 				"menge": p.menge,
 				"einzelpreis": p.einzelpreis or 0,

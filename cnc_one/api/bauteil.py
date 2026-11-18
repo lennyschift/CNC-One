@@ -1,5 +1,6 @@
 """Bauteile (Stammdaten) und ihr Arbeitsplan."""
 
+import json
 import re
 
 import frappe
@@ -18,6 +19,7 @@ def bauteil_ui(d):
 		"zeichnungsnr": d.zeichnungsnr or "",
 		"revision": d.revision or "",
 		"material": d.material or "",
+		"notizIntern": d.notiz_intern or "",
 		"arbeitsgaenge": [arbeitsgang_ui(r) for r in d.arbeitsplan],
 		"seriennummern": bool(d.seriennummern),
 		"serienStellen": d.serien_stellen or 4,
@@ -47,6 +49,34 @@ def revisionen_ui(d):
 def vorschau(name):
 	"""Vorschaubild eines Bauteils (url) oder leer."""
 	return (frappe.db.get_value("Bauteil", name, "vorschaubild") or "") if name else ""
+
+
+def bild_aus_angebot(angebot, position_key):
+	"""Vorschaubild, das die Workbench an einer Angebotsposition abgelegt hat. Rückfall für Positionen ohne Bauteil
+	(ohne Teilenummer entsteht kein Bauteil, das Bild aus dem 3D-Modell gibt es trotzdem)."""
+	if not (angebot and position_key):
+		return ""
+	k = frappe.db.get_value("Angebotsposition", {"parent": angebot, "position_key": position_key}, "kalkulation")
+	try:
+		return (json.loads(k or "{}") or {}).get("vorschaubild") or ""
+	except (TypeError, ValueError):
+		return ""
+
+
+def bild(bauteil, revision="", angebot=None, angebot_position_key=None):
+	"""Bild einer Beleg-Position: das Bauteil in dieser Revision, sonst das Bild aus der Angebotsposition."""
+	url = dateien_fuer(bauteil, revision)["vorschaubild"] if bauteil else ""
+	return url or bild_aus_angebot(angebot, angebot_position_key)
+
+
+def bild_zur_auftragsposition(auftrag, position_key, bauteil=None):
+	"""Bild über die Auftragsposition (Lieferschein, Rechnung, Fertigung): bestellte Revision, sonst das Angebot."""
+	pos = None
+	if auftrag and position_key:
+		pos = frappe.db.get_value("Auftragsposition", {"parent": auftrag, "position_key": position_key}, ["bauteil", "revision", "angebot_position_key"], as_dict=True)
+	if not pos:
+		return vorschau(bauteil)
+	return bild(pos.bauteil or bauteil, pos.revision, frappe.db.get_value("Auftrag", auftrag, "angebot"), pos.angebot_position_key)
 
 
 def dateien_fuer(name, revision=""):
@@ -118,6 +148,17 @@ def _angaben_setzen(doc, teil):
 	doc.zeichnungsnr = (teil.get("zeichnungsnr") or "").strip()
 	doc.material = _material(teil.get("material"))
 	doc.seriennummern = 1 if teil.get("seriennummern") else 0
+	notiz_setzen(doc, teil)
+
+
+def notiz_setzen(doc, teil):
+	"""Interne Notiz aus der Workbench am Bauteil ablegen, auch bei Bestandsbauteilen. Eine leere Notiz im Angebot
+	löscht die am Bauteil nicht (sie ist dann meist nur nicht geladen); leeren geht in den Stammdaten."""
+	notiz = (teil.get("notizIntern") or "").strip()
+	if notiz and notiz != (doc.notiz_intern or "").strip():
+		doc.notiz_intern = notiz
+		return True
+	return False
 
 
 DATEIFELDER = ("zeichnung", "step_datei", "vorschaubild")
@@ -239,6 +280,8 @@ def fuer_position(kunde, teil, alt=None):
 		neu = bool(alt_neu and vorhanden == alt_name)
 		if neu:
 			_angaben_setzen(doc, teil)
+			doc.save()
+		elif notiz_setzen(doc, teil):
 			doc.save()
 		return doc, neu
 	if alt_neu and alt_name and frappe.db.get_value("Bauteil", alt_name, "kunde") == kunde and not _anderweitig_verwendet(alt_name):

@@ -46,6 +46,7 @@ def fb_ui(d):
 		"teil": {
 			"name": d.bezeichnung or "", "teilenummer": d.teilenummer or "", "zeichnungsnr": d.zeichnungsnr or "",
 			"material": d.material or "", "bauteilId": d.bauteil or "", **bauteil_api.dateien_fuer(d.bauteil, d.revision),
+			"vorschaubild": bauteil_api.bild(d.bauteil, d.revision) or bauteil_api.bild_zur_auftragsposition(d.auftrag, d.auftragsposition_key),
 		},
 		"menge": d.menge,
 		"termin": datum(d.termin),

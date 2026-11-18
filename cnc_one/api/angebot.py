@@ -44,6 +44,7 @@ def angebot_ui(d):
 			"anfrageNr": d.anfrage_nr or "",
 			"gueltigWochen": d.gueltig_wochen or 4,
 			"lieferzeit": d.lieferzeit or "",
+			"materialDrucken": bool(d.material_drucken),
 			"projekt": d.projekt or "",
 			"kontaktName": d.kontakt_name or "",
 			"kontaktEmail": d.kontakt_email or "",
@@ -55,6 +56,7 @@ def angebot_ui(d):
 				"key": z.position_key, "teil": _json(z.kalkulation), "ergebnis": _json(z.ergebnis),
 				"bauteilId": z.bauteil or "", "herkunft": ("neu" if z.bauteil_neu else "bestand") if z.bauteil else "",
 				"seriennummern": bool(z.bauteil and frappe.db.get_value("Bauteil", z.bauteil, "seriennummern")),
+				"bauteilNotiz": (frappe.db.get_value("Bauteil", z.bauteil, "notiz_intern") or "") if z.bauteil else "",
 				**_revisionen(z.bauteil),
 			}
 			for z in d.positionen
@@ -97,6 +99,7 @@ def entwurf_speichern(angebot):
 	doc.anfrage_nr = kopf.get("anfrageNr") or ""
 	doc.gueltig_wochen = int(kopf.get("gueltigWochen") or 4)
 	doc.lieferzeit = kopf.get("lieferzeit") or ""
+	doc.material_drucken = 1 if kopf.get("materialDrucken") else 0
 	doc.projekt = (kopf.get("projekt") or "").strip()
 	doc.kontakt_name = (kopf.get("kontaktName") or "").strip()
 	doc.kontakt_email = (kopf.get("kontaktEmail") or "").strip().lower()
@@ -205,6 +208,21 @@ def _bild(url):
 	return "file://" + pfad if os.path.exists(pfad) else ""
 
 
+def _preiszeilen(e, t):
+	"""Spalten Menge, Stückpreis und Betrag einer Position: { haupt: [...], kosten: [...], summen: [{menge, betrag}], staffel }.
+	Ohne Staffel: Bauteilzeile, die einzelnen Kosten mit „+“ und darunter die Summe der Position (wenn es Kosten gibt).
+	Mit Staffel: je Stufe eine Zeile, darunter die Kosten; ohne Summenzeile (sie würde die Staffeln nur wiederholen)."""
+	zeilen = e.get("zeilen") or []
+	kosten = [{"label": z["label"], "betrag": z["betrag"]} for z in zeilen if z.get("typ") == "kosten"]
+	if (t.get("staffel") or {}).get("aktiv"):
+		haupt = [{"menge": s["menge"], "einzel": s["stueckpreis"], "betrag": round(s["stueckpreis"] * s["menge"], 2)} for s in e.get("stufen") or []]
+		return {"haupt": haupt, "kosten": kosten, "summen": [], "staffel": True}
+	teil = next((z for z in zeilen if z.get("typ") == "teil"), None)
+	haupt = [{"menge": teil["menge"], "einzel": teil["einzel"], "betrag": teil["betrag"]}] if teil else []
+	summen = [{"menge": None, "betrag": e.get("gesamt", 0)}] if kosten and haupt else []
+	return {"haupt": haupt, "kosten": kosten, "summen": summen, "staffel": False}
+
+
 def pdf_erzeugen(doc, zu_haenden=""):
 	"""Das Angebot als PDF (PDF/A-3, wie die Rechnung). Datum ist der Versandtag, sonst heute."""
 	from cnc_one.api.erechnung import _de, _eur
@@ -212,13 +230,17 @@ def pdf_erzeugen(doc, zu_haenden=""):
 	from cnc_one.logic import briefbogen, pdf
 
 	a = angebot_ui(doc)
-	for p in a["positionen"]:
+	for nr, p in enumerate(a["positionen"], 1):
 		t = p["teil"]
+		p["nr"] = nr
 		p["bild"] = _bild(t.get("vorschaubild") or bauteil_api.vorschau(p["bauteilId"]))
 		zeichnung = f"Zeichnung {t['zeichnungsnr']}" + (f" Rev. {t['revision']}" if t.get("revision") else "") if t.get("zeichnungsnr") else ""
 		termin = f"Liefertermin {_de(t['liefertermin'])}" if t.get("liefertermin") else ""
-		p["angaben"] = " · ".join(x for x in (f"Teilenummer {t['teilenummer']}" if t.get("teilenummer") else "", zeichnung, t.get("material") or "", termin) if x)
+		werkstoff = f"Werkstoff {t['material']}" if doc.material_drucken and t.get("material") else ""
+		p["angaben"] = [x for x in (f"Teilenummer {t['teilenummer']}" if t.get("teilenummer") else "", zeichnung, werkstoff, termin) if x]
+		p["info"] = (t.get("infoKunde") or "").strip()
 		t.setdefault("staffel", {"aktiv": False})
+		p["preis"] = _preiszeilen(p["ergebnis"], t)
 	datum = get_datetime(doc.versandt_am).date() if doc.versandt_am else getdate(nowdate())
 	kunde = a["kopf"]["kunde"] or {"adresse": [], "kontakt": None}
 	firma = firma_ui()
@@ -226,7 +248,7 @@ def pdf_erzeugen(doc, zu_haenden=""):
 		"a": a, "f": firma, "kunde": kunde, "zu_haenden": zu_haenden or doc.kontakt_name or (kunde.get("kontakt") or {}).get("name", ""),
 		"datum": datum, "gueltig_bis": add_days(datum, 7 * int(doc.gueltig_wochen or 4)), "mwst": round((doc.netto or 0) * 0.19, 2),
 		"staffel": any(p["teil"]["staffel"].get("aktiv") for p in a["positionen"]), "de": _de, "eur": _eur,
-		"rahmen": briefbogen.rahmen(firma),
+		"rahmen": briefbogen.rahmen(firma), "posten": briefbogen.posten(a["positionen"]),
 	}
 	with open(frappe.get_app_path("cnc_one", PDF_VORLAGE), encoding="utf-8") as f:
 		html = frappe.render_template(f.read(), kontext)

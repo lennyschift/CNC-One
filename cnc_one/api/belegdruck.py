@@ -85,6 +85,61 @@ def mahnung_pdf_ablegen(doc, neu=False):
 	return _ablegen("Mahnung", doc, f"{doc.stufe} {doc.name}.pdf", doc.status == "Angelegt", lambda: mahnung_pdf_erzeugen(doc), neu)
 
 
+# ----------------------------------------------------------------- Auftragsbestätigung
+def _angebotsangaben(doc):
+	"""{ angebot_position_key: kalkulation } des Angebots, für die Kundeninfo; dazu, ob der Werkstoff gedruckt wird."""
+	if not doc.angebot:
+		return {}, False
+	import json
+
+	ang = frappe.get_doc("Angebot", doc.angebot)
+	kalk = {}
+	for z in ang.positionen:
+		try:
+			kalk[z.position_key] = json.loads(z.kalkulation or "{}") or {}
+		except (TypeError, ValueError):
+			kalk[z.position_key] = {}
+	return kalk, bool(ang.material_drucken)
+
+
+def ab_pdf_erzeugen(doc, zu_haenden=""):
+	"""Die Auftragsbestätigung als PDF: Positionen wie im Angebot (Bild, Bauteil, Menge, Stückpreis, Betrag, Kosten,
+	Summe der Position), dazu Bestellnummer des Kunden und der Liefertermin je Position."""
+	from cnc_one.api.auftrag import auftrag_ui
+	from cnc_one.api.erechnung import _de
+
+	a = auftrag_ui(doc)
+	kalk, werkstoff = _angebotsangaben(doc)
+	for nr, (p, z) in enumerate(zip(a["positionen"], doc.positionen), 1):
+		t = p["teil"]
+		p["nr"] = nr
+		p["bild"] = _bild(t.get("vorschaubild") or vorschau(z.bauteil))
+		zeichnung = f"Zeichnung {t['zeichnungsnr']}" + (f" Rev. {z.revision}" if z.revision else "") if t.get("zeichnungsnr") else ""
+		p["angaben"] = [x for x in (
+			f"Teilenummer {t['teilenummer']}" if t.get("teilenummer") else "", zeichnung,
+			f"Werkstoff {t['material']}" if werkstoff and t.get("material") else "",
+			f"Liefertermin {_de(z.liefertermin)}" if z.liefertermin else "",
+			f"Seriennummern {_serien(z)}" if z.serien_von else "",
+		) if x]
+		p["info"] = ((kalk.get(z.angebot_position_key) or {}).get("infoKunde") or "").strip()
+		einzel = p["einzelpreis"] or 0
+		haupt = [{"menge": p["menge"], "einzel": einzel, "betrag": round(einzel * (p["menge"] or 0), 2)}]
+		p["preis"] = {"haupt": haupt, "kosten": p["kosten"], "summen": [{"menge": None, "betrag": p["summe"]}] if p["kosten"] else [], "staffel": False}
+	kunde = a["kunde"] or {"adresse": []}
+	firma = firma_ui()
+	html = _vorlage("auftragsbestaetigung_pdf.html", {
+		"a": a, "f": firma, "kunde": kunde, "zu_haenden": zu_haenden or doc.kontakt_name or "",
+		"datum": getdate(doc.ab_gesendet_am) if doc.ab_gesendet_am else getdate(), "mwst": round((doc.netto or 0) * 0.19, 2),
+		"posten": briefbogen.posten(a["positionen"]), "stempel": "STORNIERT" if doc.status == "Storniert" else "",
+	})
+	return pdf.pdf_a3(html, titel=f"Auftragsbestätigung {doc.name}", autor=firma.get("firmenname", ""))
+
+
+def ab_pdf_ablegen(doc):
+	"""Beim Senden: das verschickte PDF am Auftrag ablegen (ein erneutes Senden ersetzt es)."""
+	return _ablegen("Auftrag", doc, f"Auftragsbestätigung {doc.name}.pdf", True, lambda: ab_pdf_erzeugen(doc))
+
+
 # ----------------------------------------------------------------- Abruf
 @frappe.whitelist(methods=["POST"])
 def pdf_holen(doctype, id):
@@ -139,7 +194,11 @@ def _mahnung(doc):
 	return _inhalt(mahnung_pdf_ablegen(doc))
 
 
-ANSEHEN = {"Angebot": _angebot, "Rechnung": _rechnung, "Lieferschein": _lieferschein, "Mahnung": _mahnung}
+def _auftrag(doc):
+	return f"Auftragsbestätigung {doc.name}.pdf", ab_pdf_erzeugen(doc)
+
+
+ANSEHEN = {"Auftrag": _auftrag, "Angebot": _angebot, "Rechnung": _rechnung, "Lieferschein": _lieferschein, "Mahnung": _mahnung}
 
 
 def ansehen_pdf(doctype, id):

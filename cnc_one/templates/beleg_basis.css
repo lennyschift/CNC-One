@@ -1,27 +1,58 @@
 * { box-sizing: border-box; }
-body { font-family: "DejaVu Sans", sans-serif; font-size: 8.4pt; line-height: 1.45; color: #1c1c1c; margin: 0; }
+body { font-family: "Inter", "DejaVu Sans", sans-serif; font-size: 8.6pt; line-height: 1.45; color: #111; margin: 0; }
 .block { display: flex; justify-content: space-between; margin-top: 9mm; gap: 12mm; }
 .block > div { flex: 1; }
-.label { font-size: 6.5pt; letter-spacing: 1pt; text-transform: uppercase; color: #999; margin-bottom: 1mm; }
+.label { font-size: 6.6pt; letter-spacing: 0.8pt; text-transform: uppercase; color: #555; margin-bottom: 1mm; }
 .meta { width: 68mm; flex: none; border-collapse: collapse; }
 .meta td { border: 0; padding: 0.3mm 0; }
-.meta .k { color: #777; padding-right: 4mm; }
+.meta .k { color: #444; padding-right: 4mm; }
 .meta .v { text-align: right; white-space: nowrap; }
 h1 { font-size: 13pt; margin: 9mm 0 2mm; }
-.einleitung { color: #555; margin-bottom: 4mm; white-space: pre-line; }
-.klein { font-size: 7.6pt; color: #666; }
+.einleitung { color: #222; margin-bottom: 4mm; white-space: pre-line; }
+.klein { font-size: 7.6pt; color: #333; }
 /* Positionen: Nummer, Bauteilbild, Inhalt (Name, Angaben) und Betrag rechts – gleich in allen Belegen */
-.pos { display: flex; gap: 4mm; padding: 3mm 0; border-top: 0.4pt solid #e2e2e2; break-inside: avoid; }
-.nr { color: #999; width: 7mm; flex: none; }
-.bild { width: 17mm; height: 17mm; flex: none; border: 0.4pt solid #e2e2e2; border-radius: 1.5mm; object-fit: contain; }
+.pos { display: flex; gap: 4mm; padding: 3mm 0; border-top: 0.5pt solid #bbb; break-inside: avoid; }
+.nr { color: #333; width: 7mm; flex: none; }
+.bild { width: 17mm; height: 17mm; flex: none; border: 0.4pt solid #ccc; border-radius: 1.5mm; object-fit: contain; }
 .inhalt { flex: 1; }
 .zeile { display: flex; justify-content: space-between; gap: 6mm; }
-.name { font-weight: bold; }
+.name { font-weight: 600; }
 .preis { white-space: nowrap; text-align: right; }
-.kosten { display: flex; justify-content: space-between; padding-left: 4mm; color: #555; font-size: 7.8pt; margin-top: 0.6mm; }
-.summen { display: flex; justify-content: flex-end; margin-top: 3mm; border-top: 1.2pt solid #333; padding-top: 2mm; break-inside: avoid; }
+.kosten { display: flex; justify-content: space-between; padding-left: 4mm; color: #222; font-size: 7.8pt; margin-top: 0.6mm; }
+.summen { display: flex; justify-content: flex-end; margin-top: 3mm; border-top: 1.2pt solid #111; padding-top: 2mm; break-inside: avoid; }
 .summen table { width: 75mm; border-collapse: collapse; }
 .summen td { padding: 0.6mm 0; }
 .summen .r { text-align: right; white-space: nowrap; }
-.summen .gesamt td { border-top: 0.6pt solid #888; padding-top: 1.6mm; font-weight: bold; font-size: 10pt; }
-.schluss { margin-top: 8mm; color: #444; break-inside: avoid; }
+.summen .gesamt td { border-top: 0.6pt solid #111; padding-top: 1.6mm; font-weight: bold; font-size: 10pt; }
+.schluss { margin-top: 8mm; color: #111; break-inside: avoid; }
+
+/* Positionstabelle (Angebot, Auftragsbestätigung): Pos, Bild, Bauteil (frei), Menge, Stückpreis, Betrag,
+   darunter die Kosten der Position und die Summe der Position */
+table.posten { width: 100%; border-collapse: collapse; margin-top: 2mm; }
+table.posten thead th { font-size: 7.8pt; font-weight: 700; color: #111; text-transform: uppercase; letter-spacing: 0.4pt; text-align: left; padding: 0 0 1.4mm; border-bottom: 0.9pt solid #111; }
+table.posten tbody { break-inside: avoid; }
+table.posten td { vertical-align: top; padding: 0.7mm 0; }
+table.posten tbody tr.erste td { padding-top: 3mm; }
+table.posten tbody tr.letzte td { padding-bottom: 3mm; }
+/* Trennlinie oben an jeder Position: die zusammengefassten Zellen (Bild, Text) beginnen in der ersten Zeile */
+table.posten tbody tr.erste td { border-top: 0.5pt solid #bbb; }
+table.posten thead + tbody tr.erste td { border-top: 0; }
+table.posten .r { text-align: right; white-space: nowrap; }
+table.posten th.r { text-align: right; }
+table.posten .c-nr { width: 8mm; color: #333; font-weight: 600; }
+table.posten .c-bild { width: 21mm; }
+table.posten .c-menge { width: 18mm; }
+table.posten .c-einzel { width: 24mm; }
+table.posten .c-betrag { width: 25mm; }
+table.posten td.text { padding-right: 4mm; }
+table.posten .bild { width: 17mm; height: 17mm; border-color: #ccc; }
+table.posten .name { font-weight: 600; font-size: 9pt; color: #111; }
+table.posten .angaben { font-size: 7.8pt; color: #333; margin-top: 0.5mm; }
+table.posten .info { font-size: 8pt; color: #111; margin-top: 1.4mm; white-space: pre-line; }
+table.posten tr.zusatz td { color: #222; font-size: 8pt; padding: 0.3mm 0; }
+table.posten tr.zusatz td.kl { padding-left: 3mm; }
+/* Summe der Position: Strich über Menge bis Betrag, Betrag fett */
+table.posten tr.summe td.s { border-top: 0.8pt solid #111; padding-top: 1.2mm; font-weight: 600; color: #111; }
+table.posten tr.summe + tr.summe td.s { border-top: 0; padding-top: 0.4mm; }
+table.posten tr.summe td.kl { padding-left: 3mm; padding-top: 1.2mm; font-size: 8pt; font-weight: 600; color: #111; }
+table.posten tr.summe + tr.summe td.kl { padding-top: 0.4mm; }

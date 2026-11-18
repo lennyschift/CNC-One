@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Auftragsbestätigung {{ a.id }}</title>
+<meta name="author" content="{{ f.firmenname }}">
+<style>
+{{ rahmen.css | safe }}
+</style>
+</head>
+<body>
+{{ rahmen.fuss | safe }}
+{{ rahmen.kopf | safe }}
+{% if stempel %}<div class="stempel">{{ stempel }}</div>{% endif %}
+
+<div class="block">
+  <div>
+    <div class="label">Kunde</div>
+    <div style="font-weight:bold">{{ a.kundeName }}</div>
+    {% for z in kunde.adresse %}<div>{{ z }}</div>{% endfor %}
+    {% if zu_haenden %}<div class="klein" style="margin-top:1mm">z. Hd. {{ zu_haenden }}</div>{% endif %}
+  </div>
+  <table class="meta">
+    <tr><td class="k">Auftrag</td><td class="v"><strong>{{ a.id }}</strong></td></tr>
+    <tr><td class="k">Datum</td><td class="v">{{ de(datum) }}</td></tr>
+    {% if a.kundenbestellnr %}<tr><td class="k">Ihre Bestellung</td><td class="v">{{ a.kundenbestellnr }}</td></tr>{% endif %}
+    {% if a.angebotId %}<tr><td class="k">Unser Angebot</td><td class="v">{{ a.angebotId }}</td></tr>{% endif %}
+    {% if kunde.lieferantennr %}<tr><td class="k">Lieferanten-Nr.</td><td class="v">{{ kunde.lieferantennr }}</td></tr>{% endif %}
+  </table>
+</div>
+
+<h1>Auftragsbestätigung</h1>
+<div class="einleitung">Vielen Dank für Ihren Auftrag{% if a.kundenbestellnr %} {{ a.kundenbestellnr }}{% endif %}. Wir bestätigen Ihnen folgende Positionen:</div>
+
+{{ posten | safe }}
+
+<div class="summen"><table>
+  <tr><td>Summe netto</td><td class="r"><strong>{{ eur(a.netto) }}</strong></td></tr>
+  <tr><td>zzgl. 19 % MwSt.</td><td class="r">{{ eur(mwst) }}</td></tr>
+  <tr class="gesamt"><td>Gesamt</td><td class="r">{{ eur(a.netto + mwst) }}</td></tr>
+</table></div>
+
+<div class="schluss">
+  <p>Die Liefertermine stehen bei den Positionen. Bitte prüfen Sie die Angaben und melden Sie sich, falls etwas nicht stimmt. Alle Preise netto zuzüglich gesetzlicher Mehrwertsteuer.</p>
+  <p style="margin-top:3mm">Mit freundlichen Grüßen<br>{{ f.firmenname }}</p>
+</div>
+
+</body>
+</html>

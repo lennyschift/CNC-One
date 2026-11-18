@@ -39,6 +39,19 @@ def _web(url):
 	return re.sub(r"^https?://", "", (url or "").strip()).rstrip("/")
 
 
+def _schrift():
+	"""Inter (liegt in Frappe) als Schrift der Belege; WeasyPrint bettet sie ein (PDF/A). Fehlt sie, gilt DejaVu Sans."""
+	import os
+
+	ordner = frappe.get_app_path("frappe", "public", "css", "fonts", "inter")
+	css = []
+	for datei, gewicht in (("Inter-Regular", 400), ("Inter-Medium", 500), ("Inter-SemiBold", 600), ("Inter-Bold", 700)):
+		pfad = os.path.join(ordner, f"{datei}.woff2")
+		if os.path.exists(pfad):
+			css.append(f'@font-face {{ font-family: "Inter"; font-weight: {gewicht}; font-style: normal; src: url("file://{pfad}"); }}')
+	return "\n".join(css) + "\n"
+
+
 def rahmen(f):
 	"""{css, kopf, fuss} für die Vorlage. `f` sind die Firmendaten des Belegs (bei der Rechnung die festgeschriebenen);
 	die Kopfzeile kommt immer aus den aktuellen Firmendaten. Der Fuß muss im HTML vor dem Inhalt stehen."""
@@ -46,10 +59,18 @@ def rahmen(f):
 
 	bild = _bild(frappe.db.get_single_value("Firma", "briefkopf"))
 	return {
-		"css": _datei("beleg_basis.css") + _datei("beleg_rahmen.css"),
+		"css": _schrift() + _datei("beleg_basis.css") + _datei("beleg_rahmen.css"),
 		"kopf": frappe.render_template(_datei("beleg_kopf.html"), {"f": f, "bild": bild}),
 		"fuss": frappe.render_template(_datei("beleg_fuss.html"), {"f": {**f, "web": _web(f.get("web"))}, "symbol": SYMBOLE}),
 	}
+
+
+def posten(positionen):
+	"""Die Positionstabelle (Angebot, Auftragsbestätigung). Je Position: nr, bild, teil.name, angaben, info und
+	preis = { haupt: [{menge, einzel, betrag}], kosten: [{label, betrag}], summen: [{menge, betrag}] }."""
+	from cnc_one.api.erechnung import _eur
+
+	return frappe.render_template(_datei("beleg_posten.html"), {"positionen": positionen, "eur": _eur})
 
 
 def muster_html(f):
