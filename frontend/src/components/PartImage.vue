@@ -1,14 +1,33 @@
+<script>
+// Gepflegte ISO-Gruppen der Rohmaterialien, einmal für alle Bilder geholt
+import { ref as modulRef } from 'vue';
+import { repo } from '../data/repo.js';
+
+const stamm = modulRef(null);
+function gepflegteGruppe(name) {
+  if (!name) return '';
+  if (stamm.value === null) {
+    stamm.value = [];
+    repo.materialien.liste().then((l) => { stamm.value = l ?? []; });
+  }
+  return stamm.value.find((x) => x.name === name)?.isoGruppe ?? '';
+}
+</script>
+
 <script setup>
 // Bild eines Bauteils oder Rohmaterials. Einheitlich überall verwenden.
+// Mit `iso` zeigt es oben links die ISO-Materialgruppe (P/M/K/N/S/H, farbig) und ab 64 px unten den Werkstoff (nur Oberfläche, nicht PDF).
 // Solange es keine echte Vorschau aus der STEP-Datei gibt, zeigt die Komponente
 // eine schematische Darstellung, die je nach Teil (Name/Nummer) unterschiedlich ausfällt.
 import { computed } from 'vue';
+import { isoGruppe } from '../lib/iso.js';
 
 const props = defineProps({
   teil: { type: Object, default: null },
   art: { type: String, default: 'teil' },
   bild: { type: String, default: '' },
   groesse: { type: Number, default: 44 },
+  iso: { type: Boolean, default: false },
 });
 
 const bildUrl = computed(() => props.bild || props.teil?.vorschaubild || '');
@@ -19,10 +38,15 @@ const form = computed(() => {
   return h % 4;
 });
 const uid = Math.random().toString(36).slice(2, 7);
+const werkstoff = computed(() => (props.iso ? props.teil?.material ?? '' : ''));
+const gruppe = computed(() => (werkstoff.value ? isoGruppe(werkstoff.value, gepflegteGruppe(werkstoff.value)) : null));
+// klein und bündig in der Ecke, damit es das Teil nicht verdeckt
+const marke = computed(() => Math.round(Math.min(16, Math.max(11, props.groesse * 0.14))));
+const titel = computed(() => (gruppe.value ? `ISO ${gruppe.value.code} · ${gruppe.value.name} · ${werkstoff.value}` : werkstoff.value || undefined));
 </script>
 
 <template>
-  <div class="relative shrink-0 overflow-hidden rounded-xl border border-line bg-surface2" :style="{ width: groesse + 'px', height: groesse + 'px' }">
+  <div class="relative shrink-0 overflow-hidden rounded-xl border border-line bg-surface2" :style="{ width: groesse + 'px', height: groesse + 'px' }" :title="titel">
     <img v-if="bildUrl" :src="bildUrl" alt="" class="h-full w-full object-contain" />
     <svg v-else viewBox="0 0 64 64" class="h-full w-full">
       <defs>
@@ -67,5 +91,13 @@ const uid = Math.random().toString(36).slice(2, 7);
         <ellipse cx="32" cy="16" rx="7" ry="2.6" fill="var(--surface-2)" />
       </g>
     </svg>
+    <span
+      v-if="gruppe" class="absolute left-0 top-0 grid place-items-center rounded-br-[5px] font-bold leading-none"
+      :style="{ width: marke + 'px', height: marke + 'px', fontSize: Math.round(marke * 0.66) + 'px', background: gruppe.farbe, color: gruppe.schrift }"
+    >{{ gruppe.code }}</span>
+    <span
+      v-if="werkstoff && groesse >= 64" class="absolute inset-x-0 bottom-0 truncate bg-surface/85 px-1 py-0.5 text-center font-medium leading-tight text-ink"
+      :style="{ fontSize: groesse >= 100 ? '11px' : '9.5px' }"
+    >{{ werkstoff }}</span>
   </div>
 </template>

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, Inbox, ClipboardList } from '@lucide/vue';
+import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, Inbox, ClipboardList, Calculator } from '@lucide/vue';
 import AngebotMailDialog from '../components/AngebotMailDialog.vue';
 import { useUi } from '../stores/ui.js';
 import BelegPdf from '../components/BelegPdf.vue';
@@ -39,8 +39,9 @@ async function drucken() {
   try { await pdfDrucken(pdfUrl.value); } catch (e) { ui.toast(e.message, 'warn'); }
 }
 
-function bearbeiten() {
-  draft.ausAngebot(angebot.value);
+// Entwurf: in der Workbench weiterbearbeiten. Gesendet: dort nur ansehen, wie kalkuliert wurde.
+async function bearbeiten() {
+  await draft.ausAngebot(angebot.value);
   router.push('/workbench');
 }
 async function loeschen() {
@@ -83,6 +84,7 @@ function angelegt(auftrag) {
             <button v-if="status === 'Teilweise bestellt'" class="btn w-full justify-center" :class="auftraegeDazu.length === 1 ? '' : 'btn-primary'" @click="dialog = true"><ShoppingCart :size="16" /> Weitere Bauteile in Auftrag übernehmen</button>
             <button v-else class="btn w-full justify-center" title="Dasselbe Angebot noch einmal beauftragen, z. B. für einen Abruf" @click="dialog = true"><ShoppingCart :size="16" /> Weiteren Auftrag (Abruf) anlegen</button>
           </template>
+          <button v-if="angebot.status !== 'Entwurf'" class="btn w-full justify-center" title="Kalkulation, Zeichnung und 3D-Modell in der Workbench ansehen (ohne Änderungen)" @click="bearbeiten"><Calculator :size="16" /> In Workbench ansehen</button>
           <button class="btn w-full justify-center" @click="drucken"><Printer :size="16" /> Drucken</button>
           <button v-if="angebot.status === 'Gesendet' && !beauftragt" class="btn w-full justify-center !text-mute" @click="b.angebotAblehnen(angebot.id)"><XCircle :size="16" /> Als abgelehnt markieren</button>
           <button v-if="angebot.status === 'Entwurf'" class="btn w-full justify-center !text-mute" @click="loeschen"><Trash2 :size="16" /> Entwurf löschen</button>

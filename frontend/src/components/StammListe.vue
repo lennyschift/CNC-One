@@ -8,6 +8,7 @@ import StammNav from './StammNav.vue';
 import StammDialog from './StammDialog.vue';
 import NumField from './NumField.vue';
 import Toggle from './Toggle.vue';
+import FilterLeiste from './FilterLeiste.vue';
 import { useStammdaten } from '../stores/stammdaten.js';
 import { eur } from '../lib/format.js';
 
@@ -16,7 +17,8 @@ const props = defineProps({
   einzahl: { type: String, required: true },
   icon: { type: Object, required: true },
   beschreibung: { type: String, default: '' },
-  // [{ key, label, typ: 'text' | 'zahl' | 'euro' | 'kurz' | 'text-lang', suffix, hinweis, zeile }]
+  // [{ key, label, typ: 'text' | 'zahl' | 'euro' | 'kurz' | 'text-lang' | 'auswahl' | 'mehrfach', suffix, hinweis, zeile, optionen: [{ wert, label }], leer: (x) => Anzeige ohne Wert }]
+  // 'mehrfach': Liste von Werten (z. B. Lieferanten einer Vorlage), zum Anklicken
   felder: { type: Array, required: true },
   // Spalten der Liste: Schlüssel der Felder
   spalten: { type: Array, required: true },
@@ -28,12 +30,16 @@ onMounted(() => store.laden(props.art));
 const suche = ref('');
 const inaktive = ref(false);
 const liste = computed(() => store.listen[props.art] ?? []);
-const zeilen = computed(() => {
+// Filter (anpassbar): Beschriftungen kommen aus der Feldbeschreibung der Seite
+const zeilen = ref([]);
+const beschriftungen = computed(() => ({ name: 'Name', aktiv: 'Aktiv', ...Object.fromEntries(props.felder.map((f) => [f.key, f.label])) }));
+const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return liste.value.filter((x) => (inaktive.value || x.aktiv) && (!q || Object.values(x).some((v) => typeof v === 'string' && v.toLowerCase().includes(q))));
 });
 
-const leer = () => ({ id: '', name: '', aktiv: true, ...Object.fromEntries(props.felder.map((f) => [f.key, f.typ === 'zahl' || f.typ === 'euro' ? 0 : ''])) });
+const leer = () => ({ id: '', name: '', aktiv: true, ...Object.fromEntries(props.felder.map((f) => [f.key, f.typ === 'zahl' || f.typ === 'euro' ? 0 : f.typ === 'mehrfach' ? [] : ''])) });
+function umschalten(liste, wert) { const i = liste.indexOf(wert); if (i >= 0) liste.splice(i, 1); else liste.push(wert); }
 const bearbeitet = ref(null);
 const speichert = ref(false);
 const neu = computed(() => !bearbeitet.value?.id);
@@ -54,6 +60,8 @@ const anzeige = (x, key) => {
   const v = x[key];
   if (f?.typ === 'euro') return eur(v);
   if (f?.typ === 'zahl') return v ? `${v}${f.suffix ? ' ' + f.suffix : ''}` : '–';
+  if (f?.typ === 'auswahl') return v ? (f.optionen.find((o) => o.wert === v)?.label ?? v) : (f.leer?.(x) ?? '–');
+  if (f?.typ === 'mehrfach') return v?.length ? v.join(', ') : '–';
   return v || '–';
 };
 const kopf = (key) => (key === 'name' ? 'Name' : props.felder.find((g) => g.key === key)?.label ?? key);
@@ -72,6 +80,7 @@ const kopf = (key) => (key === 'name' ? 'Name' : props.felder.find((g) => g.key 
       <button v-if="darf" class="btn btn-primary" @click="oeffnen()"><Plus :size="16" /> Neu</button>
     </div>
 
+    <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" :modul="`stamm-${art}`" :beschriftungen="beschriftungen" />
     <div class="card overflow-hidden">
       <div class="grid items-center gap-4 border-b border-line bg-surface2 px-5 py-2.5 text-xs font-medium text-mute" :style="{ gridTemplateColumns: `minmax(180px,1.4fr) repeat(${spalten.length}, minmax(80px,1fr))` }">
         <span>Name</span><span v-for="s in spalten" :key="s">{{ kopf(s) }}</span>
@@ -93,6 +102,15 @@ const kopf = (key) => (key === 'name' ? 'Name' : props.felder.find((g) => g.key 
       <div class="grid gap-3 sm:grid-cols-2">
         <template v-for="f in felder" :key="f.key">
           <NumField v-if="f.typ === 'zahl' || f.typ === 'euro'" v-model="bearbeitet[f.key]" :label="f.label" :unit="f.suffix" :decimals="f.decimals ?? 2" />
+          <label v-else-if="f.typ === 'auswahl'" class="block"><span class="label mb-1 block">{{ f.label }}</span>
+            <select v-model="bearbeitet[f.key]" class="field" :disabled="!darf"><option v-for="o in f.optionen" :key="o.wert" :value="o.wert">{{ o.label }}</option></select>
+          </label>
+          <div v-else-if="f.typ === 'mehrfach'" class="sm:col-span-2"><span class="label mb-1 block">{{ f.label }}</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button v-for="o in f.optionen" :key="o.wert" type="button" class="rounded-full border px-2.5 py-1 text-xs transition" :class="bearbeitet[f.key].includes(o.wert) ? 'border-accent bg-accent-soft text-accent' : 'border-line text-mute hover:text-ink'" :disabled="!darf" @click="umschalten(bearbeitet[f.key], o.wert)">{{ o.label }}</button>
+              <span v-if="!f.optionen.length" class="text-xs text-mute">{{ f.hinweis }}</span>
+            </div>
+          </div>
           <label v-else-if="f.typ === 'text-lang'" class="block sm:col-span-2"><span class="label mb-1 block">{{ f.label }}</span><textarea v-model="bearbeitet[f.key]" rows="2" class="field resize-y" :disabled="!darf" /></label>
           <label v-else class="block"><span class="label mb-1 block">{{ f.label }}</span><input v-model="bearbeitet[f.key]" class="field" :placeholder="f.hinweis" :disabled="!darf" /></label>
         </template>

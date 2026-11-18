@@ -1,4 +1,5 @@
 <script setup>
+import FilterLeiste from '../components/FilterLeiste.vue';
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
@@ -20,7 +21,10 @@ const suche = ref('');
 const dialog = ref(false);
 const filterListe = ['Alle', 'Bereit', 'Geliefert', 'Storniert'];
 
-const zeilen = computed(() => {
+// Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
+const zeilen = ref([]);
+const beschriftungen = {'status': 'Status', 'kundeName': 'Kunde', 'projekt': 'Projekt', 'lieferdatum': 'Lieferdatum', 'positionen.teil.name': 'Bauteil', 'positionen.teil.teilenummer': 'Teilenummer', 'positionen.auftragId': 'Auftrag'};
+const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return l.lieferscheine.filter((x) => (filter.value === 'Alle' || x.status === filter.value)
     && (!q || `${x.id} ${x.kundeName} ${x.kundenbestellnr} ${projekteVon(x).join(' ')} ${x.positionen.map((p) => `${p.teil.name} ${p.teil.teilenummer} ${p.auftragId}`).join(' ')}`.toLowerCase().includes(q)));
@@ -46,6 +50,7 @@ function angelegt(rec) { dialog.value = false; router.push(`/lieferscheine/${rec
       <button class="btn btn-primary" @click="dialog = true"><Plus :size="16" /> Neuer Lieferschein</button>
     </div>
 
+    <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="lieferscheine" :beschriftungen="beschriftungen" :standard-angeheftet="['kundeName']" />
     <div v-auto-animate class="space-y-2.5">
       <RouterLink v-for="x in zeilen" :key="x.id" :to="`/lieferscheine/${x.id}`" class="card flex items-center gap-5 p-4 transition hover:-translate-y-px hover:border-accent/40" :class="x.status === 'Storniert' ? 'opacity-60' : ''">
         <div class="flex -space-x-3">

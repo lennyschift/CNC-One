@@ -1,4 +1,5 @@
 <script setup>
+import FilterLeiste from '../components/FilterLeiste.vue';
 import { onMounted, ref, computed } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { ClipboardList, Search } from '@lucide/vue';
@@ -12,7 +13,10 @@ const b = useBelege();
 onMounted(() => b.auftraegeNeuLaden());
 const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
 const suche = ref('');
-const zeilen = computed(() => {
+// Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
+const zeilen = ref([]);
+const beschriftungen = {'status': 'Status', 'kundeName': 'Kunde', 'projekt': 'Projekt', 'kundenbestellnr': 'Bestellnummer des Kunden', 'kontaktName': 'Ansprechpartner', 'netto': 'Netto', 'datum': 'Angelegt am', 'lieferung.status': 'Lieferstand', 'abrechnung.status': 'Abrechnung', 'positionen.teil.name': 'Bauteil', 'positionen.teil.teilenummer': 'Teilenummer', 'positionen.teil.material': 'Werkstoff', 'positionen.termin': 'Liefertermin', 'ab.gesendetAm': 'AB gesendet am'};
+const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return b.auftraege.filter((x) => !q || `${x.id} ${x.projekt} ${x.kundeName} ${x.kontaktName} ${x.kundenbestellnr} ${x.angebotId} ${x.positionen.map((p) => `${p.teil.name} ${p.teil.teilenummer}`).join(' ')}`.toLowerCase().includes(q));
 });
@@ -27,6 +31,7 @@ const zeilen = computed(() => {
       </label>
       <span class="ml-auto text-sm text-mute tnum">{{ zeilen.length }} von {{ b.auftraege.length }}</span>
     </div>
+    <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="auftraege" :beschriftungen="beschriftungen" :standard-angeheftet="['kundeName']" />
     <div v-auto-animate class="space-y-2.5">
       <RouterLink v-for="x in zeilen" :key="x.id" :to="`/auftraege/${x.id}`" class="card flex items-center gap-5 p-4 transition hover:-translate-y-px hover:border-accent/40">
         <div class="flex -space-x-3">

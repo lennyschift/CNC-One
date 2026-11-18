@@ -85,7 +85,7 @@ function auftragWahl(z, wert) {
 }
 function hinzu(x) {
   zeilen.push({
-    key: x.id, aktiv: true, bauteilId: x.id, teil: { name: x.name, teilenummer: x.teilenummer, zeichnungsnr: x.zeichnungsnr, vorschaubild: '' }, menge: 1,
+    key: x.id, aktiv: true, bauteilId: x.id, teil: { name: x.name, teilenummer: x.teilenummer, zeichnungsnr: x.zeichnungsnr, vorschaubild: x.vorschaubild || '' }, menge: 1,
     auftrag: '', auftragsposition: '', offen: null, serienVon: null, serienBis: null, serienStellen: x.serienStellen ?? 4, serienStart: '', mitSerien: !!x.seriennummern,
   });
 }

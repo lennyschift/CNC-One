@@ -5,6 +5,8 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { X, Send, Plus, Mail } from '@lucide/vue';
 import PartImage from './PartImage.vue';
 import NumField from './NumField.vue';
+import VorlagenChips from './VorlagenChips.vue';
+import AnfrageMailDialog from './AnfrageMailDialog.vue';
 import { repo } from '../data/repo.js';
 import { fremdPositionen, mailText } from '../lib/anfrage.js';
 import { useAnfragen } from '../stores/anfragen.js';
@@ -42,6 +44,8 @@ onMounted(async () => {
 });
 
 const aktiv = computed(() => positionen.filter((p) => p.an));
+const kontext = computed(() => ({ art: 'Fremdvergabe', texte: aktiv.value.flatMap((p) => [p.ag.name, p.teil.material]) }));
+const mailVorgang = ref('');
 const auswahl = computed(() => lieferanten.value.filter((l) => gewaehlt[l.id]));
 const vorschau = computed(() => mailText({
   id: `LA-${new Date().getFullYear()}-NNNN`,
@@ -69,13 +73,14 @@ async function senden() {
     })),
   });
   speichert.value = false;
-  if (neu) emit('schliessen');
+  if (neu) mailVorgang.value = neu[0].vorgang;
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4 backdrop-blur-[2px]" @mousedown.self="emit('schliessen')">
+    <AnfrageMailDialog v-if="mailVorgang" :vorgang="mailVorgang" @schliessen="emit('schliessen')" @gesendet="emit('schliessen')" />
+    <div v-else class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4 backdrop-blur-[2px]" @mousedown.self="emit('schliessen')">
       <Transition name="pop" appear>
         <div class="card flex max-h-[92vh] w-[min(1040px,96vw)] flex-col overflow-hidden shadow-2xl">
           <header class="flex items-center justify-between border-b border-line px-6 py-4">
@@ -111,6 +116,7 @@ async function senden() {
 
               <div>
                 <div class="label mb-2">An welche Lieferanten?</div>
+                <VorlagenChips v-model:notiz="notiz" class="mb-2" :kontext="kontext" :lieferanten="lieferanten" :gewaehlt="gewaehlt" />
                 <div class="space-y-1.5">
                   <label v-for="l in lieferanten" :key="l.id" class="flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm transition" :class="gewaehlt[l.id] ? 'border-accent bg-accent-soft' : 'border-line hover:border-mute'">
                     <input v-model="gewaehlt[l.id]" type="checkbox" class="accent-[var(--accent)]" />
@@ -138,7 +144,7 @@ async function senden() {
             <span class="text-sm text-mute">{{ aktiv.length }} Position{{ aktiv.length === 1 ? '' : 'en' }} · {{ auswahl.length }} Lieferant{{ auswahl.length === 1 ? '' : 'en' }}</span>
             <div class="flex gap-2">
               <button class="btn" @click="emit('schliessen')">Abbrechen</button>
-              <button class="btn btn-primary" :disabled="!bereit || speichert" :class="!bereit || speichert ? 'pointer-events-none opacity-40' : ''" @click="senden"><Send :size="16" /> Anfrage{{ auswahl.length > 1 ? 'n' : '' }} anlegen</button>
+              <button class="btn btn-primary" :disabled="!bereit || speichert" :class="!bereit || speichert ? 'pointer-events-none opacity-40' : ''" @click="senden"><Send :size="16" /> Anlegen und Mail schreiben</button>
             </div>
           </footer>
         </div>

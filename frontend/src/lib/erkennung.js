@@ -60,15 +60,22 @@ const norm = (s) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 const ohneZeichen = (s) => norm(s).replace(/[\s\-_.:/]+/g, '');
 
 // Stichwort am Anfang des Textstücks? Liefert { feld, rest } oder null. Das längste passende Stichwort gewinnt.
+// Zweisprachige Labels: "Benennung / Title", "Werkstoff/Material" – der Teil nach dem Schrägstrich ist kein Wert.
+// Ein Textstück, das nur aus "/Title" besteht, ist ebenfalls ein Label (die zweite Hälfte), kein Wert.
+const ZWEITSPRACHE = /^\s*[/|]\s*[\p{L} .-]{1,25}[.:]?\s*$/u;
+
 function stichwortIn(text) {
-  const t = norm(text);
+  const t = norm(text).replace(/^[/|]\s*/, '');
+  const roh = String(text ?? '').trim().replace(/^[/|]\s*/, '');
   let best = null;
   for (const [feld, f] of Object.entries(FELDER)) {
     for (const s of f.stichworte) {
       if (!t.startsWith(s)) continue;
       const rest = t.slice(s.length);
-      if (rest && !/^[\s.:]/.test(rest)) continue; // Wortgrenze: "material" passt nicht auf "materialien"
-      if (!best || s.length > best.laenge) best = { feld, laenge: s.length, rest: text.trim().slice(s.length) };
+      if (rest && !/^[\s.:/|]/.test(rest)) continue; // Wortgrenze: "material" passt nicht auf "materialien"
+      let restRoh = roh.slice(s.length);
+      if (ZWEITSPRACHE.test(restRoh)) restRoh = '';
+      if (!best || s.length > best.laenge) best = { feld, laenge: s.length, rest: restRoh };
     }
   }
   if (best) return best;

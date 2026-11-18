@@ -10,6 +10,7 @@ import AuftragDetailView from './views/AuftragDetailView.vue';
 import FertigungView from './views/FertigungView.vue';
 import FertigungDetailView from './views/FertigungDetailView.vue';
 import AnfragenListView from './views/AnfragenListView.vue';
+import AnfrageVergleichView from './views/AnfrageVergleichView.vue';
 import AnfrageDetailView from './views/AnfrageDetailView.vue';
 import RechnungListView from './views/RechnungListView.vue';
 import RechnungDetailView from './views/RechnungDetailView.vue';
@@ -22,6 +23,7 @@ import LagerView from './views/LagerView.vue';
 import StammHubView from './views/StammHubView.vue';
 import KundenView from './views/KundenView.vue';
 import BauteileView from './views/BauteileView.vue';
+import AnfragevorlagenView from './views/AnfragevorlagenView.vue';
 import LieferantenView from './views/LieferantenView.vue';
 import MaschinenView from './views/MaschinenView.vue';
 import MaterialienView from './views/MaterialienView.vue';
@@ -30,6 +32,7 @@ import PosteingangView from './views/PosteingangView.vue';
 import MailEinstellungenView from './views/MailEinstellungenView.vue';
 import DokumenteView from './views/DokumenteView.vue';
 import ArchivView from './views/ArchivView.vue';
+import FensterView from './views/FensterView.vue';
 import { ladeStammdaten } from './data/repo.js';
 import './style.css';
 
@@ -37,6 +40,8 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/', redirect: '/workbench' },
+    // eigenes Fenster für Zeichnung bzw. 3D-Modell (zweiter Bildschirm), ohne Seitenleiste
+    { path: '/fenster/:art', component: FensterView, meta: { titel: 'Fenster', fenster: true } },
     { path: '/posteingang/:id?', component: PosteingangView, meta: { titel: 'Posteingang: Anfragen', bereich: 'posteingang' } },
     { path: '/workbench', component: WorkbenchView, meta: { titel: 'Angebots-Workbench', bereich: 'workbench' } },
     { path: '/angebote', component: AngebotListView, meta: { titel: 'Angebote', bereich: 'angebote' } },
@@ -57,10 +62,12 @@ const router = createRouter({
     { path: '/stammdaten/firma', component: FirmaView, meta: { titel: 'Stammdaten: Firma', bereich: 'stammdaten' } },
     { path: '/lager', component: LagerView, meta: { titel: 'Lager', bereich: 'lager' } },
     { path: '/anfragen', component: AnfragenListView, meta: { titel: 'Lieferantenanfragen', bereich: 'anfragen' } },
+    { path: '/anfragen/vergleich/:vorgang', component: AnfrageVergleichView, meta: { titel: 'Angebotsvergleich', bereich: 'anfragen' } },
     { path: '/anfragen/:id', component: AnfrageDetailView, meta: { titel: 'Lieferantenanfrage', bereich: 'anfragen' } },
     { path: '/stammdaten', component: StammHubView, meta: { titel: 'Stammdaten', bereich: 'stammdaten' } },
     { path: '/stammdaten/kunden', component: KundenView, meta: { titel: 'Stammdaten: Kunden', bereich: 'stammdaten' } },
     { path: '/stammdaten/bauteile', component: BauteileView, meta: { titel: 'Stammdaten: Bauteile', bereich: 'stammdaten' } },
+    { path: '/stammdaten/anfragevorlagen', component: AnfragevorlagenView, meta: { titel: 'Stammdaten: Anfragevorlagen', bereich: 'stammdaten' } },
     { path: '/stammdaten/lieferanten', component: LieferantenView, meta: { titel: 'Stammdaten: Lieferanten', bereich: 'stammdaten' } },
     { path: '/stammdaten/maschinen', component: MaschinenView, meta: { titel: 'Stammdaten: Maschinen', bereich: 'stammdaten' } },
     { path: '/stammdaten/materialien', component: MaterialienView, meta: { titel: 'Stammdaten: Materialien', bereich: 'stammdaten' } },

@@ -1,4 +1,5 @@
 <script setup>
+import FilterLeiste from '../components/FilterLeiste.vue';
 import { ref, computed, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Search, Package, Layers, ArrowDownToLine, ArrowUpFromLine, RotateCcw, SlidersHorizontal } from '@lucide/vue';
@@ -14,7 +15,10 @@ const suche = ref('');
 const nurMinus = ref(false);
 onMounted(() => l.lagerLaden().catch(() => {}));
 
-const zeilen = computed(() => {
+// Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
+const zeilen = ref([]);
+const beschriftungen = {'kundeName': 'Kunde', 'bestand': 'Bestand', 'teil.name': 'Bauteil', 'teil.material': 'Werkstoff'};
+const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return l.lager.filter((x) => (!nurMinus.value || x.bestand < 0)
     && (!q || `${x.teil.name} ${x.teil.teilenummer} ${x.kundeName}`.toLowerCase().includes(q)));
@@ -63,6 +67,7 @@ const rohmaterialAnzahl = (stammdatenRoh().materialien ?? []).length;
         <label class="flex cursor-pointer items-center gap-2 text-xs text-mute"><input v-model="nurMinus" type="checkbox" class="accent-[var(--accent)]" /> nur Minusbestand</label>
       </div>
 
+      <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="lager" :beschriftungen="beschriftungen" :standard-angeheftet="[]" />
       <div v-auto-animate class="space-y-2">
         <button v-for="x in zeilen" :key="x.bauteilId" class="card flex w-full items-center gap-4 p-3.5 text-left transition hover:-translate-y-px hover:border-accent/40" @click="oeffnen(x)">
           <PartImage :teil="x.teil" :groesse="48" />

@@ -34,7 +34,7 @@ const weg = computed(() => props.fb.arbeitsgaenge.some((a) => a.typ === 'fremd' 
 <template>
   <RouterLink :to="`/fertigung/${fb.id}`" class="card block cursor-grab p-3.5 transition hover:-translate-y-px hover:border-accent/40 active:cursor-grabbing" draggable="true" @dragstart="$emit('drag', fb.id)">
     <div class="flex items-start gap-3">
-      <PartImage :teil="fb.teil" :groesse="52" />
+      <PartImage iso :teil="fb.teil" :groesse="52" />
       <div class="min-w-0 flex-1">
         <div class="flex items-start justify-between gap-2">
           <div class="truncate text-sm font-medium">{{ fb.teil.name }}</div>

@@ -1,6 +1,14 @@
-// Lieferantenanfrage für Fremdvergabe. Reine Funktionen, getestet in anfrage.test.js.
-// Eine Anfrage geht an einen Lieferanten und kann mehrere Positionen (Bauteil + Arbeitsgang + Mengen) enthalten.
+// Lieferantenanfrage. Reine Funktionen, getestet in anfrage.test.js.
+// Eine Anfrage geht an einen Lieferanten und kann mehrere Positionen enthalten: aus der Workbench Bauteil + Arbeitsgang
+// + Mengen (Fremdvergabe), frei erfasst (ohne Angebot) Bezeichnung, Werkstoff, Abmessung, Einheit und Mengen.
 import { num } from './calc.js';
+
+export const EINHEITEN = ['Stk', 'm', 'kg', 'Stangen', 'Platten', 'Zuschnitte'];
+
+// Freie Anfrage: ohne Angebot, die Positionen sind selbst eingetragen
+export const istFrei = (a) => !a.angebotId && (a.positionen ?? []).every((p) => String(p.key ?? '').startsWith('frei:'));
+// „Rundstahl · 42CrMo4 · Ø 50 x 3000 mm“
+export const freieZeile = (p) => [p.teil?.name, p.teil?.material, p.abmessung].filter(Boolean).join(' · ');
 
 // Welche angefragten Mengen werden für ein Bauteil gebraucht: alle Staffeln oder die eine Menge.
 export function mengenFuer(teil) {
@@ -57,8 +65,32 @@ export function zusammenfassungText(z) {
 
 const teilZeile = (t) => `${t.name}${t.teilenummer ? ` (Teilenummer ${t.teilenummer})` : ''}`;
 
+// Text einer freien Anfrage (z. B. Material): je Position Bezeichnung, Werkstoff, Abmessung und Mengen mit Einheit
+function freierText(a, firma) {
+  const pos = a.positionen;
+  const was = a.art === 'Material' ? 'folgendes Material' : 'folgende Positionen';
+  const zeilen = ['Sehr geehrte Damen und Herren,', '', `bitte senden Sie uns ein Angebot für ${was}:`, ''];
+  pos.forEach((p, i) => {
+    zeilen.push(`${i + 1}. ${p.teil.name}`);
+    if (p.teil.material) zeilen.push(`   Werkstoff: ${p.teil.material}`);
+    if (p.abmessung) zeilen.push(`   Abmessung: ${p.abmessung}`);
+    zeilen.push(`   Menge: ${p.mengen.map((m) => `${m} ${p.einheit || 'Stk'}`).join(' / ')}`);
+    zeilen.push('');
+  });
+  if (a.notiz) zeilen.push(`Hinweis: ${a.notiz}`, '');
+  zeilen.push(
+    `Bitte nennen Sie in Ihrem Angebot unsere Anfragenummer ${a.id}, damit wir es zuordnen können.`,
+    '',
+    'Mit freundlichen Grüßen',
+    firma,
+  );
+  const titel = pos.length === 1 ? `${pos[0].teil.name}${pos[0].teil.material ? ` ${pos[0].teil.material}` : ''}` : `${a.art || 'Material'}, ${pos.length} Positionen`;
+  return { betreff: `Anfrage ${a.id}: ${titel}`, text: zeilen.join('\n') };
+}
+
 // Text der Anfrage. Die Anfragenummer steht im Betreff und im Text, der Lieferant soll sie im Angebot nennen.
 export function mailText(a, firma = 'Hohenstein GmbH') {
+  if (istFrei(a)) return freierText(a, firma);
   const pos = a.positionen;
   const einzel = pos.length === 1;
   const zeilen = [

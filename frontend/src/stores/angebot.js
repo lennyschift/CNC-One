@@ -40,6 +40,8 @@ export function neuesTeil(name = 'Neues Bauteil') {
     dateien: [],
     vorschaubild: '',
     liefertermin: '',
+    infoKunde: '', // Beschreibung für den Kunden, steht im Angebot
+    notizIntern: '', // nur intern, wird am Bauteil gespeichert
   };
 }
 
@@ -80,7 +82,7 @@ function demoTeile() {
   return [a, b, c];
 }
 
-const leererKopf = () => ({ kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache', projekt: '', kontaktName: '', kontaktEmail: '' });
+const leererKopf = () => ({ kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache', projekt: '', kontaktName: '', kontaktEmail: '', materialDrucken: false });
 
 // Das Angebot, an dem gerade gearbeitet wird. Es liegt als Entwurf in Frappe und wird nach jeder Änderung
 // kurz verzögert gespeichert. In Frappe merkt sich die Workbench je Benutzer, welches Angebot offen war.
@@ -109,6 +111,9 @@ export const useAngebot = defineStore('angebot', () => {
   const markierung = ref(null);
   // Stelle, an die die Zeichnungsansicht heranzoomt (Fadenkreuz in der Erkennung) { teilId, lage, n }
   const fokus = ref(null);
+  // Nur ansehen: gesendetes Angebot zum Nachsehen der Kalkulation (aus Angebot oder Auftrag geöffnet). Nichts wird gespeichert.
+  // { status, auftragId, zurueckZu } oder null; zurueckZu = Entwurf, der vorher offen war
+  const nurAnsicht = ref(null);
 
   let unterdrueckt = true;
   let timer = 0;
@@ -136,20 +141,36 @@ export const useAngebot = defineStore('angebot', () => {
     const m = {};
     for (const p of positionen) {
       if (p.bauteilId) m[p.key] = { bauteilId: p.bauteilId, herkunft: p.herkunft, seriennummern: !!p.seriennummern, revision: p.bauteilRevision ?? '', revisionen: p.bauteilRevisionen ?? [] };
+      // interne Notiz steht am Bauteil: ist sie im Angebot leer, die vom Bauteil zeigen
+      const t = teile.value.find((x) => x.id === p.key);
+      if (t && !t.notizIntern && p.bauteilNotiz) t.notizIntern = p.bauteilNotiz;
     }
     zuordnung.value = m;
   }
 
-  // Gespeichertes Angebot (Entwurf) zum Weiterbearbeiten laden.
-  function ausAngebot(record) {
+  // Ist nur ansehen aktiv, ändert sich nichts: Hinweis zeigen und true liefern
+  function gesperrt() {
+    if (!nurAnsicht.value) return false;
+    ui.toast('Gesendetes Angebot: nur ansehen, Änderungen sind nicht möglich', 'warn');
+    return true;
+  }
+
+  // Gespeichertes Angebot laden: ein Entwurf zum Weiterbearbeiten, ein gesendetes nur zum Ansehen.
+  // auswahl: Position (Workbench-Bauteil), die gleich gewählt sein soll; auftragId: von dort geöffnet
+  async function ausAngebot(record, { auswahl = '', auftragId = '' } = {}) {
+    const ansehen = record.status !== 'Entwurf';
+    if (speicherStand.value === 'offen' && !nurAnsicht.value) await speichern();
+    const zurueckZu = ansehen ? (nurAnsicht.value ? nurAnsicht.value.zurueckZu : angebotId.value && angebotId.value !== record.id ? angebotId.value : '') : '';
+    clearTimeout(timer);
     unterdrueckt = true;
+    nurAnsicht.value = ansehen ? { status: record.status, auftragId, zurueckZu } : null;
     const k = JSON.parse(JSON.stringify(record.kopf));
     kopf.value = {
       kundeId: k.kundeId, anfrageNr: k.anfrageNr, gueltigWochen: k.gueltigWochen, lieferzeit: k.lieferzeit,
-      projekt: k.projekt ?? '', kontaktName: k.kontaktName ?? '', kontaktEmail: k.kontaktEmail ?? '',
+      projekt: k.projekt ?? '', kontaktName: k.kontaktName ?? '', kontaktEmail: k.kontaktEmail ?? '', materialDrucken: !!k.materialDrucken,
     };
     teile.value = record.positionen.map((p) => JSON.parse(JSON.stringify(p.teil)));
-    auswahlId.value = teile.value.find((t) => t.id === sitzung.auswahlId)?.id ?? teile.value[0]?.id ?? null;
+    auswahlId.value = teile.value.find((t) => t.id === (auswahl || sitzung.auswahlId))?.id ?? teile.value[0]?.id ?? null;
     angebotId.value = record.id;
     mailAnfrage.value = record.mailAnfrage ?? null;
     zuordnungAus(record.positionen);
@@ -161,6 +182,7 @@ export const useAngebot = defineStore('angebot', () => {
   // laufende (wichtig beim Hochladen: die Dateien brauchen die Angebotsnummer).
   function speichern() {
     clearTimeout(timer);
+    if (nurAnsicht.value) return Promise.resolve();
     if (laeuft) { nochmal = true; return laufend; }
     laufend = speichernJetzt();
     return laufend;
@@ -195,7 +217,7 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   function planeSpeichern() {
-    if (unterdrueckt) return;
+    if (unterdrueckt || nurAnsicht.value) return;
     if (!angebotId.value && !teile.value.length && !kopf.value.kundeId) return;
     speicherStand.value = 'offen';
     clearTimeout(timer);
@@ -221,6 +243,7 @@ export const useAngebot = defineStore('angebot', () => {
     }
   });
   watch([angebotId, auswahlId], () => {
+    if (nurAnsicht.value) return; // die Ansicht merkt sich nicht als zuletzt offenes Angebot
     einstellungSpeichern('workbenchAngebot', angebotId.value ?? '');
     einstellungSpeichern('workbenchAuswahl', auswahlId.value ?? '');
   });
@@ -232,6 +255,7 @@ export const useAngebot = defineStore('angebot', () => {
 
   async function neu() {
     if (speicherStand.value === 'offen') await speichern();
+    nurAnsicht.value = null;
     await ruhig(() => {
       teile.value = [];
       zuordnung.value = {};
@@ -244,6 +268,7 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   function hinzufuegen(name) {
+    if (gesperrt()) return null;
     const t = neuesTeil(name);
     const letzte = auswahl.value;
     if (letzte) {
@@ -262,6 +287,7 @@ export const useAngebot = defineStore('angebot', () => {
 
   // Bestandsbauteil aus den Stammdaten ins Angebot übernehmen (Angaben und Arbeitsplan, ohne Kalkulationswerte)
   function ausBauteilHinzufuegen(b, materialien = []) {
+    if (gesperrt()) return null;
     const t = neuesTeil(b.name || b.teilenummer);
     const m = materialien.find((x) => x.name === b.material);
     Object.assign(t, {
@@ -274,6 +300,7 @@ export const useAngebot = defineStore('angebot', () => {
         ...(b.stepDatei ? [{ name: dateiname(b.stepDatei), art: 'STEP', url: b.stepDatei }] : []),
       ],
       vorschaubild: b.vorschaubild ?? '',
+      notizIntern: b.notizIntern ?? '',
     });
     zuordnung.value = { ...zuordnung.value, [t.id]: { bauteilId: b.id, herkunft: 'bestand', seriennummern: !!b.seriennummern, ...revisionenVon(b) } };
     teile.value.push(t);
@@ -283,6 +310,7 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   function duplizieren(id) {
+    if (gesperrt()) return null;
     const q = teile.value.find((t) => t.id === id);
     if (!q) return;
     const kopie = JSON.parse(JSON.stringify(q));
@@ -299,6 +327,7 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   function loeschen(id) {
+    if (gesperrt()) return null;
     const i = teile.value.findIndex((t) => t.id === id);
     if (i < 0) return;
     const [weg] = teile.value.splice(i, 1);
@@ -309,6 +338,7 @@ export const useAngebot = defineStore('angebot', () => {
   // Zeichnung und Modell lagen in zwei Bauteilen (Namen passten nicht zusammen): die Dateien von „quelle“ kommen zu „ziel“,
   // leere Angaben wie Teilenummer werden ergänzt, „quelle“ entfällt
   function zusammenfuehren(zielId, quelleId) {
+    if (gesperrt()) return null;
     const ziel = teile.value.find((t) => t.id === zielId);
     const quelle = teile.value.find((t) => t.id === quelleId);
     if (!ziel || !quelle || ziel === quelle) return;
@@ -324,6 +354,7 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   function verschieben(id, richtung) {
+    if (gesperrt()) return null;
     const i = teile.value.findIndex((t) => t.id === id);
     const j = i + richtung;
     if (i < 0 || j < 0 || j >= teile.value.length) return;
@@ -335,6 +366,7 @@ export const useAngebot = defineStore('angebot', () => {
   // Ohne Ziel ordnet lib/zuordnung.js zu: Zeichnung und Modell eines Bauteils (auch bei verschiedenen Namen) ergeben ein
   // Bauteil, das fehlende Gegenstück eines schon vorhandenen Bauteils kommt dorthin.
   async function dateienHinzufuegen(files, zielTeil = null) {
+    if (gesperrt()) return null;
     const auftraege = [];
     if (zielTeil) {
       for (const f of files) auftraege.push({ teil: zielTeil, datei: f });
@@ -380,7 +412,7 @@ export const useAngebot = defineStore('angebot', () => {
   async function ausMailAnfrage({ angebot, dateien = [], text = '', zeilen = [] }) {
     if (speicherStand.value === 'offen') await speichern();
     belege.einsetzen(angebot);
-    ausAngebot(angebot);
+    await ausAngebot(angebot);
     if (!dateien.length) return;
     const [{ gruppieren, mengenAusText, dateiPfad }, { passtZu }] = await Promise.all([import('../lib/mailanfrage.js'), import('../lib/mailtabelle.js')]);
     const gruppen = gruppieren(dateien);
@@ -413,6 +445,7 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   async function erkennenFuer(teil, datei) {
+    if (gesperrt()) return null;
     erkennungen.value[teil.id] = { stand: 'laeuft', datei: datei.url };
     try {
       const [{ zeichnungLesen }, { erkennen, kundeFinden }] = await Promise.all([import('../lib/pdf.js'), import('../lib/erkennung.js')]);
@@ -559,12 +592,14 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   function dateiEntfernen(teil, datei) {
+    if (gesperrt()) return null;
     const i = teil.dateien.indexOf(datei);
     if (i >= 0) teil.dateien.splice(i, 1);
   }
 
   // Vorschaubild des Bauteils aus dem 3D-Modell (PNG) hochladen und setzen
   async function vorschaubildSetzen(teil, blob, melden = false) {
+    if (gesperrt()) return null;
     if (!blob) return;
     if (!angebotId.value) await speichern();
     if (!angebotId.value) return;
@@ -579,11 +614,12 @@ export const useAngebot = defineStore('angebot', () => {
   }
 
   function beispieleEinfuegen() {
+    if (gesperrt()) return null;
     const neue = demoTeile();
     teile.value.push(...neue);
     auswahlId.value = neue[0].id;
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { kopf, teile, zuordnung, fruehesterTermin, mailAnfrage, ausMailAnfrage, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, zusammenfuehren, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
+  return { nurAnsicht, kopf, teile, zuordnung, fruehesterTermin, mailAnfrage, ausMailAnfrage, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, zusammenfuehren, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
 });

@@ -30,7 +30,7 @@ function onDateien(files) {
   a.dateienHinzufuegen(files);
 }
 
-const untertitel = computed(() => (route.meta.bereich === 'workbench' ? (a.angebotId ? `${a.angebotId} · Entwurf` : 'Neues Angebot') : ''));
+const untertitel = computed(() => (route.meta.bereich === 'workbench' ? (a.nurAnsicht ? `${a.angebotId} · ${a.nurAnsicht.status} · nur ansehen` : a.angebotId ? `${a.angebotId} · Entwurf` : 'Neues Angebot') : ''));
 
 const befehle = computed(() => [
   { id: 'go-wb', label: 'Zur Workbench', gruppe: 'Gehe zu', icon: Calculator, run: () => router.push('/workbench') },
@@ -72,7 +72,8 @@ useEventListener(window, 'keydown', (e) => {
 </script>
 
 <template>
-  <div class="flex h-full">
+  <div v-if="route.meta.fenster" class="h-full"><RouterView /><Toasts /></div>
+  <div v-else class="flex h-full">
     <AppRail />
     <div class="flex min-w-0 flex-1 flex-col">
       <header class="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface/80 px-6 backdrop-blur">

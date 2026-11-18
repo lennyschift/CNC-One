@@ -239,3 +239,16 @@ describe('Dichte schätzen', () => {
     expect(dichteSchaetzen('Holz')).toBe(0);
   });
 });
+
+describe('zweisprachige Labels', () => {
+  const el = (text, x, y, b = 0.08, h = 0.012) => ({ text, x, y, b, h });
+  it('"/Title" unter "Benennung" ist kein Wert', () => {
+    const seite = { elemente: [el('Benennung', 0.6, 0.9), el('/Title', 0.6, 0.913), el('Flanschwelle', 0.6, 0.93, 0.12)] };
+    expect(erkennen(seite).felder.bezeichnung?.wert).toBe('Flanschwelle');
+  });
+  it('"Benennung / Title" in einem Textstück sucht den Wert daneben', () => {
+    const seite = { elemente: [el('Benennung / Title', 0.6, 0.9, 0.1), el('Lagerbock', 0.72, 0.9, 0.1)] };
+    expect(erkennen(seite).felder.bezeichnung?.wert).toBe('Lagerbock');
+  });
+});
+

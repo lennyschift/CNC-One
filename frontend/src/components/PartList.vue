@@ -23,7 +23,7 @@ const anteil = (id) => (a.netto > 0 ? Math.max(0.03, (a.ergebnisse[id]?.gesamt ?
   <section class="card flex min-h-0 flex-col">
     <header class="flex items-center justify-between px-4 pb-2 pt-4">
       <h2 class="text-sm font-semibold">Bauteile <span class="ml-1 rounded-full bg-surface2 px-2 py-0.5 text-xs font-medium text-mute tnum">{{ a.teile.length }}</span></h2>
-      <div class="flex gap-1.5">
+      <div v-if="!a.nurAnsicht" class="flex gap-1.5">
         <button class="btn !py-1.5" title="Bauteil des Kunden aus den Stammdaten übernehmen" @click="ui.bauteilWahlOffen = true"><Database :size="14" /> Aus Stammdaten</button>
         <button class="btn btn-primary !py-1.5" title="Neues Bauteil anlegen, es steht danach in den Stammdaten" @click="a.hinzufuegen('Neues Bauteil')"><Plus :size="15" /> Neu <span class="kbd !border-white/30 !bg-white/15 !text-white">N</span></button>
       </div>
@@ -41,7 +41,7 @@ const anteil = (id) => (a.netto > 0 ? Math.max(0.03, (a.ergebnisse[id]?.gesamt ?
         @keydown.enter="a.auswahlId = t.id"
       >
         <div class="flex items-start gap-3">
-          <PartImage :teil="t" :groesse="44" />
+          <PartImage iso :teil="t" :groesse="44" />
           <div class="min-w-0 flex-1">
             <div class="truncate text-sm font-medium"><span class="mr-1.5 text-xs text-mute tnum">{{ i + 1 }}</span>{{ t.name || 'Ohne Namen' }}
               <span v-if="a.zuordnung[t.id]" class="ml-1.5 rounded-full px-1.5 py-0.5 align-middle text-[10px] font-semibold" :class="a.zuordnung[t.id].herkunft === 'neu' ? 'bg-accent-soft text-accent' : 'bg-surface2 text-mute'" :title="a.zuordnung[t.id].herkunft === 'neu' ? 'Mit diesem Angebot neu angelegt, steht in den Stammdaten' : 'Bestandsbauteil aus den Stammdaten'">{{ a.zuordnung[t.id].herkunft === 'neu' ? 'Neu' : 'Bestand' }}</span>
@@ -62,7 +62,7 @@ const anteil = (id) => (a.netto > 0 ? Math.max(0.03, (a.ergebnisse[id]?.gesamt ?
         <div class="mt-2.5 h-1 overflow-hidden rounded-full bg-line/70">
           <div class="h-full rounded-full bg-accent transition-all duration-500" :style="{ width: anteil(t.id) * 100 + '%' }" />
         </div>
-        <div class="absolute right-2 top-2 flex gap-0.5 rounded-lg border border-line bg-surface p-0.5 opacity-0 shadow-sm transition group-hover:opacity-100">
+        <div v-if="!a.nurAnsicht" class="absolute right-2 top-2 flex gap-0.5 rounded-lg border border-line bg-surface p-0.5 opacity-0 shadow-sm transition group-hover:opacity-100">
           <button class="grid h-6 w-6 place-items-center rounded-md text-mute hover:bg-surface2 hover:text-ink" title="Nach oben" @click.stop="a.verschieben(t.id, -1)"><ArrowUp :size="13" /></button>
           <button class="grid h-6 w-6 place-items-center rounded-md text-mute hover:bg-surface2 hover:text-ink" title="Nach unten" @click.stop="a.verschieben(t.id, 1)"><ArrowDown :size="13" /></button>
           <button class="grid h-6 w-6 place-items-center rounded-md text-mute hover:bg-surface2 hover:text-ink" title="Duplizieren" @click.stop="a.duplizieren(t.id)"><Copy :size="13" /></button>

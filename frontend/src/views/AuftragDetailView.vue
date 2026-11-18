@@ -1,10 +1,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory, Truck, Receipt, FileText } from '@lucide/vue';
+import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory, Truck, Receipt, FileText, Calculator, Send, FileCheck2 } from '@lucide/vue';
 import { useRouter } from 'vue-router';
 import LieferscheinDialog from '../components/LieferscheinDialog.vue';
 import RechnungDialog from '../components/RechnungDialog.vue';
+import AngebotMailDialog from '../components/AngebotMailDialog.vue';
+import PdfVorschauDialog from '../components/PdfVorschauDialog.vue';
+import { belegPdfUrl } from '../lib/belegpdf.js';
 import { auftragStand } from '../lib/auftragstand.js';
 import { useRechnung } from '../stores/rechnung.js';
 import { bereichText } from '../lib/serien.js';
@@ -14,6 +17,7 @@ import ProjektMarke from '../components/ProjektMarke.vue';
 import ProjektFeld from '../components/ProjektFeld.vue';
 import PartImage from '../components/PartImage.vue';
 import { useBelege } from '../stores/belege.js';
+import { useAngebot } from '../stores/angebot.js';
 import { useFertigung } from '../stores/fertigung.js';
 import { produziert, fortschritt } from '../lib/fertigung.js';
 import { eur } from '../lib/format.js';
@@ -25,6 +29,11 @@ const auftrag = computed(() => b.auftrag(route.params.id));
 onMounted(() => b.auftraegeNeuLaden());
 const lieferDialog = ref(false);
 const rechnungDialog = ref(false);
+// Auftragsbestätigung: ansehen (frisch erzeugt) und per Mail senden
+const abDialog = ref(false);
+const abPdf = ref(null);
+function abAnsehen() { abPdf.value = { url: belegPdfUrl('Auftrag', auftrag.value.id, Date.now()), name: `Auftragsbestätigung ${auftrag.value.id}.pdf` }; }
+const zeitpunkt = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
 const router = useRouter();
 const re = useRechnung();
 const fbs = computed(() => (auftrag.value ? f.fuerAuftrag(auftrag.value.id) : []));
@@ -36,6 +45,13 @@ const rechnungen = computed(() => (auftrag.value ? re.fuerAuftrag(auftrag.value.
 function rechnungAngelegt(rec) { rechnungDialog.value = false; router.push(`/rechnungen/${rec.id}`); }
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
 const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
+// Kalkulation des Angebots in der Workbench ansehen (nur lesen), auf Wunsch gleich mit dieser Position
+const draft = useAngebot();
+const angebotDazu = computed(() => (auftrag.value ? b.angebot(auftrag.value.angebotId) : null));
+async function inWorkbench(posKey = '') {
+  await draft.ausAngebot(angebotDazu.value, { auswahl: posKey, auftragId: auftrag.value.id });
+  router.push('/workbench');
+}
 </script>
 
 <template>
@@ -47,8 +63,15 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
         <div>
           <div class="flex items-center gap-3"><h2 class="text-xl font-semibold tnum">{{ auftrag.id }}</h2><StatusBadge :status="auftrag.status" /><ProjektMarke :projekt="auftrag.projekt" /></div>
           <p class="mt-1 text-sm text-mute">aus <RouterLink :to="`/angebote/${auftrag.angebotId}`" class="text-accent hover:underline tnum">{{ auftrag.angebotId }}</RouterLink> · angelegt am {{ de(auftrag.datum) }}</p>
+          <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <button class="btn" title="Auftragsbestätigung als PDF ansehen und drucken" @click="abAnsehen"><FileCheck2 :size="16" /> Auftragsbestätigung</button>
+            <button v-if="auftrag.status !== 'Storniert'" class="btn" :class="auftrag.ab?.gesendetAm ? '' : 'btn-primary'" @click="abDialog = true"><Send :size="15" /> {{ auftrag.ab?.gesendetAm ? 'AB erneut senden' : 'AB per Mail senden' }}</button>
+            <span v-if="auftrag.ab?.gesendetAm" class="text-xs text-ok">gesendet am {{ zeitpunkt(auftrag.ab.gesendetAm) }} an {{ auftrag.ab.gesendetAn }}</span>
+            <span v-else class="text-xs text-mute">noch nicht bestätigt</span>
+          </div>
           <button v-if="!fbs.length" class="btn btn-primary mt-4" @click="f.ausAuftrag(auftrag.id)"><Factory :size="16" /> Fertigung starten</button>
           <RouterLink v-else to="/fertigung" class="btn mt-4"><Factory :size="16" /> Zur Fertigung</RouterLink>
+          <button v-if="angebotDazu" class="btn mt-4 ml-2" title="Kalkulation, Zeichnung und 3D-Modell des Angebots in der Workbench ansehen (ohne Änderungen)" @click="inWorkbench()"><Calculator :size="16" /> Kalkulation ansehen</button>
           <button v-if="auftrag.lieferung.status !== 'Geliefert'" class="btn mt-4 ml-2" @click="lieferDialog = true"><Truck :size="16" /> Lieferschein erstellen</button>
           <span class="ml-2 mt-4 inline-block align-middle"><StatusBadge :status="auftrag.lieferung.status" /></span>
           <button v-if="auftrag.abrechnung.status !== 'Berechnet'" class="btn mt-4 ml-2" @click="rechnungDialog = true"><Receipt :size="16" /> Rechnung erstellen</button>
@@ -74,7 +97,7 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
         <div class="text-right"><div class="text-xs text-mute">Auftragswert netto</div><div class="text-lg font-semibold tnum">{{ eur(auftrag.netto) }}</div></div>
       </header>
       <div v-for="(p, i) in auftrag.positionen" :key="p.key" class="flex gap-4 border-b border-line px-6 py-4 last:border-0">
-        <PartImage :teil="p.teil" :groesse="64" />
+        <PartImage iso :teil="p.teil" :groesse="64" />
         <div class="min-w-0 flex-1">
           <div class="flex items-baseline justify-between gap-4">
             <div><span class="mr-2 text-mute">{{ i + 1 }}</span><span class="font-medium">{{ p.teil.name }}</span><span v-if="p.teil.teilenummer" class="ml-2 text-xs text-mute">{{ p.teil.teilenummer }}</span><span v-if="p.teil.revision" class="ml-1.5 text-xs text-mute">Rev. {{ p.teil.revision }}</span></div>
@@ -82,6 +105,7 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
           </div>
           <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-mute">
             <span v-if="p.teil.material">{{ p.teil.material }}</span>
+            <button v-if="angebotDazu && p.angebotKey" class="inline-flex items-center gap-1 text-accent hover:underline" title="Kalkulation dieses Bauteils in der Workbench ansehen" @click="inWorkbench(p.angebotKey)"><Calculator :size="12" /> Kalkulation</button>
             <a v-if="p.teil.zeichnung" :href="p.teil.zeichnung" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-accent hover:underline"><FileText :size="12" /> Zeichnung</a>
             <span v-if="p.teil.revision && p.teil.aktuelleRevision && p.teil.revision.toLowerCase() !== p.teil.aktuelleRevision.toLowerCase()" class="text-warn">am Bauteil inzwischen Rev. {{ p.teil.aktuelleRevision }}</span>
             <span v-if="p.staffelMenge">Staffel {{ p.staffelMenge }} Stk</span>
@@ -104,6 +128,8 @@ const fbZu = (key) => fbs.value.find((x) => x.auftragPosKey === key);
         </div>
       </div>
     </section>
+    <AngebotMailDialog v-if="abDialog" :auftrag="auftrag" @schliessen="abDialog = false" @gesendet="abDialog = false" />
+    <PdfVorschauDialog v-if="abPdf" :url="abPdf.url" :name="abPdf.name" @schliessen="abPdf = null" />
     <RechnungDialog v-if="rechnungDialog" :auftrag-id="auftrag.id" @schliessen="rechnungDialog = false" @angelegt="rechnungAngelegt" />
     <LieferscheinDialog v-if="lieferDialog" :auftrag-id="auftrag.id" @schliessen="lieferDialog = false" @angelegt="lieferDialog = false" />
   </div>

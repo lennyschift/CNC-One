@@ -28,8 +28,8 @@ async function laden() {
     const [modul, daten] = await Promise.all([import('../lib/pdf.js'), pdfLaden(props.url)]);
     pdfjs = modul.pdfjs;
     const doc = await pdfjs.getDocument({ data: new Uint8Array(daten) }).promise;
-    if (meiner !== lauf) { doc.destroy(); return; }
-    dokument?.destroy();
+    if (meiner !== lauf) { doc.loadingTask.destroy(); return; }
+    dokument?.loadingTask.destroy(); // pdf.js 6: das Dokument selbst hat kein destroy() mehr
     dokument = doc;
     anzahl.value = doc.numPages;
     stand.value = 'fertig';
@@ -92,7 +92,7 @@ onBeforeUnmount(() => {
   lauf++;
   clearTimeout(warten);
   abbrechen();
-  dokument?.destroy();
+  dokument?.loadingTask.destroy(); // pdf.js 6: das Dokument selbst hat kein destroy() mehr
 });
 </script>
 

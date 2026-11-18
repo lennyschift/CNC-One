@@ -1,4 +1,5 @@
 <script setup>
+import FilterLeiste from '../components/FilterLeiste.vue';
 import { ref, computed, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Search, Receipt } from '@lucide/vue';
@@ -32,7 +33,10 @@ const passt = (r) => {
     default: return true;
   }
 };
-const zeilen = computed(() => {
+// Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
+const zeilen = ref([]);
+const beschriftungen = {'status': 'Status', 'kundeName': 'Kunde', 'nummer': 'Rechnungsnummer', 'projekt': 'Projekt', 'netto': 'Netto', 'brutto': 'Brutto', 'datum': 'Rechnungsdatum', 'faelligAm': 'Fällig am', 'tageUeberfaellig': 'Tage überfällig', 'auftragId': 'Auftrag'};
+const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return store.rechnungen.filter((r) => passt(r) && (!q || `${r.nummer} ${r.id} ${r.kundeName} ${r.auftragId} ${r.kundenbestellnr} ${projektVon(r)}`.toLowerCase().includes(q)));
 });
@@ -57,6 +61,7 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
       </label>
     </div>
 
+    <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="rechnungen" :beschriftungen="beschriftungen" :standard-angeheftet="['kundeName']" />
     <div v-auto-animate class="space-y-2.5">
       <RouterLink v-for="r in zeilen" :key="r.id" :to="`/rechnungen/${r.id}`" class="card flex items-center gap-5 p-4 transition hover:-translate-y-px hover:border-accent/40" :class="r.status === 'Storniert' ? 'opacity-60' : ''">
         <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-surface2 text-mute"><Receipt :size="20" /></span>

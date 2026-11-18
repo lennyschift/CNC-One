@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mengenFuer, fremdPositionen, preisFuerMenge, gehoertZu, zusammenfassung, zusammenfassungText, mailText } from './anfrage.js';
+import { mengenFuer, fremdPositionen, preisFuerMenge, gehoertZu, zusammenfassung, zusammenfassungText, mailText, istFrei, freieZeile } from './anfrage.js';
 
 describe('mengenFuer', () => {
   it('Staffelangebot fragt alle Staffeln an', () => {
@@ -87,4 +87,35 @@ describe('mailText', () => {
     expect(t).not.toContain('Hinweis');
     expect(t).not.toMatch(/Zeichnung: undefined/);
   });
+});
+
+describe('freie Anfrage (Material)', () => {
+  const a = {
+    id: 'LA-2026-0009', art: 'Material', angebotId: '', notiz: 'mit Zeugnis 3.1',
+    positionen: [
+      { key: 'frei:1', teil: { name: 'Rundstahl', material: '42CrMo4' }, abmessung: 'Ø 50 x 3000 mm', einheit: 'Stangen', mengen: [2, 5] },
+      { key: 'frei:2', teil: { name: 'Flachstahl', material: '' }, abmessung: '', einheit: 'm', mengen: [12] },
+    ],
+  };
+  it('erkennt die freie Anfrage', () => {
+    expect(istFrei(a)).toBe(true);
+    expect(istFrei({ angebotId: 'ANG-1', positionen: [{ key: 't1:a1' }] })).toBe(false);
+  });
+  it('nennt Werkstoff, Abmessung und Mengen mit Einheit', () => {
+    const t = mailText(a).text;
+    expect(t).toContain('Angebot für folgendes Material:');
+    expect(t).toContain('1. Rundstahl');
+    expect(t).toContain('   Werkstoff: 42CrMo4');
+    expect(t).toContain('   Abmessung: Ø 50 x 3000 mm');
+    expect(t).toContain('   Menge: 2 Stangen / 5 Stangen');
+    expect(t).toContain('   Menge: 12 m');
+    expect(t).toContain('Hinweis: mit Zeugnis 3.1');
+    expect(t).toContain('unsere Anfragenummer LA-2026-0009');
+    expect(t).not.toContain('Zeichnungen');
+  });
+  it('Betreff mit Nummer', () => {
+    expect(mailText(a).betreff).toBe('Anfrage LA-2026-0009: Material, 2 Positionen');
+    expect(mailText({ ...a, positionen: [a.positionen[0]] }).betreff).toBe('Anfrage LA-2026-0009: Rundstahl 42CrMo4');
+  });
+  it('Kurzzeile', () => expect(freieZeile(a.positionen[0])).toBe('Rundstahl · 42CrMo4 · Ø 50 x 3000 mm'));
 });

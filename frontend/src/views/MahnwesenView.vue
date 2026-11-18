@@ -1,4 +1,5 @@
 <script setup>
+import FilterLeiste from '../components/FilterLeiste.vue';
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
@@ -24,7 +25,10 @@ async function mahnen(v) {
 
 const filter = ref('Alle');
 const filterListe = ['Alle', 'Angelegt', 'Versendet', 'Erledigt', 'Zurückgezogen'];
-const zeilen = computed(() => store.mahnungen.filter((m) => filter.value === 'Alle' || m.status === filter.value));
+// Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
+const zeilen = ref([]);
+const beschriftungen = {'status': 'Status', 'stufe': 'Stufe', 'kundeName': 'Kunde', 'datum': 'Datum'};
+const vorgefiltert = computed(() => store.mahnungen.filter((m) => filter.value === 'Alle' || m.status === filter.value));
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
 </script>
 
@@ -59,6 +63,7 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
         <h2 class="mr-auto text-sm font-semibold">Mahnungen</h2>
         <div class="flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1"><button v-for="f in filterListe" :key="f" class="rounded-lg px-3 py-1.5 text-sm transition" :class="filter === f ? 'bg-accent-soft font-medium text-accent' : 'text-mute hover:text-ink'" @click="filter = f">{{ f }}</button></div>
       </div>
+      <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="mahnungen" :beschriftungen="beschriftungen" :standard-angeheftet="[]" />
       <div v-auto-animate class="space-y-2">
         <RouterLink v-for="m in zeilen" :key="m.id" :to="`/mahnungen/${m.id}`" class="card flex items-center gap-4 p-3.5 transition hover:-translate-y-px hover:border-accent/40" :class="m.status === 'Zurückgezogen' ? 'opacity-60' : ''">
           <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface2 text-mute"><BellRing :size="18" /></span>

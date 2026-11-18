@@ -13,13 +13,14 @@ const SCHREIBEN = {
   material: ['CNC Admin', 'System Manager'],
   bauteil: ['CNC Admin', 'CNC Vertrieb', 'CNC Fertigung', 'System Manager'],
   arbeitsgaenge: ['CNC Admin', 'System Manager'],
+  anfragevorlage: ['CNC Admin', 'CNC Vertrieb', 'System Manager'],
 };
 
 // Kunden, Bauteile, Lieferanten, Maschinen und Materialien. Die Listen werden beim ersten Öffnen geladen.
 export const useStammdaten = defineStore('stammdaten', () => {
   const ui = useUi();
   const stamm = useStamm();
-  const listen = reactive({ kunde: null, lieferant: null, maschine: null, material: null, bauteil: null });
+  const listen = reactive({ kunde: null, lieferant: null, maschine: null, material: null, bauteil: null, anfragevorlage: null });
 
   const darf = (art) => (benutzer()?.rollen ?? []).some((r) => (SCHREIBEN[art] ?? []).includes(r));
 

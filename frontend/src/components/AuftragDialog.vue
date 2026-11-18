@@ -111,7 +111,7 @@ async function anlegen() {
 
             <div v-for="s in sicht" :key="s.p.key" class="rounded-2xl border p-4 transition" :class="s.z.aktiv ? 'border-line bg-surface' : 'border-line/60 bg-surface2 opacity-70'">
               <div class="flex items-start gap-4">
-                <PartImage :teil="s.p.teil" :groesse="60" />
+                <PartImage iso :teil="s.p.teil" :groesse="60" />
                 <div class="min-w-0 flex-1">
                   <div class="flex items-start justify-between gap-3">
                     <div>

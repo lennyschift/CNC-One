@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle, Inbox } from '@lucide/vue';
+import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle, Inbox, Lock, ClipboardList, LogOut } from '@lucide/vue';
+import { useBelege } from '../stores/belege.js';
 import AnfrageDialog from '../components/AnfrageDialog.vue';
 import BauteilWahlDialog from '../components/BauteilWahlDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
@@ -13,6 +14,7 @@ import PartList from '../components/PartList.vue';
 import PartEditor from '../components/PartEditor.vue';
 import AnimatedNumber from '../components/AnimatedNumber.vue';
 import NumField from '../components/NumField.vue';
+import Toggle from '../components/Toggle.vue';
 import { repo } from '../data/repo.js';
 import { eur } from '../lib/format.js';
 import { useAngebot } from '../stores/angebot.js';
@@ -66,10 +68,28 @@ const kontaktWahl = computed({
   },
 });
 const mwst = computed(() => a.netto * 0.19);
+// Nur ansehen verlassen: zurück zum Entwurf, der vorher offen war, sonst ein neues Angebot
+const belege = useBelege();
+const vorherigerEntwurf = computed(() => {
+  const x = a.nurAnsicht?.zurueckZu ? belege.angebot(a.nurAnsicht.zurueckZu) : null;
+  return x && x.status === 'Entwurf' ? x : null;
+});
+async function ansichtVerlassen() {
+  if (vorherigerEntwurf.value) await a.ausAngebot(vorherigerEntwurf.value);
+  else await a.neu();
+}
 </script>
 
 <template>
   <div class="mx-auto flex max-w-[1500px] flex-col gap-4">
+    <!-- Nur ansehen: gesendetes Angebot -->
+    <div v-if="a.nurAnsicht" class="flex flex-wrap items-center gap-3 rounded-2xl border border-warn/40 bg-warn/10 px-5 py-3 text-sm">
+      <Lock :size="16" class="shrink-0 text-warn" />
+      <span class="min-w-0 flex-1"><strong class="tnum">{{ a.angebotId }}</strong> ist {{ a.nurAnsicht.status.toLowerCase() }}: Hier siehst du, wie kalkuliert wurde. Änderungen sind nicht möglich.</span>
+      <RouterLink :to="`/angebote/${a.angebotId}`" class="btn !py-1.5"><Eye :size="15" /> Zum Angebot</RouterLink>
+      <RouterLink v-if="a.nurAnsicht.auftragId" :to="`/auftraege/${a.nurAnsicht.auftragId}`" class="btn !py-1.5"><ClipboardList :size="15" /> Zum Auftrag {{ a.nurAnsicht.auftragId }}</RouterLink>
+      <button class="btn !py-1.5" @click="ansichtVerlassen"><LogOut :size="15" /> {{ vorherigerEntwurf ? `Zurück zu ${vorherigerEntwurf.id}` : 'Neues Angebot' }}</button>
+    </div>
     <!-- Angebotskopf -->
     <section class="card p-5">
       <RouterLink v-if="a.mailAnfrage" :to="`/posteingang/${a.mailAnfrage.id}`" class="mb-4 flex items-center gap-2 rounded-xl bg-accent-soft/60 px-3.5 py-2 text-sm hover:bg-accent-soft">
@@ -78,7 +98,7 @@ const mwst = computed(() => a.netto * 0.19);
         <span class="ml-auto shrink-0 text-xs text-accent">Mail ansehen</span>
       </RouterLink>
       <div class="grid gap-5 lg:grid-cols-[1fr_auto]">
-        <div class="grid gap-4 md:grid-cols-[minmax(240px,1.2fr)_1fr_120px_1fr]">
+        <fieldset :disabled="!!a.nurAnsicht" class="m-0 grid min-w-0 gap-4 border-0 p-0 md:grid-cols-[minmax(240px,1.2fr)_1fr_120px_1fr]">
           <CustomerCombobox v-model="a.kopf.kundeId" />
           <label class="block"><span class="label mb-1 block">Anfrage-Nr. des Kunden</span><input v-model="a.kopf.anfrageNr" class="field" placeholder="z. B. RFQ-2026-118" /></label>
           <NumField v-model="a.kopf.gueltigWochen" label="Gültig" unit="Wo." :decimals="0" :min="1" />
@@ -99,7 +119,8 @@ const mwst = computed(() => a.netto * 0.19);
               <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><Hash :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div class="text-xs text-mute">Lieferanten-Nr. bei Kunde</div><div>{{ kunde.lieferantennr || '–' }}</div></div></div>
             </div>
           </Transition>
-        </div>
+          <div class="md:col-span-4"><Toggle v-model="a.kopf.materialDrucken" klein label="Werkstoff im Angebots-PDF nennen" /></div>
+        </fieldset>
 
         <!-- Summe -->
         <div class="min-w-[250px] rounded-2xl bg-ink px-5 py-4 text-bg">
@@ -109,12 +130,12 @@ const mwst = computed(() => a.netto * 0.19);
           <div class="mt-3 flex h-1.5 overflow-hidden rounded-full bg-white/15">
             <div v-for="(t, i) in a.teile" :key="t.id" class="h-full transition-all duration-500" :style="{ width: (a.netto > 0 ? (a.ergebnisse[t.id].gesamt / a.netto) * 100 : 0) + '%', background: 'var(--accent)', opacity: 1 - (i % 4) * 0.22 }" :title="t.name" />
           </div>
-          <button v-if="anzahlFremd" class="btn mt-4 w-full justify-center !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" @click="anfrageOeffnen()"><Send :size="15" /> Lieferantenanfrage ({{ anzahlFremd }} Fremdvergabe{{ anzahlFremd === 1 ? '' : 'n' }}<template v-if="anzahlAnfragen">, {{ anzahlAnfragen }} gesendet</template>)</button>
-          <div class="mt-2 flex gap-2">
+          <button v-if="anzahlFremd && !a.nurAnsicht" class="btn mt-4 w-full justify-center !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" @click="anfrageOeffnen()"><Send :size="15" /> Lieferantenanfrage ({{ anzahlFremd }} Fremdvergabe{{ anzahlFremd === 1 ? '' : 'n' }}<template v-if="anzahlAnfragen">, {{ anzahlAnfragen }} gesendet</template>)</button>
+          <div v-if="!a.nurAnsicht" class="mt-2 flex gap-2">
             <button class="btn btn-primary flex-1 justify-center" @click="ansehen"><Eye :size="16" /> Angebot ansehen</button>
             <button class="btn !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" title="Neues, leeres Angebot beginnen" @click="neuesAngebot"><FilePlus2 :size="16" /></button>
           </div>
-          <div class="mt-3 flex items-center justify-center gap-1.5 text-xs opacity-70">
+          <div v-if="!a.nurAnsicht" class="mt-3 flex items-center justify-center gap-1.5 text-xs opacity-70">
             <Loader v-if="a.speicherStand === 'speichert' || a.speicherStand === 'offen'" :size="12" class="animate-spin" />
             <AlertTriangle v-else-if="a.speicherStand === 'fehler'" :size="12" />
             <Check v-else :size="12" />

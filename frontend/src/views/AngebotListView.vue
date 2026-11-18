@@ -1,4 +1,5 @@
 <script setup>
+import FilterLeiste from '../components/FilterLeiste.vue';
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
@@ -21,7 +22,10 @@ const filter = ref('Alle');
 const filterListe = ['Alle', 'Entwurf', 'Gesendet', 'Bestellt'];
 const suche = ref('');
 const ansprechpartner = (x) => x.kopf.kontaktName || x.mailAnfrage?.vonName || x.mailAnfrage?.vonEmail || '';
-const zeilen = computed(() => {
+// Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
+const zeilen = ref([]);
+const beschriftungen = {'status': 'Status', 'kopf.kundeName': 'Kunde', 'kopf.projekt': 'Projekt', 'kopf.anfrageNr': 'Anfragenummer des Kunden', 'kopf.kontaktName': 'Ansprechpartner', 'netto': 'Netto', 'datum': 'Datum', 'teile.name': 'Bauteil', 'teile.teilenummer': 'Teilenummer', 'teile.material': 'Werkstoff'};
+const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return b.angebote
     .map((x) => ({ ...x, anzeige: b.statusVon(x) }))
@@ -49,6 +53,7 @@ const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
       <button class="btn btn-primary" @click="neu"><Plus :size="16" /> Neues Angebot</button>
     </div>
 
+    <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="angebote" :beschriftungen="beschriftungen" :standard-angeheftet="['kopf.kundeName']" />
     <div v-auto-animate class="space-y-2.5">
       <RouterLink v-for="x in zeilen" :key="x.id" :to="`/angebote/${x.id}`" class="card flex items-center gap-5 p-4 transition hover:-translate-y-px hover:border-accent/40">
         <div class="flex -space-x-3">

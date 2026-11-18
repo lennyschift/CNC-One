@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { useEventListener, useResizeObserver } from '@vueuse/core';
-import { Maximize2, Minimize2, Scan, ImagePlus, Loader, AlertTriangle, Spline, Download, Ruler, Box, Scissors, ScanEye, MousePointerClick, X, Check } from '@lucide/vue';
+import { Maximize2, Minimize2, Scan, ImagePlus, Loader, AlertTriangle, Spline, Download, Ruler, Box, Scissors, ScanEye, MousePointerClick, X, Check, MonitorUp } from '@lucide/vue';
 import { stepNetze } from '../lib/step.js';
 import { ANSICHTEN, modellGruppe, abmessungen, kameraAusrichten, lichter, flaecheHervorheben, rohteilLinien } from '../lib/modell3d.js';
 import { volumenUndFlaeche, rohteile, rundmaterial, quader, flaecheAnalysieren, flaecheZuDreieck, messpunkt, abstand, gewichtKg, ACHSEN } from '../lib/messen.js';
@@ -21,8 +21,9 @@ const props = defineProps({
   dichteGeschaetzt: { type: Boolean, default: false }, // Richtwert, am Rohmaterial ist keine Dichte gepflegt
   aufmass: { type: Number, default: 0 }, // mm je Seite für das Rohteil
   nurAnsehen: { type: Boolean, default: false }, // z. B. in der Fertigung: nichts ans Bauteil übernehmen
+  fensterKnopf: { type: Boolean, default: false }, // Knopf für das eigene Fenster (zweiter Bildschirm), meldet 'fenster'
 });
-const emit = defineEmits(['geladen', 'vorschau', 'gewicht', 'update:aufmass']);
+const emit = defineEmits(['geladen', 'vorschau', 'gewicht', 'update:aufmass', 'fenster']);
 
 const huelle = ref(null);
 const stand = ref('laedt'); // 'laedt' | 'bereit' | 'fehler'
@@ -36,7 +37,7 @@ const vollbild = ref(false);
 const werkzeug = ref('flaeche'); // 'flaeche' (anklicken zeigt Maß) | 'messen' (zwei Punkte)
 const flaechenInfo = ref(null); // Analyse der angeklickten Fläche
 const messung = ref([]); // bis zu zwei Messpunkte { punkt, art }
-const rohteilAn = ref(false);
+const rohteilAn = ref(!props.nurAnsehen); // in der Workbench gleich an, ausblenden per Knopf
 const rohteilWahl = ref(''); // '' = Vorschlag | 'Quader' | 'X' | 'Y' | 'Z' | 'Fläche'
 const eigeneAchse = ref(null); // Achse aus einer angeklickten Zylinderfläche
 const schnitt = ref({ an: false, achse: 'X', anteil: 0.5, umgekehrt: false });
@@ -357,6 +358,7 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
         <div class="werkzeug right-3 top-3">
           <button v-if="stand === 'bereit' && !nurAnsehen" class="knopf" title="Aktuelle Ansicht als Vorschaubild des Bauteils übernehmen" @click="alsVorschau"><ImagePlus :size="15" /></button>
           <a class="knopf" :href="url" :download="name || true" title="STEP-Datei herunterladen"><Download :size="15" /></a>
+          <button v-if="fensterKnopf" class="knopf" title="Im eigenen Fenster zeigen (auf den zweiten Bildschirm ziehen)" @click="emit('fenster')"><MonitorUp :size="15" /></button>
           <button class="knopf" :title="vollbild ? 'Vollbild verlassen (Esc)' : 'Vollbild'" @click="vollbild = !vollbild"><Minimize2 v-if="vollbild" :size="15" /><Maximize2 v-else :size="15" /></button>
         </div>
 

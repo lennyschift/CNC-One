@@ -1,10 +1,12 @@
 <script setup>
+import FilterLeiste from '../components/FilterLeiste.vue';
 import { ref, computed, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, Search, Building2, Trash2, MapPin, UserRound } from '@lucide/vue';
+import { Plus, Search, Building2, Trash2, MapPin, UserRound, Phone, X } from '@lucide/vue';
 import StammNav from '../components/StammNav.vue';
 import StammDialog from '../components/StammDialog.vue';
 import Toggle from '../components/Toggle.vue';
+import AngelerntAnzeige from '../components/AngelerntAnzeige.vue';
 import { useStammdaten } from '../stores/stammdaten.js';
 
 const store = useStammdaten();
@@ -15,20 +17,33 @@ const inaktive = ref(false);
 const liste = computed(() => store.listen.kunde ?? []);
 const ort = (k) => { const a = k.adressen.find((x) => x.standard) ?? k.adressen[0]; return a ? [a.plz, a.ort].filter(Boolean).join(' ') : ''; };
 const kontakt = (k) => { const c = k.kontakte.find((x) => x.rechnungskontakt) ?? k.kontakte[0]; return c ? [c.vorname, c.nachname].filter(Boolean).join(' ') : ''; };
-const zeilen = computed(() => {
+// Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
+const zeilen = ref([]);
+const beschriftungen = {'name': 'Name', 'kuerzel': 'Kürzel', 'aktiv': 'Aktiv', 'adressen.ort': 'Ort', 'adressen.plz': 'PLZ', 'adressen.land': 'Land', 'kontakte.nachname': 'Ansprechpartner', 'zahlungszielTage': 'Zahlungsziel (Tage)'};
+const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return liste.value.filter((k) => (inaktive.value || k.aktiv) && (!q || `${k.name} ${k.kuerzel} ${k.id} ${ort(k)} ${kontakt(k)} ${k.ustId}`.toLowerCase().includes(q)));
 });
 
 const leerAdresse = () => ({ typ: 'Rechnung und Lieferung', strasse: '', plz: '', ort: '', land: '', standard: false });
-const leerKontakt = () => ({ anrede: '', vorname: '', nachname: '', email: '', telefon: '', rechnungskontakt: false });
-const leer = () => ({ id: '', name: '', kuerzel: '', aktiv: true, ustId: '', steuernummer: '', zahlungsbedingung: '', leitwegId: '', lieferantennr: '', zahlungszielTage: 0, adressen: [leerAdresse()], kontakte: [leerKontakt()] });
+const TELEFON_ARTEN = ['Arbeit', 'Mobil', 'Zentrale', 'Fax', 'Privat', 'Sonstige'];
+const leerKontakt = () => ({ anrede: '', vorname: '', nachname: '', email: '', telefon: '', telefonnummern: [{ art: 'Arbeit', nummer: '' }], rechnungskontakt: false });
+const leer = () => ({ id: '', name: '', kuerzel: '', aktiv: true, ustId: '', steuernummer: '', zahlungsbedingung: '', leitwegId: '', lieferantennr: '', zahlungszielTage: 0, telefonnummern: [], adressen: [leerAdresse()], kontakte: [leerKontakt()] });
 
 const k = ref(null);
 const speichert = ref(false);
 const neu = computed(() => !k.value?.id);
 const darf = computed(() => store.darf('kunde'));
-function oeffnen(x) { k.value = x ? JSON.parse(JSON.stringify(x)) : leer(); }
+function oeffnen(x) {
+  k.value = x ? JSON.parse(JSON.stringify(x)) : leer();
+  k.value.telefonnummern ??= [];
+  for (const c of k.value.kontakte) c.telefonnummern ??= c.telefon ? [{ art: 'Arbeit', nummer: c.telefon }] : [];
+}
+// neue Nummer: die erste Art, die noch fehlt (Arbeit, dann Mobil …)
+function nummerDazu(liste, start = 'Arbeit') {
+  const frei = TELEFON_ARTEN.slice(TELEFON_ARTEN.indexOf(start)).concat(TELEFON_ARTEN).find((a) => !liste.some((n) => n.art === a));
+  liste.push({ art: frei ?? 'Sonstige', nummer: '' });
+}
 function standardAdresse(i) { k.value.adressen.forEach((a, j) => { a.standard = j === i; }); }
 function rechnungsKontakt(i) { k.value.kontakte.forEach((c, j) => { c.rechnungskontakt = j === i && !c.rechnungskontakt; }); }
 async function speichern() {
@@ -53,6 +68,7 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
       <button v-if="darf" class="btn btn-primary" @click="oeffnen()"><Plus :size="16" /> Neuer Kunde</button>
     </div>
 
+    <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="kunden" :beschriftungen="beschriftungen" :standard-angeheftet="['adressen.ort']" />
     <div class="card overflow-hidden">
       <div class="grid grid-cols-[minmax(200px,1.6fr)_80px_minmax(120px,1fr)_minmax(120px,1fr)_100px] items-center gap-4 border-b border-line bg-surface2 px-5 py-2.5 text-xs font-medium text-mute">
         <span>Name</span><span>Kürzel</span><span>Ort</span><span>Ansprechpartner</span><span>Nummer</span>
@@ -84,6 +100,18 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
       </div>
 
       <section>
+        <div class="mb-2 flex items-center justify-between"><h3 class="flex items-center gap-2 text-sm font-semibold"><Phone :size="15" class="text-accent" /> Telefon der Firma</h3><button type="button" class="btn !py-1 !text-xs" @click="nummerDazu(k.telefonnummern, 'Zentrale')"><Plus :size="13" /> Nummer</button></div>
+        <div class="space-y-1.5">
+          <div v-for="(n, j) in k.telefonnummern" :key="j" class="grid grid-cols-[110px_1fr_28px] items-center gap-2">
+            <select v-model="n.art" class="field !py-1.5 text-sm"><option v-for="a in TELEFON_ARTEN" :key="a">{{ a }}</option></select>
+            <input v-model="n.nummer" class="field !py-1.5" type="tel" :placeholder="`Telefon ${n.art}`" />
+            <button type="button" class="grid h-7 w-7 place-items-center rounded-lg text-mute hover:text-accent" title="Nummer entfernen" @click="k.telefonnummern.splice(j, 1)"><X :size="14" /></button>
+          </div>
+          <p v-if="!k.telefonnummern.length" class="text-xs text-mute">Noch keine Nummer, z. B. Zentrale oder Fax.</p>
+        </div>
+      </section>
+
+      <section>
         <div class="mb-2 flex items-center justify-between"><h3 class="flex items-center gap-2 text-sm font-semibold"><MapPin :size="15" class="text-accent" /> Adressen</h3><button type="button" class="btn !py-1 !text-xs" @click="k.adressen.push(leerAdresse())"><Plus :size="13" /> Adresse</button></div>
         <div class="space-y-2">
           <div v-for="(a, i) in k.adressen" :key="i" class="rounded-xl border border-line p-3">
@@ -110,8 +138,15 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
               <input v-model="c.vorname" class="field" placeholder="Vorname" />
               <input v-model="c.nachname" class="field" placeholder="Nachname" />
               <span class="hidden sm:block" />
-              <input v-model="c.email" class="field" placeholder="E-Mail" />
-              <input v-model="c.telefon" class="field" placeholder="Telefon" />
+              <input v-model="c.email" class="field sm:col-span-2" placeholder="E-Mail" />
+            </div>
+            <div class="mt-2 space-y-1.5">
+              <div v-for="(n, j) in c.telefonnummern" :key="j" class="grid grid-cols-[110px_1fr_28px] items-center gap-2">
+                <select v-model="n.art" class="field !py-1.5 text-sm"><option v-for="a in TELEFON_ARTEN" :key="a">{{ a }}</option></select>
+                <input v-model="n.nummer" class="field !py-1.5" type="tel" :placeholder="`Telefon ${n.art}`" />
+                <button type="button" class="grid h-7 w-7 place-items-center rounded-lg text-mute hover:text-accent" title="Nummer entfernen" @click="c.telefonnummern.splice(j, 1)"><X :size="14" /></button>
+              </div>
+              <button type="button" class="inline-flex items-center gap-1.5 text-xs text-mute hover:text-accent" @click="nummerDazu(c.telefonnummern)"><Phone :size="13" /> Nummer hinzufügen</button>
             </div>
             <div class="mt-2 flex items-center justify-between">
               <label class="flex cursor-pointer items-center gap-2 text-xs text-mute"><input type="checkbox" :checked="c.rechnungskontakt" class="accent-[var(--accent)]" @change="rechnungsKontakt(i)" /> Rechnungskontakt (Empfänger von Angeboten und Rechnungen)</label>
@@ -120,6 +155,8 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
           </div>
         </div>
       </section>
+
+      <AngelerntAnzeige v-if="!neu" :kunde="k.id" :darf="darf" />
 
       <Toggle v-model="k.aktiv" label="Aktiv (in Auswahllisten sichtbar)" />
     </StammDialog>

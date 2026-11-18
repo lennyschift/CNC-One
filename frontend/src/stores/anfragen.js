@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { gehoertZu } from '../lib/anfrage.js';
+import { imVorgang } from '../lib/vergleich.js';
 import { call } from '../data/api.js';
 import { stammdatenRoh } from '../data/repo.js';
 import { useUi } from './ui.js';
@@ -8,7 +9,7 @@ import { useUi } from './ui.js';
 const kopie = (o) => JSON.parse(JSON.stringify(o));
 const kopf = (t) => ({ name: t.name, teilenummer: t.teilenummer, zeichnungsnr: t.zeichnungsnr, material: t.material });
 
-// Lieferantenanfragen für Fremdvergabe liegen in Frappe. Eine Anfrage geht an einen Lieferanten und enthält mehrere Positionen.
+// Lieferantenanfragen (Fremdvergabe aus der Workbench oder frei, z. B. Material) liegen in Frappe. Eine Anfrage geht an einen Lieferanten und enthält mehrere Positionen.
 export const useAnfragen = defineStore('anfragen', () => {
   const ui = useUi();
   const liste = ref(kopie(stammdatenRoh().anfragen ?? []));
@@ -17,6 +18,8 @@ export const useAnfragen = defineStore('anfragen', () => {
   const fuerArbeitsgang = (agId) => liste.value.filter((x) => x.positionen.some((p) => p.agId === agId));
   // Anfragen zu einem Angebot (auch der Entwurf ist ein gespeichertes Angebot): ziel = { angebotId }
   const fuerAngebot = (ziel) => liste.value.filter((x) => gehoertZu(x, ziel));
+  // Alle Anfragen, die zusammen verschickt wurden (gemeinsame Vorgangsnummer)
+  const vorgang = (v) => imVorgang(liste.value, v);
 
   async function sicher(fn) {
     try { return await fn(); } catch (e) { ui.toast(e.message, 'warn'); return null; }
@@ -43,10 +46,35 @@ export const useAnfragen = defineStore('anfragen', () => {
     return neu;
   }
 
+  // Freie Anfrage ohne Angebot (z. B. Material): positionen = [{ teil: { name, material }, abmessung, einheit, mengen }]
+  async function freiAnlegen({ lieferanten, positionen, notiz, art }) {
+    const neu = await sicher(() => call('cnc_one.api.anfrage.anlegen', {
+      angebot: '', art, notiz: notiz || '', lieferanten: lieferanten.map((l) => l.name), positionen: kopie(positionen),
+    }));
+    if (!neu) return null;
+    for (const x of neu) einsetzen(x);
+    ui.toast(`${neu.map((x) => x.id).join(', ')} angelegt`, 'ok');
+    return neu;
+  }
+
   async function antwortErfassen(id, antwort) {
     const rec = await sicher(() => call('cnc_one.api.anfrage.antwort_erfassen', { id, antwort: kopie(antwort) }));
     if (rec) { einsetzen(rec); ui.toast(`Angebot zu ${id} erfasst`, 'ok'); }
     return rec;
+  }
+
+  // Nach dem Versand: die Anfragen des Vorgangs mit Mail im Verlauf
+  function alleEinsetzen(recs) { for (const r of recs ?? []) einsetzen(r); }
+
+  async function zuschlag(id, an) {
+    const rec = await sicher(() => call('cnc_one.api.anfrage.zuschlag', { id, an: an ? 1 : 0 }));
+    if (rec) { einsetzen(rec); ui.toast(an ? `Zuschlag an ${rec.lieferantName}` : 'Zuschlag zurückgenommen', 'ok'); }
+    return rec;
+  }
+
+  async function gelesen(id) {
+    const rec = await sicher(() => call('cnc_one.api.anfrage.gelesen', { id }));
+    if (rec) einsetzen(rec);
   }
 
   async function absagen(id) {
@@ -55,5 +83,5 @@ export const useAnfragen = defineStore('anfragen', () => {
     return rec;
   }
 
-  return { liste, anfrage, fuerArbeitsgang, fuerAngebot, anlegen, antwortErfassen, absagen };
+  return { liste, anfrage, fuerArbeitsgang, fuerAngebot, vorgang, anlegen, freiAnlegen, antwortErfassen, absagen, alleEinsetzen, zuschlag, gelesen };
 });

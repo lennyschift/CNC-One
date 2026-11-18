@@ -1,7 +1,8 @@
 <script setup>
-// Angebot per Mail schicken: bei einer Mail-Anfrage als Antwort im selben Verlauf, sonst an den Kontakt des Kunden.
-// Empfänger, Betreff und Text sind vorbelegt und änderbar; das Angebot hängt als PDF an.
-import { ref, onMounted } from 'vue';
+// Beleg per Mail schicken. Angebot: bei einer Mail-Anfrage als Antwort im selben Verlauf, sonst an den Kontakt des Kunden.
+// Auftragsbestätigung (mit `auftrag`): an den Ansprechpartner des Auftrags. Empfänger, Betreff und Text sind vorbelegt
+// und änderbar; der Beleg hängt als PDF an.
+import { ref, computed, onMounted } from 'vue';
 import { X, Send, FileText, Reply, AlertTriangle, Loader } from '@lucide/vue';
 import { call } from '../data/api.js';
 import PdfVorschauDialog from './PdfVorschauDialog.vue';
@@ -9,10 +10,11 @@ import MailHtml from './MailHtml.vue';
 import Toggle from './Toggle.vue';
 import { benutzer } from '../data/repo.js';
 import { useBelege } from '../stores/belege.js';
+import { belegPdfUrl } from '../lib/belegpdf.js';
 import { useMail } from '../stores/mail.js';
 import { useUi } from '../stores/ui.js';
 
-const props = defineProps({ angebot: { type: Object, required: true } });
+const props = defineProps({ angebot: { type: Object, default: null }, auftrag: { type: Object, default: null } });
 const emit = defineEmits(['schliessen', 'gesendet']);
 const ui = useUi();
 const belege = useBelege();
@@ -24,17 +26,35 @@ const pdf = ref(null);
 const zitieren = ref(true);
 const istAdmin = (benutzer()?.rollen ?? []).some((x) => ['CNC Admin', 'System Manager'].includes(x));
 
+const ab = computed(() => !!props.auftrag);
+const kopf = computed(() => (ab.value
+  ? { titel: 'Auftragsbestätigung per Mail senden', id: props.auftrag.id, kunde: props.auftrag.kundeName }
+  : { titel: 'Angebot per Mail senden', id: props.angebot.id, kunde: props.angebot.kopf.kundeName }));
+
 onMounted(async () => {
-  try { v.value = await call('cnc_one.api.mail.antwort_vorschlag', { angebot: props.angebot.id }); } catch (e) { ui.toast(e.message, 'warn'); emit('schliessen'); }
+  try {
+    v.value = ab.value
+      ? await call('cnc_one.api.mail.ab_vorschlag', { auftrag: props.auftrag.id })
+      : await call('cnc_one.api.mail.antwort_vorschlag', { angebot: props.angebot.id });
+  } catch (e) { ui.toast(e.message, 'warn'); emit('schliessen'); }
 });
 
 async function pdfAnsehen() {
+  if (ab.value) { pdf.value = { url: belegPdfUrl('Auftrag', props.auftrag.id, Date.now()), name: v.value.anhang }; return; }
   try { pdf.value = await call('cnc_one.api.angebot.pdf', { id: props.angebot.id }); } catch (e) { ui.toast(e.message, 'warn'); }
 }
 
 async function senden() {
   sendet.value = true;
   try {
+    if (ab.value) {
+      const r = await call('cnc_one.api.mail.ab_senden', { auftrag: props.auftrag.id, an: v.value.an, cc: v.value.cc, betreff: v.value.betreff, text: v.value.text });
+      belege.auftragEinsetzen(r.auftrag);
+      ui.toast(`Auftragsbestätigung an ${v.value.an} geschickt`, 'ok');
+      if (r.hinweis) ui.toast(r.hinweis, 'warn');
+      emit('gesendet', r);
+      return;
+    }
     const r = await call('cnc_one.api.mail.angebot_senden', { angebot: props.angebot.id, an: v.value.an, cc: v.value.cc, betreff: v.value.betreff, text: v.value.text, zitieren: zitieren.value ? 1 : 0 });
     belege.einsetzen(r.angebot);
     if (r.mailAnfrage) mail.zaehlen();
@@ -57,14 +77,15 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
         <div class="card flex max-h-[92vh] w-[min(760px,96vw)] flex-col overflow-hidden shadow-2xl">
           <header class="flex items-center justify-between border-b border-line px-6 py-4">
             <div>
-              <h2 class="text-base font-semibold">Angebot per Mail senden</h2>
-              <p class="text-xs text-mute">{{ angebot.id }} · {{ angebot.kopf.kundeName }}<template v-if="v?.absender"> · von {{ v.absender }}</template></p>
+              <h2 class="text-base font-semibold">{{ kopf.titel }}</h2>
+              <p class="text-xs text-mute">{{ kopf.id }} · {{ kopf.kunde }}<template v-if="v?.absender"> · von {{ v.absender }}</template></p>
             </div>
             <button class="grid h-8 w-8 place-items-center rounded-lg text-mute hover:bg-surface2" @click="emit('schliessen')"><X :size="18" /></button>
           </header>
 
           <div v-if="!v" class="flex items-center gap-2 p-6 text-sm text-mute"><Loader :size="15" class="animate-spin" /> Wird vorbereitet …</div>
           <div v-else class="space-y-3 overflow-auto px-6 py-5">
+            <p v-if="v.gesendetAm" class="rounded-xl bg-surface2 px-3 py-2 text-sm">Schon gesendet am {{ zeit(v.gesendetAm) }}. Erneut senden schickt die aktuelle Fassung.</p>
             <p v-if="v.antwortAuf" class="flex items-center gap-2 rounded-xl bg-accent-soft/60 px-3 py-2 text-sm"><Reply :size="15" class="shrink-0 text-accent" /> Antwort auf die Anfrage von <strong>{{ v.antwortAuf.vonName }}</strong> vom {{ zeit(v.antwortAuf.datum) }}, im selben Verlauf</p>
             <p v-if="!v.bereit" class="flex items-start gap-2 rounded-xl bg-warn/10 px-3 py-2 text-sm text-warn">
               <AlertTriangle :size="15" class="mt-0.5 shrink-0" />
@@ -88,7 +109,7 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
           </div>
 
           <footer class="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
-            <span v-if="angebot.status === 'Entwurf'" class="mr-auto text-xs text-mute">Nach dem Senden steht das Angebot auf „Gesendet“.</span>
+            <span v-if="!ab && angebot.status === 'Entwurf'" class="mr-auto text-xs text-mute">Nach dem Senden steht das Angebot auf „Gesendet“.</span>
             <button class="btn" @click="emit('schliessen')">Abbrechen</button>
             <button class="btn btn-primary" :disabled="!v || !v.bereit || sendet || !v.an.trim()" :class="!v || !v.bereit || !v.an.trim() ? 'pointer-events-none opacity-40' : ''" @click="senden">
               <Send :size="15" /> {{ sendet ? 'Wird gesendet …' : 'Senden' }}

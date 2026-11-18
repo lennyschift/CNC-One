@@ -83,7 +83,7 @@ const akzent = { Offen: 'bg-mute', 'In Fertigung': 'bg-warn', Fertig: 'bg-ok' };
         </header>
         <div v-auto-animate class="space-y-2">
           <RouterLink v-for="e in l.eintraege" :key="e.fb.id + e.ag.id" :to="`/fertigung/${e.fb.id}`" class="card flex items-center gap-3 p-2.5 transition hover:border-accent/40">
-            <PartImage :teil="e.fb.teil" :groesse="40" />
+            <PartImage iso :teil="e.fb.teil" :groesse="40" />
             <div class="min-w-0 flex-1">
               <div class="truncate text-sm font-medium">{{ e.fb.teil.name }}</div>
               <div class="truncate text-[11px] text-mute">{{ e.ag.name }} · {{ produziert(e.fb) }}/{{ e.fb.menge }} Stk</div>

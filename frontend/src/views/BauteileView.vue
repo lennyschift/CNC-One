@@ -1,4 +1,5 @@
 <script setup>
+import FilterLeiste from '../components/FilterLeiste.vue';
 import { ref, computed, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Plus, Search, Workflow, Hash, FileText, Box, History } from '@lucide/vue';
@@ -26,14 +27,17 @@ const kundenName = (id) => kunden.value.find((k) => k.id === id)?.name ?? id;
 const suche = ref('');
 const kundeFilter = ref('');
 const liste = computed(() => store.listen.bauteil ?? []);
-const zeilen = computed(() => {
+// Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
+const zeilen = ref([]);
+const beschriftungen = {'kundeName': 'Kunde', 'name': 'Bezeichnung', 'teilenummer': 'Teilenummer', 'material': 'Werkstoff', 'status': 'Status', 'seriennummern': 'Mit Seriennummern', 'revision': 'Revision'};
+const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return liste.value.filter((b) => (!kundeFilter.value || b.kundeId === kundeFilter.value)
     && (!q || `${b.name} ${b.teilenummer} ${b.zeichnungsnr} ${b.material} ${kundenName(b.kundeId)}`.toLowerCase().includes(q)));
 });
 const kundenMitBauteil = computed(() => kunden.value.filter((k) => liste.value.some((b) => b.kundeId === k.id)));
 
-const leer = () => ({ id: '', kundeId: kundeFilter.value, teilenummer: '', name: '', zeichnungsnr: '', revision: '', material: '', status: 'Aktiv', seriennummern: false, serienStellen: 4, letzteSeriennummer: 0, arbeitsgaenge: [] });
+const leer = () => ({ id: '', kundeId: kundeFilter.value, teilenummer: '', name: '', zeichnungsnr: '', revision: '', material: '', status: 'Aktiv', notizIntern: '', seriennummern: false, serienStellen: 4, letzteSeriennummer: 0, arbeitsgaenge: [] });
 const b = ref(null);
 const revisionsNamen = computed(() => [...new Set((b.value?.revisionen ?? []).map((r) => r.revision).filter(Boolean))]);
 const speichert = ref(false);
@@ -62,6 +66,7 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
       <button v-if="darf" class="btn btn-primary" @click="oeffnen()"><Plus :size="16" /> Neues Bauteil</button>
     </div>
 
+    <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="bauteile" :beschriftungen="beschriftungen" :standard-angeheftet="['material']" />
     <div v-auto-animate class="space-y-2">
       <button v-for="x in zeilen" :key="x.id" class="card flex w-full items-center gap-4 p-3.5 text-left transition hover:-translate-y-px hover:border-accent/40" @click="oeffnen(x)">
         <PartImage :teil="x" :groesse="48" />
@@ -90,6 +95,7 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
             <select v-model="b.material" class="field"><option value="">– keiner –</option><option v-for="m in materialien" :key="m.name" :value="m.name">{{ m.name }}</option></select>
           </label>
           <label class="block"><span class="label mb-1 block">Status</span><select v-model="b.status" class="field"><option>Aktiv</option><option>Gesperrt</option></select></label>
+          <label class="block sm:col-span-2"><span class="label mb-1 block">Interne Notiz <span class="font-normal normal-case text-mute">(steht nicht auf Belegen)</span></span><textarea v-model="b.notizIntern" rows="2" class="field min-h-[56px] resize-y" /></label>
           <div class="flex flex-wrap items-end gap-4 sm:col-span-2">
             <Toggle v-model="b.seriennummern" klein label="Seriennummern führen" />
             <NumField v-if="b.seriennummern" v-model="b.serienStellen" label="Stellen der Seriennummer" :decimals="0" :min="1" class="w-44" hint="immer mit führenden Nullen" />

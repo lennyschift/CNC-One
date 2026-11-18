@@ -73,15 +73,22 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
 <template>
   <div class="space-y-4">
     <!-- Kopf -->
+    <fieldset :disabled="!!angebot.nurAnsicht" class="m-0 min-w-0 border-0 p-0">
     <section class="card p-5">
       <div class="flex flex-wrap items-start justify-between gap-4">
-        <PartImage :teil="teil" :groesse="104" />
+        <PartImage iso :teil="teil" :groesse="104" />
         <div class="min-w-[260px] flex-1">
           <input v-model="teil.name" class="w-full bg-transparent text-2xl font-semibold tracking-tight outline-none placeholder:text-mute" placeholder="Bezeichnung des Bauteils" />
           <div class="mt-3 grid max-w-2xl grid-cols-[1fr_1fr_90px] gap-3">
             <label class="block"><span class="label mb-1 block">Teilenummer</span><input v-model="teil.teilenummer" class="field" :disabled="bestand" placeholder="z. B. F31.683.122" /></label>
             <label class="block"><span class="label mb-1 block">Zeichnungsnummer</span><input v-model="teil.zeichnungsnr" class="field" placeholder="optional" /></label>
             <label class="block"><span class="label mb-1 block">Revision</span><input v-model="teil.revision" class="field" placeholder="–" /></label>
+          </div>
+          <div class="mt-3 grid max-w-2xl gap-3 md:grid-cols-2">
+            <label class="block"><span class="label mb-1 block">Beschreibung für den Kunden <span class="font-normal normal-case text-mute">(steht im Angebot)</span></span>
+              <textarea v-model="teil.infoKunde" rows="2" class="field min-h-[60px] resize-y" placeholder="z. B. gleitgeschliffen, entgratet" /></label>
+            <label class="block"><span class="label mb-1 block">Interne Notiz <span class="font-normal normal-case text-mute">(am Bauteil gespeichert)</span></span>
+              <textarea v-model="teil.notizIntern" rows="2" class="field min-h-[60px] resize-y" placeholder="nur für uns, z. B. Spannen, Besonderheiten" /></label>
           </div>
           <p v-if="revisionHinweis" class="mt-2 flex max-w-2xl items-start gap-1.5 text-xs" :class="revisionHinweis.warn ? 'text-warn' : 'text-mute'"><History :size="13" class="mt-0.5 shrink-0" /> {{ revisionHinweis.text }}</p>
           <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -110,7 +117,11 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
       </div>
     </section>
 
+    </fieldset>
+
     <TeilDateien :teil="teil" />
+
+    <fieldset :disabled="!!angebot.nurAnsicht" class="m-0 min-w-0 space-y-4 border-0 p-0">
 
     <div class="grid gap-4 xl:grid-cols-2">
       <!-- Menge & Maschine -->
@@ -248,5 +259,6 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
           </tbody>
         </table>
       </section>
+    </fieldset>
   </div>
 </template>

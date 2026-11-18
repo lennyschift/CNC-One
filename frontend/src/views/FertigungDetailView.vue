@@ -72,7 +72,7 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
     <!-- Kopf -->
     <section class="card p-6">
       <div class="flex flex-wrap items-start gap-6">
-        <PartImage :teil="fb.teil" :groesse="128" />
+        <PartImage iso :teil="fb.teil" :groesse="128" />
         <div class="min-w-[260px] flex-1">
           <div class="flex items-center gap-3"><span class="text-sm text-mute tnum">{{ fb.id }}</span><StatusBadge :status="fb.status" /></div>
           <h2 class="mt-1 text-2xl font-semibold tracking-tight">{{ fb.teil.name }}</h2>

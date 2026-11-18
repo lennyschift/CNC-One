@@ -208,6 +208,33 @@ const kurzZeit = (iso) => {
             <span class="ml-auto text-xs text-mute tnum">{{ zeit(n.datum) }}</span>
           </div>
           <p v-if="i > 0 && n.betreff !== d.betreff" class="mb-2 text-xs text-mute">Betreff: {{ n.betreff }}</p>
+          <!-- Anhänge oben zwischen Kopf und Text -->
+          <div v-if="n.anhaenge.length || n.hinweis" class="mb-4 border-b border-line pb-3">
+            <div v-if="n.anhaenge.length" class="flex flex-wrap gap-2">
+              <span class="mr-1 inline-flex items-center gap-1 text-xs text-mute"><Paperclip :size="13" /> {{ n.anhaenge.filter((x) => !x.aus).length }}</span>
+              <component
+                :is="ansehbar(a) ? 'button' : 'a'" v-for="a in n.anhaenge.filter((x) => !x.aus)" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
+                class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
+              >
+                <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
+              </component>
+            </div>
+            <div v-for="z in ausZip(n)" :key="z.zip" class="mt-2 flex flex-wrap gap-2 rounded-lg bg-surface2/60 p-2">
+              <span class="mr-1 inline-flex w-full items-center gap-1 text-[11px] text-mute"><FileArchive :size="12" /> Ausgepackt aus {{ z.zip }} · {{ z.dateien.length }} Datei{{ z.dateien.length === 1 ? '' : 'en' }}</span>
+              <component
+                :is="ansehbar(a) ? 'button' : 'a'" v-for="a in z.dateien" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
+                class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" :title="a.ordner ? `${a.name}
+im Ordner ${a.ordner}` : a.name" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
+              >
+                <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
+              </component>
+            </div>
+            <p v-if="n.hinweis" class="mt-2 flex items-start gap-1.5 text-xs text-warn"><MailWarning :size="13" class="mt-0.5 shrink-0" /> {{ n.hinweis }}</p>
+            <div v-if="vorschau && n.anhaenge.some((a) => a.url === vorschau.url)" class="mt-3 h-[520px]">
+              <DrawingViewer v-if="vorschau.art === 'Zeichnung'" :key="vorschau.url" :url="vorschau.url" :name="vorschau.name" />
+              <ModelViewer v-else :key="vorschau.url" :url="vorschau.url" :name="vorschau.name" nur-ansehen />
+            </div>
+          </div>
           <template v-if="n.html && !alsText[i]">
             <MailHtml :html="n.html" />
             <button class="mt-1 text-[11px] text-mute hover:text-ink" @click="alsText[i] = true">Als Text anzeigen</button>
@@ -216,30 +243,6 @@ const kurzZeit = (iso) => {
             <div class="max-h-[420px] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed">{{ n.text || '(kein Text)' }}</div>
             <button v-if="n.html" class="mt-1 text-[11px] text-mute hover:text-ink" @click="alsText[i] = false">Wie im Mailprogramm anzeigen</button>
           </template>
-          <div v-if="n.anhaenge.length" class="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
-            <span class="mr-1 inline-flex items-center gap-1 text-xs text-mute"><Paperclip :size="13" /> {{ n.anhaenge.filter((x) => !x.aus).length }}</span>
-            <component
-              :is="ansehbar(a) ? 'button' : 'a'" v-for="a in n.anhaenge.filter((x) => !x.aus)" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
-              class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
-            >
-              <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
-            </component>
-          </div>
-          <div v-for="z in ausZip(n)" :key="z.zip" class="mt-2 flex flex-wrap gap-2 rounded-lg bg-surface2/60 p-2">
-            <span class="mr-1 inline-flex w-full items-center gap-1 text-[11px] text-mute"><FileArchive :size="12" /> Ausgepackt aus {{ z.zip }} · {{ z.dateien.length }} Datei{{ z.dateien.length === 1 ? '' : 'en' }}</span>
-            <component
-              :is="ansehbar(a) ? 'button' : 'a'" v-for="a in z.dateien" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
-              class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" :title="a.ordner ? `${a.name}
-im Ordner ${a.ordner}` : a.name" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
-            >
-              <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
-            </component>
-          </div>
-          <p v-if="n.hinweis" class="mt-2 flex items-start gap-1.5 text-xs text-warn"><MailWarning :size="13" class="mt-0.5 shrink-0" /> {{ n.hinweis }}</p>
-          <div v-if="vorschau && n.anhaenge.some((a) => a.url === vorschau.url)" class="mt-3 h-[520px]">
-            <DrawingViewer v-if="vorschau.art === 'Zeichnung'" :key="vorschau.url" :url="vorschau.url" :name="vorschau.name" />
-            <ModelViewer v-else :key="vorschau.url" :url="vorschau.url" :name="vorschau.name" nur-ansehen />
-          </div>
         </section>
       </div>
       <div v-else class="card hidden flex-col items-center justify-center p-14 text-sm text-mute lg:flex"><Inbox :size="30" :stroke-width="1.4" class="mb-2" /> Anfrage links auswählen</div>
