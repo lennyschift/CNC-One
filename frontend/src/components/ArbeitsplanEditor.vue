@@ -1,17 +1,11 @@
 <script setup>
 // Arbeitsplan eines Bauteils. Wird in der Workbench, beim Beauftragen und in der Fertigung genutzt.
 // Der Plan lässt sich am Bauteil speichern (Kunde + Teilenummer), damit spätere Angebote und Aufträge ihn schon haben.
-import { ref, computed, onMounted, watch } from 'vue';
+import { useArbeitsplan } from '../lib/arbeitsplan.js';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Hash, Plus, Truck, Cog, ChevronUp, ChevronDown, Trash2, Save, DownloadCloud, FileText, Send, Euro } from '@lucide/vue';
+import { Hash, Plus, Truck, Cog, ChevronUp, ChevronDown, Trash2, Save, DownloadCloud, FileText, Send, Euro, Clock } from '@lucide/vue';
 import NumField from './NumField.vue';
-import { repo } from '../data/repo.js';
-import { leererArbeitsgang } from '../lib/fertigung.js';
-import { preisFuerMenge } from '../lib/anfrage.js';
-import { uid } from '../lib/format.js';
-import { useStamm } from '../stores/stamm.js';
-import { useAnfragen } from '../stores/anfragen.js';
-import { useUi } from '../stores/ui.js';
+import { eur } from '../lib/format.js';
 
 const props = defineProps({
   arbeitsgaenge: { type: Array, required: true },
@@ -28,73 +22,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['anfrage']);
 
-const stamm = useStamm();
-const anfragen = useAnfragen();
-const ui = useUi();
-
-const maschinen = ref([]);
-const lieferanten = ref([]);
-onMounted(async () => { [maschinen.value, lieferanten.value] = await Promise.all([repo.maschinen.liste(), repo.lieferanten.liste()]); });
-
-const vorlagen = computed(() => stamm.vorlagenFuer(props.kundeId));
-const gespeichert = computed(() => stamm.hatPlan(props.kundeId, props.teilenummer));
-const schluesselOk = computed(() => !!stamm.teilKey(props.kundeId, props.teilenummer));
-
-// Hat das Bauteil schon einen gespeicherten Plan und der aktuelle ist leer, wird er übernommen.
-function ausBauteilLaden(still = false) {
-  const p = stamm.planFuer(props.kundeId, props.teilenummer);
-  if (!p) return;
-  props.arbeitsgaenge.splice(0, props.arbeitsgaenge.length, ...p);
-  if (!still) ui.toast(`Arbeitsplan vom Bauteil geladen (${p.length} Arbeitsgänge)`, 'ok');
-}
-watch(() => [props.kundeId, props.teilenummer], () => {
-  if (!props.arbeitsgaenge.length && gespeichert.value) {
-    ausBauteilLaden(true);
-    ui.toast('Arbeitsplan vom Bauteil übernommen', 'ok');
-  }
-}, { immediate: true });
-
-async function bauteilSpeichern() {
-  const info = props.teil ?? props.teilInfo ?? {};
-  if (await stamm.planSpeichern(props.kundeId, props.teilenummer, props.arbeitsgaenge, info)) ui.toast('Arbeitsplan am Bauteil gespeichert', 'ok');
-}
-
-function serienArbeitsgang() { props.arbeitsgaenge.push({ ...leererArbeitsgang('intern', uid), name: stamm.serienart }); }
-function hinzu(typ) { props.arbeitsgaenge.push(leererArbeitsgang(typ, uid)); }
-function weg(i) { props.arbeitsgaenge.splice(i, 1); }
-function schieben(i, d) {
-  const j = i + d;
-  if (j < 0 || j >= props.arbeitsgaenge.length) return;
-  const [a] = props.arbeitsgaenge.splice(i, 1);
-  props.arbeitsgaenge.splice(j, 0, a);
-}
-function vorlageAnwenden(id, el) {
-  if (!id) return;
-  const kopie = stamm.vorlageKopie(id);
-  props.arbeitsgaenge.push(...kopie);
-  if (el) el.value = '';
-  ui.toast(`${kopie.length} Arbeitsgänge aus der Vorlage hinzugefügt`, 'ok');
-}
-function maschineWechsel(ag, name) {
-  ag.maschine = name;
-  const m = maschinen.value.find((x) => x.name === name);
-  if (m) ag.satz = m.satz;
-}
-const arten = (typ) => stamm.arten.filter((a) => a.typ === typ);
-
-function anfragenZu(ag) { return anfragen.fuerArbeitsgang(ag.id); }
-function preisUebernehmen(ag, a) {
-  const pos = a.positionen.find((x) => x.agId === ag.id);
-  const menge = props.teil ? (props.teil.staffel?.aktiv && props.teil.staffel.stufen.length ? Math.min(...props.teil.staffel.stufen.map((s) => Number(s.menge) || Infinity)) : props.teil.menge) : pos?.mengen[0];
-  const p = preisFuerMenge(a.antwort, menge, pos?.key);
-  if (!p) return;
-  ag.fremdProStk = p.proStk;
-  ag.fremdEinmal = p.einmalig;
-  ag.lieferant = a.lieferantName;
-  ag.anfrageId = a.id;
-  ui.toast(`Preis aus ${a.id} übernommen (${p.menge} Stk)`, 'ok');
-}
-const farbe = { Gesendet: 'text-warn', 'Angebot erhalten': 'text-ok', Abgesagt: 'text-mute' };
+const { stamm, anfragen, ui, maschinen, lieferanten, vorlagen, gespeichert, schluesselOk, ausBauteilLaden, bauteilSpeichern, serienArbeitsgang, hinzu, weg, schieben, vorlageAnwenden, maschineWechsel, arten, anfragenZu, preisUebernehmen, farbe, SPALTEN, umschalten, zeitNoetig, summe, fremdSumme } = useArbeitsplan(props);
 </script>
 
 <template>
@@ -133,14 +61,29 @@ const farbe = { Gesendet: 'text-warn', 'Angebot erhalten': 'text-ok', Abgesagt: 
           </div>
         </div>
 
-        <div v-if="ag.typ === 'intern'" class="mt-2.5 grid gap-2 sm:grid-cols-4">
-          <label class="block"><span class="label mb-1 block">Maschine</span>
-            <select class="field" :value="ag.maschine" @change="maschineWechsel(ag, $event.target.value)"><option value="">– wählen –</option><option v-for="m in maschinen" :key="m.name" :value="m.name">{{ m.name }}</option></select>
-          </label>
-          <NumField v-model="ag.satz" label="Satz" unit="€/h" />
-          <NumField v-model="ag.ruestMin" label="Rüstzeit" unit="min" :step="5" />
-          <NumField v-model="ag.stueckMin" label="Stückzeit" unit="min" :step="0.5" />
-          <p v-if="stamm.istSerienart(ag.name)" class="flex items-center gap-2 text-xs text-accent sm:col-span-4"><Hash :size="12" /> Dieser Arbeitsgang bringt die Seriennummern an. In der Fertigung ist dann zu sehen, welche Nummern schon fertig sind.</p>
+        <!-- Intern: Maschine und Satz, daneben Rüsten und je Stück (Zeit oder direkt Euro) -->
+        <div v-if="ag.typ === 'intern'" class="mt-2.5 grid gap-2.5 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div class="grid grid-cols-[minmax(0,1fr)_96px] gap-2">
+            <label class="block"><span class="label mb-1 block">Maschine</span>
+              <select class="field" :value="ag.maschine" @change="maschineWechsel(ag, $event.target.value)"><option value="">– wählen –</option><option v-for="m in maschinen" :key="m.name" :value="m.name">{{ m.name }}</option></select>
+            </label>
+            <NumField v-model="ag.satz" label="Satz" unit="€/h" :class="zeitNoetig(ag) ? '' : 'opacity-50'" />
+          </div>
+          <div v-for="sp in SPALTEN" :key="sp.art" class="kosten">
+            <div class="mb-1 flex items-center justify-between gap-2">
+              <span class="label">{{ sp.label }}</span>
+              <span class="flex rounded-lg border border-line bg-surface p-0.5 text-[11px]" role="radiogroup" :aria-label="`${sp.label}: Zeit oder Euro`">
+                <button type="button" role="radio" :aria-checked="!ag[sp.direkt]" class="umschalter" :class="!ag[sp.direkt] ? 'aktiv' : ''" title="Zeit × Satz" @click="umschalten(ag, sp, false)"><Clock :size="11" /> Zeit</button>
+                <button type="button" role="radio" :aria-checked="!!ag[sp.direkt]" class="umschalter" :class="ag[sp.direkt] ? 'aktiv' : ''" title="Kosten direkt eintragen" @click="umschalten(ag, sp, true)"><Euro :size="11" /> Betrag</button>
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <NumField v-if="ag[sp.direkt]" v-model="ag[sp.euro]" unit="€" class="min-w-0 flex-1" />
+              <NumField v-else v-model="ag[sp.zeit]" unit="min" :step="sp.schritt" class="min-w-0 flex-1" />
+              <span class="w-24 shrink-0 text-right text-sm font-semibold tnum" :title="ag[sp.direkt] ? 'direkt eingetragen' : 'Zeit × Satz'">{{ eur(sp.kosten(ag)) }}<span class="block text-[10px] font-normal text-mute">{{ sp.art === 'ruest' ? 'einmalig' : 'je Stück' }}</span></span>
+            </div>
+          </div>
+          <p v-if="stamm.istSerienart(ag.name)" class="flex items-center gap-2 text-xs text-accent md:col-span-3"><Hash :size="12" /> Dieser Arbeitsgang bringt die Seriennummern an. In der Fertigung ist dann zu sehen, welche Nummern schon fertig sind.</p>
         </div>
 
         <div v-else class="mt-2.5 space-y-2.5">
@@ -165,8 +108,19 @@ const farbe = { Gesendet: 'text-warn', 'Angebot erhalten': 'text-ok', Abgesagt: 
       </div>
     </div>
 
+    <div v-if="arbeitsgaenge.length" class="mt-3 flex flex-wrap items-center justify-end gap-x-6 gap-y-1 rounded-xl bg-surface2 px-4 py-2.5 text-sm">
+      <span class="text-mute">Summe</span>
+      <span>Rüsten <strong class="tnum">{{ eur(summe.ruest) }}</strong><template v-if="fremdSumme.ruest"> <span class="text-xs text-mute">+ Fremd einmalig {{ eur(fremdSumme.ruest) }}</span></template></span>
+      <span>Je Stück <strong class="tnum">{{ eur(summe.stueck + fremdSumme.stueck) }}</strong><template v-if="fremdSumme.stueck"> <span class="text-xs text-mute">davon Fremd {{ eur(fremdSumme.stueck) }}</span></template></span>
+    </div>
     <p v-if="!arbeitsgaenge.length" class="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-mute">
       Noch keine Arbeitsgänge. Vorlage anwenden oder Arbeitsgänge hinzufügen. Das geht auch später in der Fertigung.
     </p>
   </div>
 </template>
+
+<style scoped>
+.kosten { border-radius: 0.75rem; background: var(--surface); padding: 0.5rem 0.65rem; border: 1px solid var(--line); }
+.umschalter { display: inline-flex; align-items: center; gap: 0.2rem; border-radius: 0.4rem; padding: 0.1rem 0.4rem; color: var(--mute); }
+.umschalter.aktiv { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+</style>

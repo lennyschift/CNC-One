@@ -58,8 +58,8 @@ function aufmassGeaendert(v) { aufmass.value = v; melden('aufmass', { wert: v })
       <DrawingViewer v-else-if="art === 'zeichnung'" :key="inhalt.url" :url="inhalt.url" :name="inhalt.name" fenster="fenster" />
       <ModelViewer
         v-else :key="inhalt.url" :url="inhalt.url" :name="inhalt.name" :dichte="inhalt.dichte" :dichte-geschaetzt="inhalt.dichteGeschaetzt"
-        :aufmass="aufmass" @update:aufmass="aufmassGeaendert"
-        @geladen="modellGeladen" @gewicht="(kg) => melden('gewicht', { kg })" @vorschau="(blob) => melden('vorschau', { blob })"
+        :aufmass="aufmass" :nur-ansehen="!!inhalt.nurAnsicht" @update:aufmass="aufmassGeaendert"
+        @geladen="modellGeladen" @gewicht="(kg) => melden('gewicht', { kg })" @rohteil="(r) => melden('rohteil', { r })" @vorschlag="(r) => melden('vorschlag', { r })" @vorschau="(blob) => melden('vorschau', { blob })"
       />
     </div>
   </div>

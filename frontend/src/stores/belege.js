@@ -19,8 +19,11 @@ export const useBelege = defineStore('belege', () => {
     for (const a of auftraege.value) {
       if (a.status === 'Storniert') continue;
       for (const p of a.positionen) {
-        m[a.angebotId] ??= {};
-        m[a.angebotId][p.angebotKey] = (m[a.angebotId][p.angebotKey] ?? 0) + p.menge;
+        // Aufträge aus einer Bestellung können Positionen aus mehreren (auch früheren) Angeboten haben
+        const ang = p.angebotId || a.angebotId;
+        if (!ang || !p.angebotKey) continue;
+        m[ang] ??= {};
+        m[ang][p.angebotKey] = (m[ang][p.angebotKey] ?? 0) + p.menge;
       }
     }
     return m;
@@ -36,6 +39,9 @@ export const useBelege = defineStore('belege', () => {
     const i = angebote.value.findIndex((a) => a.id === rec.id);
     if (i >= 0) angebote.value[i] = rec;
     else angebote.value.unshift(rec);
+    // eine gesendete Überarbeitung ersetzt die vorige Fassung (der Server hat sie schon umgestellt)
+    const vorher = rec.status === 'Gesendet' && rec.vorgaenger ? angebote.value.find((a) => a.id === rec.vorgaenger) : null;
+    if (vorher && vorher.status !== 'Ersetzt') Object.assign(vorher, { status: 'Ersetzt', ersetztDurch: rec.id });
     return rec;
   }
 
@@ -63,6 +69,13 @@ export const useBelege = defineStore('belege', () => {
   async function angebotAblehnen(id) {
     const rec = await sicher(() => call('cnc_one.api.angebot.ablehnen', { id }));
     if (rec) { einsetzen(rec); ui.toast(`${rec.id} als abgelehnt markiert`); }
+    return rec;
+  }
+
+  // Neue Fassung eines gesendeten Angebots (gleiche Nummer mit -1, -2 …); das Original bleibt unverändert
+  async function angebotUeberarbeiten(id, grund = '') {
+    const rec = await sicher(() => call('cnc_one.api.angebot.ueberarbeiten', { id, grund }));
+    if (rec) { einsetzen(rec); ui.toast(`Neue Fassung ${rec.id} angelegt`, 'ok'); }
     return rec;
   }
 
@@ -106,5 +119,5 @@ export const useBelege = defineStore('belege', () => {
     if (a && status) a.status = status;
   }
 
-  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, einsetzen, angebotSpeichern, angebotSenden, angebotAblehnen, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen, projektSetzen, auftraegeNeuLaden };
+  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, einsetzen, angebotSpeichern, angebotSenden, angebotAblehnen, angebotUeberarbeiten, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen, projektSetzen, auftraegeNeuLaden };
 });

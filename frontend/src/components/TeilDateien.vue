@@ -10,6 +10,7 @@ import { useUi } from '../stores/ui.js';
 import { repo } from '../data/repo.js';
 import { zahl } from '../lib/format.js';
 import { dichteSchaetzen } from '../lib/erkennung.js';
+import { ausModell, vorschlagAnwenden, rohText } from '../lib/rohmaterial.js';
 
 const ModelViewer = defineAsyncComponent(() => import('./ModelViewer.vue'));
 const DrawingViewer = defineAsyncComponent(() => import('./DrawingViewer.vue'));
@@ -30,6 +31,21 @@ function gewichtUebernehmen(kg) {
   if (angebot.nurAnsicht) { ui.toast('Gesendetes Angebot: nur ansehen', 'warn'); return; }
   props.teil.gewichtKg = kg;
   ui.toast(`Rohteilgewicht ${zahl(kg, 3)} kg übernommen`, 'ok');
+}
+// Rohteil aus dem 3D-Modell: als Vorschlag merken (zeigt das Rohmaterial an) bzw. ins Rohmaterial übernehmen
+function vorschlagMerken(r) {
+  if (angebot.nurAnsicht) return;
+  const v = ausModell(r);
+  if (JSON.stringify(v) !== JSON.stringify(props.teil.rohVorschlag ?? null)) props.teil.rohVorschlag = v;
+}
+function rohteilUebernehmen(r) {
+  if (angebot.nurAnsicht) { ui.toast('Gesendetes Angebot: nur ansehen', 'warn'); return; }
+  const v = ausModell(r);
+  props.teil.rohVorschlag = v;
+  props.teil.roh = vorschlagAnwenden(props.teil.roh, v);
+  // ohne gepflegte Dichte rechnet das Rohmaterial kein Gewicht: dann das Gewicht aus dem Modell nehmen
+  if (!dichte.value && r.gewicht) props.teil.gewichtKg = r.gewicht;
+  ui.toast(`Rohteil ${rohText(props.teil.roh)} mm übernommen`, 'ok');
 }
 
 const hochgeladen = (art) => computed(() => props.teil.dateien.filter((d) => d.art === art && d.url));
@@ -75,7 +91,7 @@ const titel = computed(() => [props.teil.teilenummer, props.teil.name].filter(Bo
 const inhaltZ = computed(() => ({ teilId: props.teil.id, titel: titel.value, url: zeichnung.value?.url ?? '', name: zeichnung.value?.name ?? '' }));
 const inhaltM = computed(() => ({
   teilId: props.teil.id, titel: titel.value, url: modell.value?.url ?? '', name: modell.value?.name ?? '',
-  dichte: dichte.value, dichteGeschaetzt: dichteGeschaetzt.value, aufmass: aufmass.value, vorschauFehlt: !props.teil.vorschaubild && !nurAnsicht.value,
+  dichte: dichte.value, dichteGeschaetzt: dichteGeschaetzt.value, aufmass: aufmass.value, vorschauFehlt: !props.teil.vorschaubild && !nurAnsicht.value, nurAnsicht: nurAnsicht.value,
 }));
 watch(inhaltZ, (v) => senden('zeichnung', v), { immediate: true });
 watch(inhaltM, (v) => senden('modell', v), { immediate: true });
@@ -87,6 +103,8 @@ onMounted(() => {
   abmelden = empfangen((m) => {
     if (m.teilId !== props.teil.id) return;
     if (m.typ === 'gewicht') gewichtUebernehmen(m.kg);
+    else if (m.typ === 'rohteil' && m.r) rohteilUebernehmen(m.r);
+    else if (m.typ === 'vorschlag' && m.r) vorschlagMerken(m.r);
     else if (m.typ === 'vorschau' && m.blob && !nurAnsicht.value) angebot.vorschaubildSetzen(props.teil, m.blob, !m.auto);
     else if (m.typ === 'aufmass' && !nurAnsicht.value) aufmass.value = m.wert;
   });
@@ -188,7 +206,7 @@ function zusammenfuehren() {
           </div>
           <ModelViewer
             v-else-if="modell" :key="modell.url" v-model:aufmass="aufmass" :url="modell.url" :name="modell.name" :dichte="dichte" :dichte-geschaetzt="dichteGeschaetzt"
-            fenster-knopf @geladen="modellGeladen" @vorschau="vorschauUebernehmen" @gewicht="gewichtUebernehmen" @fenster="imFenster('modell')"
+            :nur-ansehen="nurAnsicht" fenster-knopf @geladen="modellGeladen" @vorschau="vorschauUebernehmen" @gewicht="gewichtUebernehmen" @rohteil="rohteilUebernehmen" @vorschlag="vorschlagMerken" @fenster="imFenster('modell')"
           />
           <div v-else-if="nurAnsicht" class="leer">Kein 3D-Modell</div>
           <button v-else class="leer" :class="ueber === 'm' ? 'leer-aktiv' : ''" @click="auswahlM.click()">

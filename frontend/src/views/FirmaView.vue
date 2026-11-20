@@ -123,6 +123,13 @@ async function speichern() {
         </div>
       </section>
 
+      <section class="card p-5">
+        <h2 class="mb-3 text-sm font-semibold">Bestellungen der Kunden</h2>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <NumField v-model="f.bestellungToleranz" label="Toleranz beim Preisabgleich" unit="%" :decimals="1" hint="So weit darf eine Bestellposition vom Angebot abweichen, z. B. durch Rundung, wenn der Kunde die Kosten auf den Stückpreis umlegt." />
+        </div>
+      </section>
+
       <div v-if="darf" class="flex justify-end"><button type="submit" class="btn btn-primary" :disabled="!gueltig || speichert" :class="!gueltig || speichert ? 'pointer-events-none opacity-40' : ''">Firmendaten speichern</button></div>
       <p v-else class="text-center text-xs text-mute">Die Firmendaten pflegt die Buchhaltung oder der Admin.</p>
     </form>

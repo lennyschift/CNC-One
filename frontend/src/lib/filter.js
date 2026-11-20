@@ -125,3 +125,27 @@ export function beschreibung(f, feld) {
   if (f.op === 'nichtleer') return `${name}: nicht leer`;
   return `${name} ${f.op === 'nicht' ? 'ohne' : 'enthält'} „${f.wert}“`;
 }
+
+// Sortieren nach einer beliebigen Eigenschaft: s = { pfad, richtung: 'auf' | 'ab' }. Bei Listen im Eintrag zählt der
+// kleinste (aufsteigend) bzw. größte Wert; Einträge ohne Wert kommen ans Ende. `rang` legt für einzelne Felder eine
+// fachliche Reihenfolge fest, z. B. { prioritaet: ['Eilig', 'Hoch', 'Normal'] } (eiligste zuerst).
+export function vergleich(a, b) {
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  if (typeof a === 'boolean' && typeof b === 'boolean') return Number(a) - Number(b);
+  return String(a).localeCompare(String(b), 'de', { numeric: true });
+}
+export function sortieren(liste, s, rang = {}) {
+  if (!s?.pfad) return [...(liste ?? [])];
+  const r = s.richtung === 'ab' ? -1 : 1;
+  const reihe = rang[s.pfad];
+  const wert = (v) => (reihe ? (reihe.indexOf(v) < 0 ? reihe.length : reihe.indexOf(v)) : v);
+  const schluessel = (x) => {
+    const w = werte(x, s.pfad).map(wert);
+    if (!w.length) return null;
+    return w.reduce((a, b) => (r * vergleich(a, b) <= 0 ? a : b));
+  };
+  return (liste ?? [])
+    .map((x, i) => [schluessel(x), i, x])
+    .sort(([a, i], [b, j]) => (a === null ? (b === null ? i - j : 1) : b === null ? -1 : r * vergleich(a, b) || i - j))
+    .map(([, , x]) => x);
+}

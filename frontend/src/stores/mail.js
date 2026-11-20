@@ -33,7 +33,7 @@ export const useMail = defineStore('mail', () => {
       const r = await call('cnc_one.api.mail.abrufen');
       liste.value = r.liste;
       zaehlen();
-      ui.toast(r.neu ? `${r.neu} neue Anfrage${r.neu === 1 ? '' : 'n'} abgeholt` : 'Keine neuen Anfragen', r.neu ? 'ok' : 'info');
+      ui.toast(r.neu ? `${r.neu} neue Mail${r.neu === 1 ? '' : 's'} abgeholt` : 'Keine neuen Mails', r.neu ? 'ok' : 'info');
     } catch (e) {
       ui.toast(`Abrufen fehlgeschlagen: ${e.message}`, 'warn');
     } finally {
@@ -44,7 +44,8 @@ export const useMail = defineStore('mail', () => {
   function eintragen(d) {
     details.value = { ...details.value, [d.id]: d };
     const i = liste.value.findIndex((x) => x.id === d.id);
-    const kurz = { id: d.id, status: d.status, betreff: d.betreff, vonEmail: d.vonEmail, vonName: d.vonName, datum: d.datum, letzteNachricht: d.letzteNachricht, neueAntwort: d.neueAntwort, kundeId: d.kundeId, kundeName: d.kundeName, angebotId: d.angebotId };
+    const { kundeVorschlag, kontaktVorschlag, tabellen, tabellenVorlage, nachrichten, ...kurz0 } = d;
+    const kurz = { ...liste.value[i], ...kurz0 };
     if (i >= 0) liste.value.splice(i, 1, kurz);
     zaehlen();
     return d;
@@ -104,5 +105,33 @@ export const useMail = defineStore('mail', () => {
     try { await call('cnc_one.api.mail.tabellenvorlage_lernen', { id, spalten }); } catch (e) { ui.toast(`Spalten nicht gemerkt: ${e.message}`, 'warn'); }
   }
 
-  return { liste, anzahl, geladen, ruft, details, laden, zaehlen, abrufen, detail, kundeZuordnen, keineAnfrage, angebotAnlegen, tabellenvorlageLernen };
+  // Umsortieren (Anfrage, Bestellung, Rechnung, Lieferant, Sonstiges), erledigt, Lieferant zuordnen
+  async function aktion(methode, args, meldung) {
+    try {
+      const d = eintragen(await call(`cnc_one.api.mail.${methode}`, args));
+      if (meldung) ui.toast(typeof meldung === 'function' ? meldung(d) : meldung, 'ok');
+      return d;
+    } catch (e) {
+      ui.toast(e.message, 'warn');
+      return null;
+    }
+  }
+  const kategorieSetzen = (id, kategorie) => aktion('kategorie_setzen', { id, kategorie }, `Verschoben nach „${kategorie}“`);
+  const erledigt = (id, wert = 1, auftrag = '') => aktion('erledigt', { id, erledigt: wert ? 1 : 0, auftrag }, wert ? 'Als erledigt markiert' : 'Wieder offen');
+  const lieferantZuordnen = (id, lieferant) => aktion('lieferant_zuordnen', { id, lieferant }, (d) => `Lieferant ${d.lieferantId} zugeordnet; seine Mails kommen künftig von selbst`);
+
+  // Eingangsrechnung aus einem Anhang (E-Rechnung wird gelesen, PDF zum Ausfüllen)
+  async function eingangsrechnung(id, url) {
+    try {
+      const r = await call('cnc_one.api.eingangsrechnung.aus_datei', { file_url: url, mail: id });
+      await detail(id);
+      ui.toast(`Eingangsrechnung ${r.rechnung.id} angelegt`, 'ok');
+      return r.rechnung;
+    } catch (e) {
+      ui.toast(e.message, 'warn');
+      return null;
+    }
+  }
+
+  return { liste, anzahl, geladen, ruft, details, laden, zaehlen, abrufen, detail, kundeZuordnen, keineAnfrage, angebotAnlegen, tabellenvorlageLernen, kategorieSetzen, erledigt, lieferantZuordnen, eingangsrechnung };
 });

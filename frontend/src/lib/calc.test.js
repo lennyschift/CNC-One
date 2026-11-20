@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { berechne, stueckpreisBei } from './calc.js';
+import { berechne, stueckpreisBei, kostenTabelle } from './calc.js';
 
 const teil = (extra = {}) => ({
   name: 'Testteil',
@@ -92,6 +92,16 @@ describe('Arbeitsplan', () => {
     expect(r.gesamt).toBe(165 + (12 + 4) * 10);
   });
 
+  it('Rüst- und Stückkosten je Arbeitsgang auch direkt in Euro', () => {
+    const direkt = [
+      { ...plan[0], ruestDirekt: true, ruestEuro: 50 }, // Rüsten 50 € statt 45, Stück 4/60*90 = 6
+      { ...plan[1], stueckDirekt: true, stueckEuro: 2.5 }, // Rüsten 120, Stück 2,50 € statt 6
+    ];
+    const r = berechne(teil({ arbeitsgaenge: direkt, messkosten: 0 }));
+    expect(r.setup).toBe(170);
+    expect(r.unit).toBe(8.5);
+  });
+
   it('ohne interne Arbeitsgänge gelten die einfachen Felder', () => {
     expect(berechne(teil({ arbeitsgaenge: [] })).gesamt).toBe(260);
   });
@@ -121,5 +131,37 @@ describe('Preiskurve', () => {
   it('sinkt mit steigender Menge', () => {
     const p = teil();
     expect(stueckpreisBei(p, 1)).toBeGreaterThan(stueckpreisBei(p, 100));
+  });
+});
+
+describe('Kalkulationstabelle', () => {
+  const plan = [
+    { id: 'a', typ: 'intern', satz: 60, ruestMin: 60, stueckMin: 3 },
+    { id: 'b', typ: 'intern', ruestDirekt: true, ruestEuro: 40, stueckDirekt: true, stueckEuro: 1.5 },
+    { id: 'c', typ: 'fremd', fremdProStk: 2, fremdEinmal: 30 },
+  ];
+  it('Staffeln: Zeilen ergeben je Spalte den Stückpreis, Fremd einmalig als eigene Zeile', () => {
+    const p = teil({ arbeitsgaenge: plan, pauschalMaterial: 10, inStueckpreis: { mess: true }, staffel: { aktiv: true, stufen: [{ menge: 10, extra: 1 }, { menge: 50, extra: 0 }] } });
+    const t = kostenTabelle(p);
+    expect(t.spalten.map((s) => s.menge)).toEqual([10, 50]);
+    // Spalte 10 Stk: Material 4 + 1 Pauschale, a: 6 + 3, b: 4 + 1,5, Fremd 2, Mess 2 = 23,5
+    expect(t.zeilen.material.je[0]).toBeCloseTo(5, 6);
+    expect(t.zeilen['ag-a'].je[0]).toBeCloseTo(9, 6);
+    expect(t.selbstkosten[0]).toBe(23.5);
+    expect(t.stueckpreis[0]).toBe(24.5); // + Aufschlag 1
+    expect(t.einzeln[0]).toBe(30);
+    expect(t.gesamt[0]).toBe(275);
+    for (let k = 0; k < 2; k++) expect(t.stueckpreis[k]).toBeCloseTo(t.selbstkosten[k] + t.spalten[k].extra, 2);
+    expect(t.haupt).toBe(0);
+  });
+  it('Ohne Staffeln: Rüsten als eigene Zeile oder im Stückpreis, Gesamt wie im Angebot', () => {
+    const p = teil();
+    const t = kostenTabelle(p);
+    expect(t.zeilen.fertigung.je[0]).toBe(10);
+    expect(t.zeilen.fertigung.einzeln).toBe(100);
+    expect(t.stueckpreis[0]).toBeCloseTo(t.selbstkosten[0], 2);
+    expect(t.gesamt[0]).toBe(berechne(p).gesamt);
+    const q = teil({ inStueckpreis: { ruest: true } });
+    expect(kostenTabelle(q).stueckpreis[0]).toBe(berechne(q).zeilen[0].einzel);
   });
 });

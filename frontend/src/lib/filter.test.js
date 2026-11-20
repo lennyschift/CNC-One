@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { werte, lesbar, felderAus, neuerFilter, passt, anwenden, aktiv, beschreibung } from './filter.js';
+import { werte, lesbar, felderAus, neuerFilter, passt, anwenden, aktiv, beschreibung, sortieren } from './filter.js';
 
 const liste = [
   { id: 'AUF-1', status: 'Offen', kundeName: 'Alpha GmbH', netto: 1200, datum: '2026-11-02T10:00:00', eilig: true, kunde: { name: 'Alpha GmbH', adresse: ['Weg 1'] }, positionen: [{ key: 'a', teil: { name: 'Flansch', material: '1.4301', vorschaubild: '/files/x.png' } }] },
@@ -49,5 +49,27 @@ describe('passt', () => {
   it('Beschreibung', () => {
     expect(beschreibung({ pfad: 'status', typ: 'auswahl', wert: ['A', 'B', 'C'] }, { label: 'Status' })).toBe('Status: A, B +1');
     expect(beschreibung({ pfad: 'netto', typ: 'zahl', op: '>=', wert: 5 }, { label: 'Netto' })).toBe('Netto ≥ 5');
+  });
+});
+
+describe('sortieren', () => {
+  const liste = [
+    { id: 1, termin: '2026-12-10', prioritaet: 'Normal', ags: [{ m: 'B' }] },
+    { id: 2, termin: '', prioritaet: 'Eilig', ags: [{ m: 'C' }, { m: 'A' }] },
+    { id: 3, termin: '2026-11-30', prioritaet: 'Hoch', ags: [] },
+  ];
+  const ids = (l) => l.map((x) => x.id);
+  it('Datum aufsteigend, leere ans Ende', () => {
+    expect(ids(sortieren(liste, { pfad: 'termin', richtung: 'auf' }))).toEqual([3, 1, 2]);
+    expect(ids(sortieren(liste, { pfad: 'termin', richtung: 'ab' }))).toEqual([1, 3, 2]);
+  });
+  it('fachliche Reihenfolge über rang', () => {
+    expect(ids(sortieren(liste, { pfad: 'prioritaet', richtung: 'auf' }, { prioritaet: ['Eilig', 'Hoch', 'Normal'] }))).toEqual([2, 3, 1]);
+  });
+  it('Listen: kleinster Wert zählt', () => {
+    expect(ids(sortieren(liste, { pfad: 'ags.m', richtung: 'auf' }))).toEqual([2, 1, 3]);
+  });
+  it('ohne Sortierung unverändert', () => {
+    expect(ids(sortieren(liste, null))).toEqual([1, 2, 3]);
   });
 });

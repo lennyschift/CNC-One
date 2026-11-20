@@ -1,12 +1,13 @@
 <script setup>
-// Reiter im Bereich Rechnungen: Rechnungen (mit offenen Posten) und Mahnwesen.
+// Reiter im Bereich Rechnungen: Rechnungen (mit offenen Posten), Mahnwesen und Eingangsrechnungen der Lieferanten.
 import { useRoute } from 'vue-router';
-import { Receipt, BellRing } from '@lucide/vue';
+import { Receipt, BellRing, FileInput } from '@lucide/vue';
 
 const route = useRoute();
 const punkte = [
   { to: '/rechnungen', label: 'Rechnungen', icon: Receipt, bereich: 'rechnungen' },
   { to: '/mahnwesen', label: 'Mahnwesen', icon: BellRing, bereich: 'mahnwesen' },
+  { to: '/eingangsrechnungen', label: 'Eingangsrechnungen', icon: FileInput, bereich: 'eingang' },
 ];
 </script>
 

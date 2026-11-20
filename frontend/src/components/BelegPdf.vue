@@ -1,6 +1,6 @@
 <script setup>
 // Ein Beleg, wie er verschickt wird: die Seiten des Server-PDFs untereinander als Papierblätter, ohne Werkzeugleiste.
-// Gezeichnet wird mit mehrfacher Auflösung (scharf), darüber liegt die Textebene von pdf.js (Text lässt sich markieren).
+// Gezeichnet wird in der Pixelzahl des Bildschirms (scharf), darüber liegt die Textebene von pdf.js (Text lässt sich markieren).
 // Das PDF wird selbst geladen, damit bei einem Fehler die Meldung des Servers zu sehen ist.
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue';
 import { useResizeObserver } from '@vueuse/core';
@@ -47,13 +47,15 @@ function abbrechen() {
   aufgaben = [];
 }
 
-// Jede Seite in voller Breite. Der Canvas hat 2- bis 3-fache Auflösung, damit Schrift auch bei 100 % Zoom scharf ist.
+// Jede Seite in voller Breite. Der Canvas hat genau so viele Pixel wie der Bildschirm an dieser Stelle (Breite ×
+// devicePixelRatio): dann wird nichts nachträglich verkleinert, und Schrift bleibt scharf und gleichmäßig dick.
+// (Mit 2- bis 3-facher Auflösung und Verkleinern im Browser wirkte sie weich, dünne Striche wie „I“ ungleich dick.)
 async function zeichnen() {
   if (!dokument || !huelle.value) return;
   abbrechen();
   const doc = dokument;
   breite = Math.floor(huelle.value.clientWidth);
-  const fein = Math.min(Math.max((window.devicePixelRatio || 1) * 2, 2), 3);
+  const dpr = window.devicePixelRatio || 1;
   for (let i = 1; i <= doc.numPages; i++) {
     const seite = await doc.getPage(i);
     const blatt = blaetter[i - 1];
@@ -61,13 +63,16 @@ async function zeichnen() {
     const basis = seite.getViewport({ scale: 1 });
     const scale = breite / basis.width;
     const viewport = seite.getViewport({ scale });
-    blatt.style.width = `${Math.floor(viewport.width)}px`;
-    blatt.style.height = `${Math.floor(viewport.height)}px`;
+    const hoehe = Math.floor(viewport.height);
+    blatt.style.width = `${breite}px`;
+    blatt.style.height = `${hoehe}px`;
     blatt.style.setProperty('--total-scale-factor', String(scale));
     const canvas = blatt.querySelector('canvas');
-    canvas.width = Math.floor(viewport.width * fein);
-    canvas.height = Math.floor(viewport.height * fein);
-    const bild = seite.render({ canvas, canvasContext: canvas.getContext('2d'), viewport, transform: [fein, 0, 0, fein, 0, 0] });
+    canvas.width = Math.round(breite * dpr);
+    canvas.height = Math.round(hoehe * dpr);
+    const fx = canvas.width / viewport.width;
+    const fy = canvas.height / viewport.height;
+    const bild = seite.render({ canvas, canvasContext: canvas.getContext('2d'), viewport, transform: [fx, 0, 0, fy, 0, 0] });
     const textEbene = blatt.querySelector('.textLayer');
     textEbene.replaceChildren();
     const text = new pdfjs.TextLayer({ textContentSource: seite.streamTextContent(), container: textEbene, viewport });
@@ -87,8 +92,22 @@ useResizeObserver(huelle, () => {
   warten = setTimeout(zeichnen, 200);
 });
 
+// Browser-Zoom oder anderer Bildschirm ändert devicePixelRatio: neu zeichnen, damit es scharf bleibt
+let aufloesung = null;
+function aufAufloesungHoeren() {
+  aufloesung?.removeEventListener('change', beiAufloesung);
+  aufloesung = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`) ?? null;
+  aufloesung?.addEventListener('change', beiAufloesung);
+}
+function beiAufloesung() {
+  aufAufloesungHoeren();
+  if (stand.value === 'fertig') zeichnen();
+}
+aufAufloesungHoeren();
+
 watch(() => props.url, laden, { immediate: true });
 onBeforeUnmount(() => {
+  aufloesung?.removeEventListener('change', beiAufloesung);
   lauf++;
   clearTimeout(warten);
   abbrechen();

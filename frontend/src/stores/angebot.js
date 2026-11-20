@@ -39,7 +39,8 @@ export function neuesTeil(name = 'Neues Bauteil') {
     arbeitsgaenge: [],
     dateien: [],
     vorschaubild: '',
-    liefertermin: '',
+    liefertermin: '', // intern: geht in Auftrag und Fertigung, steht nicht im Angebot
+    werkstoffDrucken: false, // Werkstoff im Angebots-PDF nennen
     infoKunde: '', // Beschreibung für den Kunden, steht im Angebot
     notizIntern: '', // nur intern, wird am Bauteil gespeichert
   };
@@ -123,11 +124,8 @@ export const useAngebot = defineStore('angebot', () => {
 
   const ergebnisse = computed(() => Object.fromEntries(teile.value.map((t) => [t.id, berechne(t)])));
   const netto = computed(() => summe(Object.values(ergebnisse.value)));
-  // Haben Bauteile einen Liefertermin, ist der früheste davon die Lieferzeit des Angebots (rechnet der Server genauso)
+  // Frühester Liefertermin der Bauteile: nur als Hinweis; die Lieferzeit im Kopf bleibt frei änderbar
   const fruehesterTermin = computed(() => teile.value.map((t) => t.liefertermin).filter(Boolean).sort()[0] ?? '');
-  watch(fruehesterTermin, (iso) => {
-    if (iso) kopf.value.lieferzeit = new Date(`${iso}T00:00:00`).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  });
   const auswahl = computed(() => teile.value.find((t) => t.id === auswahlId.value) ?? null);
 
   async function ruhig(fn) {
@@ -169,7 +167,12 @@ export const useAngebot = defineStore('angebot', () => {
       kundeId: k.kundeId, anfrageNr: k.anfrageNr, gueltigWochen: k.gueltigWochen, lieferzeit: k.lieferzeit,
       projekt: k.projekt ?? '', kontaktName: k.kontaktName ?? '', kontaktEmail: k.kontaktEmail ?? '', materialDrucken: !!k.materialDrucken,
     };
-    teile.value = record.positionen.map((p) => JSON.parse(JSON.stringify(p.teil)));
+    // ältere Angebote hatten „Werkstoff nennen“ nur für das ganze Angebot: an die Positionen übertragen
+    teile.value = record.positionen.map((p) => {
+      const t = JSON.parse(JSON.stringify(p.teil));
+      if (t.werkstoffDrucken === undefined) t.werkstoffDrucken = !!k.materialDrucken;
+      return t;
+    });
     auswahlId.value = teile.value.find((t) => t.id === (auswahl || sitzung.auswahlId))?.id ?? teile.value[0]?.id ?? null;
     angebotId.value = record.id;
     mailAnfrage.value = record.mailAnfrage ?? null;

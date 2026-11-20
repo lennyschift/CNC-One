@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Search, LayoutGrid, Cog, Truck, Factory, Flame } from '@lucide/vue';
 import FertigungKarte from '../components/FertigungKarte.vue';
+import FilterLeiste from '../components/FilterLeiste.vue';
 import PartImage from '../components/PartImage.vue';
 import { useFertigung } from '../stores/fertigung.js';
 import { useBelege } from '../stores/belege.js';
@@ -14,14 +15,23 @@ const b = useBelege();
 const ansicht = ref('board');
 const suche = ref('');
 const nurEilig = ref(false);
+// Anpassbare Filter und Sortierung (je Benutzer gespeichert); Standard: Liefertermin, früheste zuerst
+const zeilen = ref([]);
+const beschriftungen = {
+  kundeName: 'Kunde', termin: 'Liefertermin', prioritaet: 'Priorität', status: 'Status', 'arbeitsgaenge.maschine': 'Maschine',
+  'arbeitsgaenge.lieferant': 'Lieferant (Fremdvergabe)', 'arbeitsgaenge.name': 'Arbeitsgang', auftragId: 'Auftrag', 'teil.name': 'Bauteil',
+  'teil.teilenummer': 'Teilenummer', 'teil.material': 'Werkstoff', menge: 'Menge', 'rohmaterial.werkstoff': 'Rohmaterial', projekt: 'Projekt',
+};
+const rang = { prioritaet: ['Eilig', 'Hoch', 'Normal'], status: ['In Fertigung', 'Offen', 'Fertig'] };
 const ziel = ref('');
 let ziehend = '';
 
-const gefiltert = computed(() => f.liste.filter((x) => {
+const vorgefiltert = computed(() => f.liste.map((x) => ({ ...x, projekt: b.auftrag(x.auftragId)?.projekt ?? '' })).filter((x) => {
   const q = suche.value.trim().toLowerCase();
   const text = `${x.teil.name} ${x.teil.teilenummer} ${x.auftragId} ${x.kundeName} ${x.id} ${b.auftrag(x.auftragId)?.projekt ?? ''}`.toLowerCase();
   return (!q || text.includes(q)) && (!nurEilig.value || x.prioritaet !== 'Normal');
 }));
+const gefiltert = computed(() => zeilen.value.map((z) => f.liste.find((x) => x.id === z.id)).filter(Boolean));
 const spalten = computed(() => STATUS.map((s) => ({ name: s, items: gefiltert.value.filter((x) => x.status === s) })));
 const lanes = computed(() => lasten(gefiltert.value));
 
@@ -46,8 +56,9 @@ const akzent = { Offen: 'bg-mute', 'In Fertigung': 'bg-warn', Fertig: 'bg-ok' };
         <input v-model="suche" class="field !w-64 !pl-9" placeholder="Bauteil, Auftrag, Kunde …" />
       </label>
       <button class="btn" :class="nurEilig ? '!border-accent !bg-accent-soft !text-accent' : ''" @click="nurEilig = !nurEilig"><Flame :size="15" /> Nur eilige</button>
-      <div class="ml-auto text-sm text-mute"><span class="font-medium text-ink tnum">{{ f.offen.length }}</span> offen · <span class="tnum">{{ f.liste.length }}</span> gesamt</div>
+      <div class="ml-auto text-sm text-mute"><span class="font-medium text-ink tnum">{{ f.offen.length }}</span> offen · <span class="tnum">{{ gefiltert.length }}</span> von <span class="tnum">{{ f.liste.length }}</span></div>
     </div>
+    <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="fertigung" :beschriftungen="beschriftungen" :standard-angeheftet="['kundeName', 'arbeitsgaenge.maschine', 'termin']" sortierbar :standard-sortierung="{ pfad: 'termin', richtung: 'auf' }" :rang="rang" />
 
     <!-- Board -->
     <div v-if="ansicht === 'board' && f.liste.length" class="grid items-start gap-4 lg:grid-cols-3">

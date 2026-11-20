@@ -144,8 +144,13 @@ export const useFertigung = defineStore('fertigung', () => {
     if (res && status === 'Fertig' && vorher < fb.menge) ui.toast('Restmenge in allen Arbeitsgängen gebucht');
   }
 
+  // nach einer Auftragsänderung (Menge, Termin, neue oder entfallene Positionen)
+  async function neuLaden() {
+    try { liste.value = await call('cnc_one.api.fertigung.liste'); } catch { /* der alte Stand bleibt sichtbar */ }
+  }
+
   return {
-    liste, offen, bauteil, fuerAuftrag, ausAuftrag, buchen, buchungLoeschen, felderPlanen, flush,
+    neuLaden, liste, offen, bauteil, fuerAuftrag, ausAuftrag, buchen, buchungLoeschen, felderPlanen, flush,
     arbeitsgangHinzu, arbeitsgangWeg, arbeitsgangVerschieben, vorlageAnwenden, planAmBauteilSpeichern,
     sendungAnlegen, sendungWeg, sendungZurueck, sendungLoeschen, statusSetzen,
   };

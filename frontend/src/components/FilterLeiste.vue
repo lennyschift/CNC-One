@@ -6,8 +6,8 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { onClickOutside, useDebounceFn } from '@vueuse/core';
 import { call } from '../data/api.js';
-import { ListFilter, Plus, X, Pin, PinOff, Bookmark, Trash2, Search } from '@lucide/vue';
-import { felderAus, neuerFilter, anwenden, aktiv, beschreibung } from '../lib/filter.js';
+import { ListFilter, Plus, X, Pin, PinOff, Bookmark, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown } from '@lucide/vue';
+import { felderAus, neuerFilter, anwenden, aktiv, beschreibung, sortieren } from '../lib/filter.js';
 
 const props = defineProps({
   liste: { type: Array, required: true },
@@ -15,6 +15,10 @@ const props = defineProps({
   beschriftungen: { type: Object, default: () => ({}) }, // { pfad: 'Beschriftung' } – empfohlene Felder, zuerst angeboten
   ausblenden: { type: Array, default: () => [] },
   standardAngeheftet: { type: Array, default: () => [] }, // Felder, die anfangs angeheftet sind (änderbar)
+  // Sortieren nach jeder Eigenschaft anbieten; standardSortierung { pfad, richtung }, rang: fachliche Reihenfolgen je Feld
+  sortierbar: { type: Boolean, default: false },
+  standardSortierung: { type: Object, default: null },
+  rang: { type: Object, default: () => ({}) },
 });
 const gefiltert = defineModel({ type: Array, default: () => [] });
 
@@ -26,10 +30,11 @@ const gemerkt = lesen();
 const filter = ref(gemerkt?.filter ?? []);
 const angeheftet = ref(gemerkt?.angeheftet ?? [...props.standardAngeheftet]);
 const ansichten = ref(gemerkt?.ansichten ?? []);
-const stand = () => ({ filter: filter.value, angeheftet: angeheftet.value, ansichten: ansichten.value });
+const sortierung = ref(gemerkt?.sortierung ?? props.standardSortierung);
+const stand = () => ({ filter: filter.value, angeheftet: angeheftet.value, ansichten: ansichten.value, sortierung: sortierung.value });
 const aufServer = useDebounceFn(() => call('cnc_one.api.einstellung.filter_speichern', { modul: props.modul, daten: stand() }).catch(() => {}), 700);
 let geladen = false;
-watch([filter, angeheftet, ansichten], () => {
+watch([filter, angeheftet, ansichten, sortierung], () => {
   try { localStorage.setItem(SPEICHER, JSON.stringify(stand())); } catch { /* privat */ }
   if (geladen) aufServer();
 }, { deep: true });
@@ -41,6 +46,7 @@ onMounted(async () => {
       filter.value = d.filter ?? [];
       angeheftet.value = d.angeheftet ?? [];
       ansichten.value = d.ansichten ?? [];
+      sortierung.value = d.sortierung ?? props.standardSortierung;
     } else if (gemerkt) aufServer();
   } catch { /* offline: die Kopie aus dem Browser gilt */ }
   geladen = true;
@@ -48,7 +54,20 @@ onMounted(async () => {
 
 const felder = computed(() => felderAus(props.liste, { beschriftungen: props.beschriftungen, ausblenden: props.ausblenden }));
 const feld = (pfad) => felder.value.find((f) => f.pfad === pfad);
-watch([() => props.liste, filter], () => { gefiltert.value = anwenden(props.liste, filter.value.filter((f) => feld(f.pfad) || !props.liste.length)); }, { deep: true, immediate: true });
+watch([() => props.liste, filter, sortierung], () => {
+  const treffer = anwenden(props.liste, filter.value.filter((f) => feld(f.pfad) || !props.liste.length));
+  gefiltert.value = props.sortierbar ? sortieren(treffer, sortierung.value, props.rang) : treffer;
+}, { deep: true, immediate: true });
+
+// ---- Sortierung (Klappfenster mit allen Eigenschaften)
+const sortMenu = ref(false);
+const sortSuche = ref('');
+const sortFelder = computed(() => {
+  const q = sortSuche.value.trim().toLowerCase();
+  return felder.value.filter((f) => !q || f.label.toLowerCase().includes(q));
+});
+function sortWaehlen(pfad, richtung) { sortierung.value = { pfad, richtung }; sortMenu.value = false; sortSuche.value = ''; }
+const sortText = computed(() => (sortierung.value?.pfad ? `${feld(sortierung.value.pfad)?.label ?? sortierung.value.pfad} ${sortierung.value.richtung === 'ab' ? '↓' : '↑'}` : 'Sortierung'));
 
 // Angeheftete Felder ohne Filter erscheinen als leere Knöpfe
 const knoepfe = computed(() => {
@@ -62,10 +81,10 @@ const offen = ref(null); // { i } Index in filter
 const menu = ref(false);
 const suche = ref('');
 const huelle = ref(null);
-onClickOutside(huelle, () => { offen.value = null; menu.value = false; });
+onClickOutside(huelle, () => { offen.value = null; menu.value = false; sortMenu.value = false; });
 
 function oeffnen(k) {
-  menu.value = false;
+  menu.value = false; sortMenu.value = false;
   if (k.i < 0) { filter.value.push(k.f); offen.value = filter.value.length - 1; } else offen.value = offen.value === k.i ? null : k.i;
 }
 function hinzufuegen(fd) {
@@ -98,16 +117,36 @@ function fertig() { offen.value = null; }
 function ansichtSpeichern() {
   const name = (prompt('Name der Ansicht (z. B. „Offene Aufträge Alpha“):') || '').trim();
   if (!name) return;
-  ansichten.value = [...ansichten.value.filter((a) => a.name !== name), { name, filter: JSON.parse(JSON.stringify(filter.value)) }];
+  ansichten.value = [...ansichten.value.filter((a) => a.name !== name), { name, filter: JSON.parse(JSON.stringify(filter.value)), sortierung: sortierung.value }];
   menu.value = false;
 }
-function ansichtLaden(a) { filter.value = JSON.parse(JSON.stringify(a.filter)); menu.value = false; offen.value = null; }
+function ansichtLaden(a) {
+  filter.value = JSON.parse(JSON.stringify(a.filter));
+  if (a.sortierung !== undefined) sortierung.value = a.sortierung;
+  menu.value = false; offen.value = null;
+}
 function ansichtLoeschen(a) { ansichten.value = ansichten.value.filter((x) => x !== a); }
 </script>
 
 <template>
   <div ref="huelle" class="relative flex flex-wrap items-center gap-1.5">
-    <button type="button" class="btn !py-1.5 !text-sm" :class="menu ? 'border-accent text-accent' : ''" @click="menu = !menu; offen = null">
+    <div v-if="sortierbar" class="relative">
+      <button type="button" class="btn !py-1.5 !text-sm" :class="sortMenu ? 'border-accent text-accent' : ''" title="Sortieren nach …" @click="sortMenu = !sortMenu; menu = false; offen = null">
+        <ArrowUpDown :size="15" /> {{ sortText }}
+      </button>
+      <div v-if="sortMenu" class="absolute left-0 top-full z-40 mt-1.5 w-80 rounded-xl border border-line bg-surface p-2 shadow-xl">
+        <label class="relative mb-1.5 block"><Search :size="14" class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-mute" /><input v-model="sortSuche" class="field !py-1.5 !pl-8 !text-sm" placeholder="Sortieren nach …" autofocus /></label>
+        <div class="max-h-72 overflow-auto">
+          <div v-for="fd in sortFelder" :key="fd.pfad" class="flex items-center gap-1 rounded-lg hover:bg-surface2" :class="sortierung?.pfad === fd.pfad ? 'bg-accent-soft/60' : ''">
+            <span class="min-w-0 flex-1 truncate px-2.5 py-1.5 text-sm">{{ fd.label }}</span>
+            <button type="button" class="rounded-md p-1 hover:bg-surface hover:text-ink" :class="sortierung?.pfad === fd.pfad && sortierung.richtung !== 'ab' ? 'text-accent' : 'text-mute'" title="aufsteigend (früheste / kleinste zuerst)" @click="sortWaehlen(fd.pfad, 'auf')"><ArrowUp :size="14" /></button>
+            <button type="button" class="mr-1 rounded-md p-1 hover:bg-surface hover:text-ink" :class="sortierung?.pfad === fd.pfad && sortierung.richtung === 'ab' ? 'text-accent' : 'text-mute'" title="absteigend (späteste / größte zuerst)" @click="sortWaehlen(fd.pfad, 'ab')"><ArrowDown :size="14" /></button>
+          </div>
+        </div>
+        <button v-if="sortierung?.pfad" type="button" class="mt-1.5 w-full rounded-lg border-t border-line px-2.5 pt-2 text-left text-xs text-mute hover:text-ink" @click="sortierung = null; sortMenu = false">Ohne Sortierung</button>
+      </div>
+    </div>
+    <button type="button" class="btn !py-1.5 !text-sm" :class="menu ? 'border-accent text-accent' : ''" @click="menu = !menu; offen = null; sortMenu = false">
       <ListFilter :size="15" /> Filter<span v-if="anzahlAktiv" class="rounded-full bg-accent px-1.5 text-[11px] font-semibold text-white">{{ anzahlAktiv }}</span>
     </button>
     <button

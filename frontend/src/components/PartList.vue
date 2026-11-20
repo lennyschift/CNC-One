@@ -16,6 +16,14 @@ const anfrageStand = (t) => {
   const l = anfragen.liste.filter((x) => x.positionen.some((p) => p.teilId === t.id));
   return l.length ? { n: l.length, fertig: l.every((x) => x.status !== 'Gesendet') } : null;
 };
+// Preise wie im Angebots-PDF: je Staffel Menge, Stückpreis und Gesamt, sonst Menge × Stückpreis und die eigenen Zeilen
+const preise = (t) => {
+  const e = a.ergebnisse[t.id];
+  if (!e) return null;
+  if (t.staffel?.aktiv) return { staffel: true, stufen: e.stufen, zusatz: e.zeilen.filter((z) => z.typ === 'kosten') };
+  const teil = e.zeilen.find((z) => z.typ === 'teil');
+  return { staffel: false, teil, zusatz: e.zeilen.filter((z) => z.typ === 'kosten') };
+};
 const anteil = (id) => (a.netto > 0 ? Math.max(0.03, (a.ergebnisse[id]?.gesamt ?? 0) / a.netto) : 0);
 </script>
 
@@ -48,7 +56,7 @@ const anteil = (id) => (a.netto > 0 ? Math.max(0.03, (a.ergebnisse[id]?.gesamt ?
               <Hash v-if="t.seriennummern" :size="11" class="ml-1 inline text-mute" title="Seriennummern" />
             </div>
             <div class="mt-0.5 truncate text-xs text-mute">
-              {{ t.teilenummer || 'ohne Teilenummer' }} · {{ t.menge }} Stk<template v-if="t.material"> · {{ t.material }}</template>
+              {{ t.teilenummer || 'ohne Teilenummer' }}<template v-if="!t.staffel?.aktiv"> · {{ t.menge }} Stk</template><template v-if="t.material"> · {{ t.material }}</template>
             </div>
           </div>
           <div class="text-right">
@@ -58,6 +66,16 @@ const anteil = (id) => (a.netto > 0 ? Math.max(0.03, (a.ergebnisse[id]?.gesamt ?
               <span v-if="t.dateien.length" class="inline-flex items-center gap-1"><FileBox :size="12" />{{ t.dateien.length }}</span>
             </div>
           </div>
+        </div>
+        <!-- Preise wie im Angebot -->
+        <div v-if="preise(t)" class="preise mt-2 rounded-lg px-2.5 py-1.5 text-[11px] tnum" :class="a.auswahlId === t.id ? 'bg-surface/70' : 'bg-surface2'">
+          <template v-if="preise(t).staffel">
+            <div v-for="(s, k) in preise(t).stufen" :key="s.menge" class="grid grid-cols-[1fr_auto_auto] gap-x-3" :class="k === 0 ? 'font-medium text-ink' : 'text-mute'">
+              <span>{{ s.menge }} Stk</span><span class="text-right">{{ eur(s.stueckpreis) }}</span><span class="w-[4.6rem] text-right">{{ eur(s.gesamt) }}</span>
+            </div>
+          </template>
+          <div v-else-if="preise(t).teil" class="flex justify-between gap-3 font-medium text-ink"><span>{{ preise(t).teil.menge }} × {{ eur(preise(t).teil.einzel) }}</span><span>{{ eur(preise(t).teil.betrag) }}</span></div>
+          <div v-for="z in preise(t).zusatz" :key="z.label" class="flex justify-between gap-3 text-mute"><span class="truncate">+ {{ z.label }}</span><span>{{ eur(z.betrag) }}</span></div>
         </div>
         <div class="mt-2.5 h-1 overflow-hidden rounded-full bg-line/70">
           <div class="h-full rounded-full bg-accent transition-all duration-500" :style="{ width: anteil(t.id) * 100 + '%' }" />

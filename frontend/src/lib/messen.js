@@ -40,7 +40,7 @@ function allePunkte(netze) {
 }
 
 // Basis senkrecht zu einer Achse (für Projektionen in die Ebene quer zur Achse)
-function quer(achse) {
+export function quer(achse) {
   const a = einheit(achse);
   const hilf = Math.abs(a[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
   const u = einheit(cross(a, hilf));
@@ -108,7 +108,7 @@ export function rohteile(netze, aufmass = 0) {
 // ---- Fläche analysieren
 // Kleinster Eigenvektor einer symmetrischen 3x3-Matrix: Potenzverfahren auf (Spur·E − M), dessen größter Eigenvektor
 // der kleinste von M ist
-function kleinsterEigenvektor(m) {
+export function kleinsterEigenvektor(m) {
   const spur = m[0][0] + m[1][1] + m[2][2] + 1e-9;
   const b = m.map((z, r) => z.map((w, c) => (r === c ? spur : 0) - w));
   const spalten = [0, 1, 2].map((c) => [b[0][c], b[1][c], b[2][c]]);
@@ -118,7 +118,7 @@ function kleinsterEigenvektor(m) {
 }
 
 // Kreis durch 2D-Punkte (algebraische Ausgleichsrechnung nach Kåsa): Mittelpunkt und Radius
-function kreisAusgleich(p) {
+export function kreisAusgleich(p) {
   let sx = 0; let sy = 0; let sxx = 0; let syy = 0; let sxy = 0; let sz = 0; let sxz = 0; let syz = 0;
   for (const [x, y] of p) { const z = x * x + y * y; sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y; sz += z; sxz += x * z; syz += y * z; }
   const n = p.length;
@@ -173,7 +173,12 @@ export function flaecheAnalysieren(netz, flaechenIndex) {
       const mitte = add(add(mul(u, k.x), mul(v, k.y)), mul(achse, (min + max) / 2));
       // Bohrung: Normalen zeigen zur Achse hin
       const nachInnen = p.reduce((s, q, i) => s + dot(n[i], sub(q, mitte)) - dot(n[i], achse) * dot(sub(q, mitte), achse), 0) < 0;
-      return { art: 'Zylinder', durchmesser: 2 * k.r, achse, mitte, laenge: max - min, bohrung: nachInnen, flaeche, dreiecke };
+      // Wie weit läuft die Fläche um die Achse? Unter 300° ist es eine Rundung (Radius), sonst ein ganzer Durchmesser
+      const w = p.map((q) => Math.atan2(dot(q, v) - k.y, dot(q, u) - k.x)).sort((x, y) => x - y);
+      let luecke = w.length ? 2 * Math.PI - (w[w.length - 1] - w[0]) : 2 * Math.PI;
+      for (let i = 1; i < w.length; i++) luecke = Math.max(luecke, w[i] - w[i - 1]);
+      const umlauf = ((2 * Math.PI - luecke) * 180) / Math.PI;
+      return { art: 'Zylinder', durchmesser: 2 * k.r, radius: k.r, umlauf, rundung: umlauf < 300, achse, mitte, laenge: max - min, bohrung: nachInnen, flaeche, dreiecke };
     }
   }
   return { art: 'Freiform', flaeche, dreiecke };
@@ -190,4 +195,76 @@ export function messpunkt(klick, analyse) {
 export function abstand(a, b) {
   const d = sub(b, a);
   return { gesamt: laenge(d), dx: Math.abs(d[0]), dy: Math.abs(d[1]), dz: Math.abs(d[2]) };
+}
+
+// ---- Drehfrästeile
+// Alle Zylinderflächen des Modells (mit Netz- und Flächennummer), Grundlage für die Drehachsen
+export function zylinderFlaechen(netze) {
+  const liste = [];
+  netze.forEach((n, ni) => (n.flaechen ?? []).forEach((_f, fi) => {
+    const a = flaecheAnalysieren(n, fi);
+    if (a.art === 'Zylinder') liste.push({ ...a, netzIndex: ni, flaechenIndex: fi });
+  }));
+  return liste;
+}
+
+// Abstand eines Punkts von einer Achse (Gerade durch p mit Richtung a, a als Einheitsvektor)
+function achsAbstand(q, p, a) {
+  const d = sub(q, p);
+  return laenge(sub(d, mul(a, dot(d, a))));
+}
+
+// Gleichachsige Zylinder zu Drehachsen zusammenfassen. Am wichtigsten ist die Achse mit der meisten gedrehten Außenfläche
+// (Wellen, Absätze), Bohrungen zählen halb. Je Achse: größter Außendurchmesser (= Drehdurchmesser) und alle Durchmesser.
+export function drehachsen(netze, zylinder = zylinderFlaechen(netze)) {
+  const box = quader(netze);
+  const toleranz = Math.max(0.05, 1e-3 * Math.max(box.x, box.y, box.z));
+  const gruppen = [];
+  for (const z of zylinder) {
+    let g = gruppen.find((x) => Math.abs(dot(x.achse, z.achse)) > 0.9995 && achsAbstand(z.mitte, x.punkt, x.achse) < toleranz);
+    if (!g) { g = { achse: z.achse, punkt: z.mitte, flaeche: 0, aussenFlaeche: 0, aussenDurchmesser: 0, durchmesser: [], flaechen: [] }; gruppen.push(g); }
+    g.flaeche += z.flaeche;
+    if (!z.bohrung) { g.aussenFlaeche += z.flaeche; g.aussenDurchmesser = Math.max(g.aussenDurchmesser, z.durchmesser); }
+    g.durchmesser.push({ wert: z.durchmesser, bohrung: z.bohrung });
+    g.flaechen.push([z.netzIndex, z.flaechenIndex]);
+  }
+  for (const g of gruppen) g.gewicht = g.aussenFlaeche + g.flaeche / 2;
+  return gruppen.sort((a, b) => b.gewicht - a.gewicht);
+}
+
+// Ist das ein Dreh(fräs)teil? Ja, wenn die wichtigste Drehachse gedrehte Außenflächen hat und ihre Zylinder einen
+// nennenswerten Teil der Oberfläche ausmachen (Schwelle als Anteil, Standard 30 %).
+export function drehteilErkennen(netze, { schwelle = 0.3, zylinder } = {}) {
+  const achsen = drehachsen(netze, zylinder);
+  const haupt = achsen[0] ?? null;
+  const gesamt = volumenUndFlaeche(netze).flaeche || 1;
+  const anteil = haupt ? haupt.flaeche / gesamt : 0;
+  return { istDrehteil: !!haupt && haupt.aussenFlaeche > 0 && anteil >= schwelle, anteil, haupt, achsen };
+}
+
+// Die Drehachse zu einer angeklickten Zylinderfläche (Referenz): die passende Gruppe oder eine neue aus der Fläche
+export function achseZuFlaeche(achsen, analyse) {
+  const g = achsen.find((x) => Math.abs(dot(x.achse, analyse.achse)) > 0.9995 && achsAbstand(analyse.mitte, x.punkt, x.achse) < 0.05 + 1e-3 * analyse.durchmesser);
+  return g ?? { achse: analyse.achse, punkt: analyse.mitte, aussenDurchmesser: analyse.bohrung ? 0 : analyse.durchmesser, durchmesser: [{ wert: analyse.durchmesser, bohrung: analyse.bohrung }] };
+}
+
+// Rundmaterial zum Drehen: mittig auf der Drehachse. Hülle = alles, was absteht (auch Fräskonturen), muss ins Rohteil;
+// mit durchmesser (z. B. dem größten Drehdurchmesser) wird stattdessen dieser Wert genommen.
+export function drehrohteil(netze, achse, punktAufAchse, { aufmass = 0, durchmesser = null } = {}) {
+  const a = einheit(achse);
+  let rMax = 0; let min = Infinity; let max = -Infinity;
+  for (const n of netze) {
+    for (let i = 0; i < n.position.length; i += 3) {
+      const d = [n.position[i] - punktAufAchse[0], n.position[i + 1] - punktAufAchse[1], n.position[i + 2] - punktAufAchse[2]];
+      const s = dot(d, a);
+      if (s < min) min = s;
+      if (s > max) max = s;
+      const r = laenge(sub(d, mul(a, s)));
+      if (r > rMax) rMax = r;
+    }
+  }
+  const huelle = 2 * rMax;
+  const d = (durchmesser || huelle) + 2 * aufmass;
+  const l = max - min + 2 * aufmass;
+  return { art: 'Rund', drehteil: true, achse: a, punkt: punktAufAchse, durchmesser: d, huelle: huelle + 2 * aufmass, laenge: l, mitte: add(punktAufAchse, mul(a, (min + max) / 2)), volumen: Math.PI * (d / 2) ** 2 * l };
 }

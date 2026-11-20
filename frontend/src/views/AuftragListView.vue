@@ -2,7 +2,9 @@
 import FilterLeiste from '../components/FilterLeiste.vue';
 import { onMounted, ref, computed } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { ClipboardList, Search } from '@lucide/vue';
+import { ClipboardList, Search, FileUp } from '@lucide/vue';
+import { useRouter } from 'vue-router';
+import BestellungDialog from '../components/BestellungDialog.vue';
 import PartImage from '../components/PartImage.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import ProjektMarke from '../components/ProjektMarke.vue';
@@ -13,6 +15,10 @@ const b = useBelege();
 onMounted(() => b.auftraegeNeuLaden());
 const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
 const suche = ref('');
+// Auftrag aus der Bestellung des Kunden (PDF)
+const bestellung = ref(false);
+const router = useRouter();
+function bestellungFertig(rec) { bestellung.value = false; router.push(`/auftraege/${rec.id}`); }
 // Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
 const zeilen = ref([]);
 const beschriftungen = {'status': 'Status', 'kundeName': 'Kunde', 'projekt': 'Projekt', 'kundenbestellnr': 'Bestellnummer des Kunden', 'kontaktName': 'Ansprechpartner', 'netto': 'Netto', 'datum': 'Angelegt am', 'lieferung.status': 'Lieferstand', 'abrechnung.status': 'Abrechnung', 'positionen.teil.name': 'Bauteil', 'positionen.teil.teilenummer': 'Teilenummer', 'positionen.teil.material': 'Werkstoff', 'positionen.termin': 'Liefertermin', 'ab.gesendetAm': 'AB gesendet am'};
@@ -24,12 +30,13 @@ const vorgefiltert = computed(() => {
 
 <template>
   <div class="mx-auto max-w-[1200px]">
-    <div v-if="b.auftraege.length" class="mb-5 flex flex-wrap items-center gap-3">
+    <div class="mb-5 flex flex-wrap items-center gap-3">
       <label class="relative">
         <Search :size="15" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
         <input v-model="suche" class="field !w-64 !pl-9" placeholder="Nummer, Projekt, Kunde, Bestellung …" />
       </label>
       <span class="ml-auto text-sm text-mute tnum">{{ zeilen.length }} von {{ b.auftraege.length }}</span>
+      <button class="btn btn-primary" title="PDF der Bestellung einlesen, mit Angeboten und früheren Aufträgen abgleichen und als Auftrag anlegen" @click="bestellung = true"><FileUp :size="16" /> Auftrag aus Bestellung</button>
     </div>
     <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="auftraege" :beschriftungen="beschriftungen" :standard-angeheftet="['kundeName']" />
     <div v-auto-animate class="space-y-2.5">
@@ -40,7 +47,7 @@ const vorgefiltert = computed(() => {
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-3"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.status" /><StatusBadge v-if="x.lieferung.geliefert" :status="x.lieferung.status" /><ProjektMarke :projekt="x.projekt" /></div>
-          <div class="mt-0.5 truncate text-sm text-mute">{{ x.kundeName }}<template v-if="x.kontaktName"> · {{ x.kontaktName }}</template><template v-if="x.kundenbestellnr"> · Bestellung {{ x.kundenbestellnr }}</template> · aus {{ x.angebotId }}</div>
+          <div class="mt-0.5 truncate text-sm text-mute">{{ x.kundeName }}<template v-if="x.kontaktName"> · {{ x.kontaktName }}</template><template v-if="x.kundenbestellnr"> · Bestellung {{ x.kundenbestellnr }}</template><template v-if="x.angebote?.length"> · aus {{ x.angebote.join(', ') }}</template><template v-else> · aus Bestellung</template></div>
         </div>
         <div class="text-right">
           <div class="font-semibold tnum">{{ eur(x.netto) }}</div>
@@ -51,9 +58,10 @@ const vorgefiltert = computed(() => {
       <div v-if="!b.auftraege.length" class="card grid place-items-center px-6 py-16 text-center">
         <ClipboardList :size="36" class="text-mute" :stroke-width="1.4" />
         <p class="mt-3 text-sm font-medium">Noch keine Aufträge</p>
-        <p class="mt-1 text-xs text-mute">Aufträge entstehen aus einem gesendeten Angebot über „In Auftrag übernehmen“.</p>
+        <p class="mt-1 text-xs text-mute">Aufträge entstehen aus einem gesendeten Angebot über „In Auftrag übernehmen“ oder aus der Bestellung des Kunden (PDF).</p>
         <RouterLink to="/angebote" class="btn mt-4">Zu den Angeboten</RouterLink>
       </div>
     </div>
+    <BestellungDialog v-if="bestellung" @schliessen="bestellung = false" @fertig="bestellungFertig" />
   </div>
 </template>

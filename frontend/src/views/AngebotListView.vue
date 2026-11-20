@@ -19,7 +19,8 @@ const anfragen = useAnfragen();
 const anfragenZu = (x) => anfragen.fuerAngebot({ angebotId: x.id });
 
 const filter = ref('Alle');
-const filterListe = ['Alle', 'Entwurf', 'Gesendet', 'Bestellt'];
+// „Alle“ ohne ersetzte Fassungen (die gelten nicht mehr); die stehen unter „Ersetzt“
+const filterListe = ['Alle', 'Entwurf', 'Gesendet', 'Bestellt', 'Ersetzt'];
 const suche = ref('');
 const ansprechpartner = (x) => x.kopf.kontaktName || x.mailAnfrage?.vonName || x.mailAnfrage?.vonEmail || '';
 // Filter (anpassbar, siehe FilterLeiste): erst die Schnellfilter oben, dann die gespeicherten/angehefteten Filter
@@ -29,7 +30,7 @@ const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return b.angebote
     .map((x) => ({ ...x, anzeige: b.statusVon(x) }))
-    .filter((x) => filter.value === 'Alle' || x.anzeige.includes(filter.value) || (filter.value === 'Bestellt' && x.anzeige === 'Teilweise bestellt'))
+    .filter((x) => (filter.value === 'Alle' ? x.status !== 'Ersetzt' : x.anzeige.includes(filter.value)) || (filter.value === 'Bestellt' && x.anzeige === 'Teilweise bestellt'))
     .filter((x) => !q || `${x.id} ${x.kopf.projekt} ${x.kopf.kundeName} ${ansprechpartner(x)} ${x.kopf.anfrageNr} ${x.positionen.map((p) => `${p.teil.name} ${p.teil.teilenummer}`).join(' ')}`.toLowerCase().includes(q));
 });
 

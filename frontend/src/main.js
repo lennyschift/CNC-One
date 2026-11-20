@@ -16,6 +16,8 @@ import RechnungListView from './views/RechnungListView.vue';
 import RechnungDetailView from './views/RechnungDetailView.vue';
 import MahnwesenView from './views/MahnwesenView.vue';
 import MahnungDetailView from './views/MahnungDetailView.vue';
+import EingangsrechnungListView from './views/EingangsrechnungListView.vue';
+import EingangsrechnungDetailView from './views/EingangsrechnungDetailView.vue';
 import FirmaView from './views/FirmaView.vue';
 import LieferscheinListView from './views/LieferscheinListView.vue';
 import LieferscheinDetailView from './views/LieferscheinDetailView.vue';
@@ -32,6 +34,7 @@ import PosteingangView from './views/PosteingangView.vue';
 import MailEinstellungenView from './views/MailEinstellungenView.vue';
 import DokumenteView from './views/DokumenteView.vue';
 import ArchivView from './views/ArchivView.vue';
+import DruckvorlagenView from './views/DruckvorlagenView.vue';
 import FensterView from './views/FensterView.vue';
 import { ladeStammdaten } from './data/repo.js';
 import './style.css';
@@ -42,7 +45,7 @@ const router = createRouter({
     { path: '/', redirect: '/workbench' },
     // eigenes Fenster für Zeichnung bzw. 3D-Modell (zweiter Bildschirm), ohne Seitenleiste
     { path: '/fenster/:art', component: FensterView, meta: { titel: 'Fenster', fenster: true } },
-    { path: '/posteingang/:id?', component: PosteingangView, meta: { titel: 'Posteingang: Anfragen', bereich: 'posteingang' } },
+    { path: '/posteingang/:id?', component: PosteingangView, meta: { titel: 'Posteingang', bereich: 'posteingang' } },
     { path: '/workbench', component: WorkbenchView, meta: { titel: 'Angebots-Workbench', bereich: 'workbench' } },
     { path: '/angebote', component: AngebotListView, meta: { titel: 'Angebote', bereich: 'angebote' } },
     { path: '/angebote/:id', component: AngebotDetailView, meta: { titel: 'Angebot', bereich: 'angebote' } },
@@ -54,11 +57,14 @@ const router = createRouter({
     { path: '/lieferscheine/:id', component: LieferscheinDetailView, meta: { titel: 'Lieferschein', bereich: 'lieferscheine' } },
     { path: '/rechnungen', component: RechnungListView, meta: { titel: 'Rechnungen', bereich: 'rechnungen', unterbereich: 'rechnungen' } },
     { path: '/rechnungen/:id', component: RechnungDetailView, meta: { titel: 'Rechnung', bereich: 'rechnungen', unterbereich: 'rechnungen' } },
+    { path: '/eingangsrechnungen', component: EingangsrechnungListView, meta: { titel: 'Eingangsrechnungen', bereich: 'rechnungen', unterbereich: 'eingang' } },
+    { path: '/eingangsrechnungen/:id', component: EingangsrechnungDetailView, meta: { titel: 'Eingangsrechnung', bereich: 'rechnungen', unterbereich: 'eingang' } },
     { path: '/mahnwesen', component: MahnwesenView, meta: { titel: 'Mahnwesen', bereich: 'rechnungen', unterbereich: 'mahnwesen' } },
     { path: '/mahnungen/:id', component: MahnungDetailView, meta: { titel: 'Mahnung', bereich: 'rechnungen', unterbereich: 'mahnwesen' } },
     { path: '/dokumente/:id?', component: DokumenteView, meta: { titel: 'Dokumente', bereich: 'dokumente' } },
     { path: '/stammdaten/archiv', component: ArchivView, meta: { titel: 'Stammdaten: Archiv', bereich: 'stammdaten' } },
     { path: '/stammdaten/mail', component: MailEinstellungenView, meta: { titel: 'Stammdaten: Mail-Anbindung', bereich: 'stammdaten' } },
+    { path: '/stammdaten/druckvorlagen', component: DruckvorlagenView, meta: { titel: 'Stammdaten: Druckvorlagen', bereich: 'stammdaten' } },
     { path: '/stammdaten/firma', component: FirmaView, meta: { titel: 'Stammdaten: Firma', bereich: 'stammdaten' } },
     { path: '/lager', component: LagerView, meta: { titel: 'Lager', bereich: 'lager' } },
     { path: '/anfragen', component: AnfragenListView, meta: { titel: 'Lieferantenanfragen', bereich: 'anfragen' } },

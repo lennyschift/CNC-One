@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { volumenUndFlaeche, gewichtKg, rundmaterial, quader, rohteile, umkreis, flaecheAnalysieren, flaecheZuDreieck, messpunkt, abstand, ACHSEN } from './messen.js';
+import { volumenUndFlaeche, gewichtKg, rundmaterial, quader, rohteile, umkreis, flaecheAnalysieren, flaecheZuDreieck, messpunkt, abstand, ACHSEN, drehteilErkennen, drehrohteil, achseZuFlaeche } from './messen.js';
 import modelle from './testdaten/modelle.json';
 
 // Eigene Testmodelle (CadQuery): Flansch Scheibe ⌀80×12 + Bund ⌀40×20, Bohrung ⌀25, 4 Löcher ⌀6,6 auf LK ⌀60, Fase 1 mm oben;
@@ -78,5 +78,44 @@ describe('Flächen anklicken', () => {
     expect(weiteste).toBeCloseTo(60, 1);
     expect(messpunkt([0, 0, 5], { art: 'Ebene' })).toEqual({ punkt: [0, 0, 5], art: 'Fläche' });
     expect(flaecheZuDreieck(n, n.flaechen[3][0])).toBe(3);
+  });
+});
+
+describe('Drehfrästeile', () => {
+  it('Flansch wird als Drehteil erkannt: Hauptachse Z, größter Drehdurchmesser ⌀80', () => {
+    const d = drehteilErkennen(flansch);
+    expect(d.istDrehteil).toBe(true);
+    expect(Math.abs(d.haupt.achse[2])).toBeCloseTo(1, 3);
+    expect(d.haupt.aussenDurchmesser).toBeCloseTo(80, 1);
+    expect(d.haupt.durchmesser.map((x) => Math.round(x.wert))).toEqual(expect.arrayContaining([80, 40, 25]));
+  });
+
+  it('Halteblock ist kein Drehteil', () => {
+    expect(drehteilErkennen(block).istDrehteil).toBe(false);
+  });
+
+  it('Rohteil mittig auf der Drehachse, mit Aufmaß', () => {
+    const { haupt } = drehteilErkennen(flansch);
+    const r = drehrohteil(flansch, haupt.achse, haupt.punkt, { aufmass: 1 });
+    expect(r.durchmesser).toBeCloseTo(82, 0);
+    expect(r.laenge).toBeCloseTo(34, 2);
+  });
+
+  it('Abstehende Fräskontur: Hülle wird größer, mit Drehdurchmesser bleibt es ⌀80', () => {
+    const { haupt } = drehteilErkennen(flansch);
+    // ein Dreieck, das 50 mm von der Achse entfernt absteht (z. B. eine Nase)
+    const p = haupt.punkt;
+    const nase = { position: new Float32Array([p[0] + 50, p[1], p[2] + 5, p[0] + 45, p[1] + 2, p[2] + 5, p[0] + 45, p[1] - 2, p[2] + 5]), normal: new Float32Array(9), index: [0, 1, 2], flaechen: [] };
+    const mitNase = [...flansch, nase];
+    expect(drehrohteil(mitNase, haupt.achse, haupt.punkt).durchmesser).toBeCloseTo(100, 0);
+    expect(drehrohteil(mitNase, haupt.achse, haupt.punkt, { durchmesser: haupt.aussenDurchmesser }).durchmesser).toBeCloseTo(80, 1);
+  });
+
+  it('Angeklickte Fläche als Referenz: Bund ⌀40 liegt auf der Hauptachse', () => {
+    const { haupt, achsen } = drehteilErkennen(flansch);
+    const bund = analysen(flansch).find((a) => a.art === 'Zylinder' && Math.abs(a.durchmesser - 40) < 0.1);
+    expect(achseZuFlaeche(achsen, bund)).toBe(haupt);
+    const loch = analysen(flansch).find((a) => a.art === 'Zylinder' && Math.abs(a.durchmesser - 6.6) < 0.1);
+    expect(achseZuFlaeche(achsen, loch)).not.toBe(haupt);
   });
 });

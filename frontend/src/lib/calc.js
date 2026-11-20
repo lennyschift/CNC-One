@@ -24,12 +24,16 @@ const fremdAg = (p) => alle(p).filter((a) => a.typ === 'fremd');
 export const hatPlan = (p) => internAg(p).length > 0;
 export const festerPreis = (p) => p.preisart === 'fest';
 
+// Kosten eines internen Arbeitsgangs: je Spalte direkt in Euro oder Zeit × Satz
+export const agRuest = (a) => (a.ruestDirekt ? num(a.ruestEuro) : (num(a.ruestMin) / 60) * num(a.satz));
+export const agStueck = (a) => (a.stueckDirekt ? num(a.stueckEuro) : (num(a.stueckMin) / 60) * num(a.satz));
+
 export const ruestKosten = (p) => (hatPlan(p)
-  ? r2(internAg(p).reduce((s, a) => s + (num(a.ruestMin) / 60) * num(a.satz), 0))
+  ? r2(internAg(p).reduce((s, a) => s + agRuest(a), 0))
   : r2((num(p.ruestMin) / 60) * num(p.satzRuest)));
 
 export const stueckKosten = (p) => (hatPlan(p)
-  ? r2(internAg(p).reduce((s, a) => s + (num(a.stueckMin) / 60) * num(a.satz), 0))
+  ? r2(internAg(p).reduce((s, a) => s + agStueck(a), 0))
   : r2((num(p.stueckMin) / 60) * num(p.satzStueck)));
 
 // Fremdvergabe: Kosten je Stück (zählen zu den Stückkosten)
@@ -146,3 +150,47 @@ export function berechne(p) {
 }
 
 export const summe = (liste) => r2(liste.reduce((s, r) => s + r.gesamt, 0));
+
+// Kalkulationstabelle der Workbench: Zeile für Zeile, je Spalte (Staffel oder Stückzahl) der Anteil am Stückpreis.
+// Einmalige Kosten werden durch die Menge der Spalte geteilt, wenn sie im Stückpreis stecken, sonst stehen sie als
+// eigene Zeile im Angebot (einzeln). Stückpreis und Gesamt kommen aus berechne(), damit alles zum Angebot passt.
+// Liefert { spalten: [{ i, menge, extra, preis }], zeilen: { key: { je: [...], einzeln } }, selbstkosten: [...],
+// stueckpreis: [...], einzeln: [...], gesamt: [...], haupt (Spalte, die für die Summe zählt) }.
+export function kostenTabelle(p, ergebnis = berechne(p)) {
+  const staffel = !!p.staffel?.aktiv;
+  const fest = festerPreis(p);
+  const f = p.inStueckpreis || {};
+  const spalten = staffel
+    ? (p.staffel.stufen || []).map((s, i) => ({ i, menge: Math.max(1, Math.floor(num(s.menge)) || 1), extra: num(s.extra), preis: num(s.preis) }))
+    : [{ i: -1, menge: Math.max(1, Math.floor(num(p.menge)) || 1), extra: 0, preis: 0 }];
+  const ruestIn = staffel || !!f.ruest;
+  const pauschalIn = staffel || !p.pauschalAlsZeile;
+  const zeile = (stueck, einmalig, imStueck) => ({ je: spalten.map((s) => stueck + (imStueck ? einmalig / s.menge : 0)), einzeln: imStueck ? 0 : einmalig });
+  const zeilen = {};
+  zeilen.material = zeile(materialProStueck(p), num(p.pauschalMaterial), pauschalIn);
+  if (hatPlan(p)) {
+    for (const a of alle(p)) {
+      zeilen[`ag-${a.id}`] = a.typ === 'fremd' ? zeile(num(a.fremdProStk), num(a.fremdEinmal), false) : zeile(agStueck(a), agRuest(a), ruestIn);
+    }
+  } else {
+    zeilen.fertigung = zeile((num(p.stueckMin) / 60) * num(p.satzStueck), (num(p.ruestMin) / 60) * num(p.satzRuest), ruestIn);
+    for (const a of fremdAg(p)) zeilen[`ag-${a.id}`] = zeile(num(a.fremdProStk), num(a.fremdEinmal), false);
+  }
+  for (const [key, feld] of [['mess', 'messkosten'], ['sonder', 'sonderkosten'], ['express', 'expresskosten']]) {
+    zeilen[key] = fest ? zeile(0, num(p[feld]), false) : zeile(0, num(p[feld]), !!f[key]);
+  }
+  const werte = Object.values(zeilen);
+  const selbstkosten = spalten.map((_s, k) => r2(werte.reduce((s, z) => s + z.je[k], 0)));
+  const einzelnKalk = r2(werte.reduce((s, z) => s + z.einzeln, 0));
+  const einzelnFest = r2(num(p.messkosten) + num(p.sonderkosten) + num(p.expresskosten));
+  const stufe = (s) => ergebnis.stufen.find((x) => x.menge === s.menge && x.extra === s.extra);
+  const teilZeile = ergebnis.zeilen.find((z) => z.typ === 'teil');
+  const stueckpreis = spalten.map((s, k) => {
+    if (staffel) return stufe(s)?.stueckpreis ?? r2(fest ? (s.preis || num(p.festpreis)) : selbstkosten[k] + s.extra);
+    return teilZeile?.einzel ?? 0;
+  });
+  const einzeln = spalten.map(() => (fest ? einzelnFest : einzelnKalk));
+  const gesamt = spalten.map((s, k) => (staffel ? stufe(s)?.gesamt ?? r2(stueckpreis[k] * s.menge + einzeln[k]) : ergebnis.gesamt));
+  const kleinste = Math.min(...spalten.map((s) => s.menge));
+  return { spalten, zeilen, selbstkosten, stueckpreis, einzeln, gesamt, haupt: spalten.findIndex((s) => s.menge === kleinste) };
+}

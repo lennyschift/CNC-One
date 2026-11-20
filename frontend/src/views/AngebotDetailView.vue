@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, Inbox, ClipboardList, Calculator } from '@lucide/vue';
+import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, Inbox, ClipboardList, Calculator, FilePen, History, ArrowRight } from '@lucide/vue';
 import AngebotMailDialog from '../components/AngebotMailDialog.vue';
 import { useUi } from '../stores/ui.js';
 import BelegPdf from '../components/BelegPdf.vue';
@@ -44,6 +44,20 @@ async function bearbeiten() {
   await draft.ausAngebot(angebot.value);
   router.push('/workbench');
 }
+// Überarbeiten: neue Fassung (gleiche Nummer mit -1, -2 …) als Entwurf, das Original bleibt unverändert
+const ueberarbeiten = ref(false);
+const grund = ref('');
+const offeneFassung = computed(() => (angebot.value?.fassungen ?? []).find((f) => f.status === 'Entwurf' && f.id !== angebot.value.id) ?? null);
+async function neueFassung() {
+  const rec = await b.angebotUeberarbeiten(angebot.value.id, grund.value);
+  if (!rec) return;
+  ueberarbeiten.value = false;
+  grund.value = '';
+  await draft.ausAngebot(rec);
+  router.push('/workbench');
+}
+const datum = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
+
 async function loeschen() {
   if (await b.angebotLoeschen(angebot.value.id)) router.push('/angebote');
 }
@@ -65,6 +79,13 @@ function angelegt(auftrag) {
         <div class="flex items-center justify-between"><h2 class="font-semibold tnum">{{ angebot.id }}</h2><StatusBadge :status="status" /></div>
         <ProjektFeld class="mt-4" :projekt="angebot.kopf.projekt" :kontakt-name="angebot.kopf.kontaktName" :kontakt-email="angebot.kopf.kontaktEmail" @speichern="b.projektSetzen('Angebot', angebot.id, $event)" />
         <div class="mt-5"><WorkflowSteps :stand="stand" :schritte="['Angebot', 'Auftrag']" /></div>
+        <RouterLink v-if="angebot.ersetztDurch" :to="`/angebote/${angebot.ersetztDurch}`" class="mt-4 flex items-center gap-2 rounded-xl bg-warn/10 px-3 py-2 text-xs text-warn hover:underline">
+          <History :size="14" class="shrink-0" /><span>Ersetzt durch die neue Fassung <strong class="tnum">{{ angebot.ersetztDurch }}</strong>. Dieses Angebot gilt nicht mehr.</span><ArrowRight :size="13" class="ml-auto shrink-0" />
+        </RouterLink>
+        <div v-if="angebot.vorgaenger" class="mt-4 rounded-xl bg-surface2 px-3 py-2 text-xs">
+          <div class="flex items-center gap-2"><FilePen :size="14" class="shrink-0 text-accent" /> Fassung {{ angebot.fassung }}, ersetzt <RouterLink :to="`/angebote/${angebot.vorgaenger}`" class="tnum text-accent hover:underline">{{ angebot.vorgaenger }}</RouterLink></div>
+          <div v-if="angebot.aenderungsgrund" class="mt-1 text-mute">Grund: {{ angebot.aenderungsgrund }}</div>
+        </div>
         <RouterLink v-if="angebot.mailAnfrage" :to="`/posteingang/${angebot.mailAnfrage.id}`" class="mt-4 flex items-center gap-2 rounded-xl bg-surface2 px-3 py-2 text-xs hover:text-accent">
           <Inbox :size="14" class="shrink-0 text-accent" /><span class="truncate">Anfrage per Mail von {{ angebot.mailAnfrage.vonName || angebot.mailAnfrage.vonEmail }}</span>
         </RouterLink>
@@ -78,6 +99,19 @@ function angelegt(auftrag) {
           <template v-else-if="angebot.status === 'Gesendet' && !beauftragt">
             <button class="btn btn-primary w-full justify-center" @click="dialog = true"><ShoppingCart :size="16" /> In Auftrag übernehmen</button>
             <button class="btn w-full justify-center" @click="mailDialog = true"><Mail :size="16" /> Erneut per Mail senden</button>
+          </template>
+          <!-- Nachverhandlung, Position entfällt …: neue Fassung statt das gesendete Angebot zu ändern -->
+          <template v-if="['Gesendet', 'Abgelehnt'].includes(angebot.status) && !beauftragt && !angebot.ersetztDurch">
+            <RouterLink v-if="offeneFassung" :to="`/angebote/${offeneFassung.id}`" class="btn w-full justify-center"><FilePen :size="16" /> Überarbeitung {{ offeneFassung.id }} öffnen</RouterLink>
+            <button v-else-if="!ueberarbeiten" class="btn w-full justify-center" title="Neue Fassung als Entwurf (gleiche Nummer mit -1, -2 …). Dieses Angebot bleibt unverändert und gilt als ersetzt, sobald die neue Fassung gesendet ist." @click="ueberarbeiten = true"><FilePen :size="16" /> Überarbeiten (neue Fassung)</button>
+            <div v-else class="rounded-xl border border-line p-3">
+              <label class="label mb-1 block">Grund (intern)</label>
+              <textarea v-model="grund" rows="2" class="field resize-y text-sm" placeholder="z. B. Position entfällt, Preis nachverhandelt" />
+              <div class="mt-2 flex gap-2">
+                <button class="btn btn-primary flex-1 justify-center !py-1.5 text-sm" @click="neueFassung"><FilePen :size="15" /> Neue Fassung anlegen</button>
+                <button class="btn !py-1.5 text-sm" @click="ueberarbeiten = false">Abbrechen</button>
+              </div>
+            </div>
           </template>
           <template v-else-if="angebot.status === 'Gesendet'">
             <RouterLink v-if="auftraegeDazu.length === 1" :to="`/auftraege/${auftraegeDazu[0].id}`" class="btn btn-primary w-full justify-center"><ClipboardList :size="16" /> Zum Auftrag {{ auftraegeDazu[0].id }}</RouterLink>
@@ -106,6 +140,17 @@ function angelegt(auftrag) {
         <ul v-if="b.auftraege.some((x) => x.angebotId === angebot.id)" class="mt-4 space-y-1.5 border-t border-line pt-3 text-sm">
           <li class="label">Aufträge aus diesem Angebot</li>
           <li v-for="x in b.auftraege.filter((a) => a.angebotId === angebot.id)" :key="x.id"><RouterLink :to="`/auftraege/${x.id}`" class="text-accent hover:underline tnum">{{ x.id }}</RouterLink></li>
+        </ul>
+      </section>
+      <section v-if="angebot.fassungen?.length > 1" class="card p-5">
+        <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold"><History :size="15" class="text-accent" /> Fassungen</h3>
+        <ul class="space-y-1.5">
+          <li v-for="f in angebot.fassungen" :key="f.id">
+            <RouterLink :to="`/angebote/${f.id}`" class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface2" :class="f.id === angebot.id ? 'bg-surface2 font-medium' : ''">
+              <span class="tnum">{{ f.id }}</span><StatusBadge :status="f.status" class="scale-90" /><span class="ml-auto text-xs text-mute">{{ datum(f.versandt) }}</span>
+            </RouterLink>
+            <div v-if="f.grund" class="truncate px-2 text-xs text-mute" :title="f.grund">{{ f.grund }}</div>
+          </li>
         </ul>
       </section>
       <AngebotAnfragen :ziel="{ angebotId: angebot.id }" variante="karte" />
