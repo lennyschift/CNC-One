@@ -1,8 +1,14 @@
-"""Anfragen aus dem gemeinsamen Postfach holen (IMAP).
+"""Mails aus dem gemeinsamen Postfach holen (IMAP) und im Posteingang einordnen.
 
-Geholt werden nur Mails mit einem Stichwort im Betreff. Die Suche läuft auf dem Mailserver, andere Mails werden gar nicht
-übertragen. Das Postfach bleibt unverändert: Der Ordner wird nur lesend geöffnet, Mails bleiben ungelesen.
-Antwortet ein Kunde im Verlauf, kommt seine Mail zur bestehenden Anfrage.
+Geholt werden Mails bekannter Absender (Kontakte der Kunden, Lieferanten und deren Domains, ohne Freemail-Anbieter) und
+Mails mit einem Stichwort im Betreff (neue Kunden). Alles andere bleibt nur im Postfach: Für die übrigen Mails werden
+nur die Kopfzeilen (Absender, Message-ID) gelesen. Das Postfach bleibt unverändert: Der Ordner wird nur lesend
+geöffnet, Mails bleiben ungelesen. Antwortet ein Kunde im Verlauf, kommt seine Mail zur bestehenden Anfrage.
+
+Eingeordnet wird nach Anfrage, Bestellung, Rechnung, Lieferant und Sonstiges (Stichwörter einstellbar); E-Rechnungen
+werden immer erkannt und als Eingangsrechnung angelegt. Anhänge mit gesperrten Endungen (Programme, Office mit Makros)
+und ausführbare Dateien werden nicht übernommen; die Prüfung des Absenders durch das Postfach (SPF/DKIM/DMARC) wird
+mitgelesen, ein fehlgeschlagener Absender nie automatisch zugeordnet.
 """
 
 import base64
@@ -22,7 +28,7 @@ from zoneinfo import ZoneInfo
 
 import frappe
 from frappe import _
-from frappe.utils import get_system_timezone, getdate, now_datetime
+from frappe.utils import add_days, get_system_timezone, getdate, now_datetime
 
 # Bei diesen Anbietern sagt die Domain nichts über den Kunden
 FREEMAIL = {
@@ -30,6 +36,14 @@ FREEMAIL = {
 	"hotmail.com", "hotmail.de", "live.com", "live.de", "yahoo.com", "yahoo.de", "icloud.com", "me.com", "aol.com",
 	"freenet.de", "posteo.de", "mailbox.org", "arcor.de", "online.de", "ionos.de",
 }
+# Diese Endungen werden nie übernommen (Programme, Skripte, Verknüpfungen, Office-Dateien mit Makros, Abbilder)
+GESPERRT = (
+	"exe", "com", "bat", "cmd", "scr", "pif", "msi", "msp", "msc", "cpl", "dll", "sys", "js", "jse", "vbs", "vbe", "wsf", "wsh",
+	"ps1", "psm1", "hta", "jar", "lnk", "reg", "inf", "scf", "url", "iso", "img", "vhd", "vhdx", "appx", "msix",
+	"docm", "dotm", "xlsm", "xltm", "xlam", "pptm", "potm", "ppam", "sldm",
+)
+KATEGORIEN = ("Anfrage", "Bestellung", "Rechnung", "Lieferant", "Sonstiges")
+CAD = (".stp", ".step", ".igs", ".iges", ".dxf", ".dwg", ".x_t", ".sldprt")
 MONATE = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 MAX_TEXT = 200_000
 MAX_HTML = 500_000
@@ -46,6 +60,127 @@ def einstellungen():
 
 def stichwoerter(s):
 	return [z.strip() for z in (s.stichwoerter or "").splitlines() if z.strip()]
+
+
+def _zeilen(text):
+	return [z.strip() for z in (text or "").splitlines() if z.strip()]
+
+
+def freemail(s=None):
+	"""Freemail-Domains aus den Einstellungen, sonst die Standardliste."""
+	s = s or einstellungen()
+	eigene = {z.lower().lstrip("@") for z in _zeilen(s.get("freemail_domains"))}
+	return eigene or FREEMAIL
+
+
+def gesperrte_endungen(s=None):
+	s = s or einstellungen()
+	eigene = {z.lower().lstrip(".") for z in re.split(r"[\s,;]+", s.get("gesperrte_endungen") or "") if z.strip()}
+	return eigene or set(GESPERRT)
+
+
+def gesperrt(name, daten, endungen):
+	"""Grund, warum ein Anhang nicht übernommen wird, oder "". Prüft Endung und Inhalt (ausführbare Dateien mit
+	falscher Endung, ZIPs mit Programmen darin)."""
+	n = (name or "").lower().strip().rstrip(".")
+	endung = n.rsplit(".", 1)[-1] if "." in n else ""
+	if endung in endungen:
+		return _("Dateityp .{0} ist gesperrt").format(endung)
+	kopf = (daten or b"")[:4]
+	if kopf[:2] == b"MZ" or kopf == b"\x7fELF":
+		return _("ausführbares Programm")
+	if endung == "zip":
+		try:
+			for i in zipfile.ZipFile(io.BytesIO(daten)).infolist():
+				innen = i.filename.lower().rstrip("/")
+				if "." in innen and innen.rsplit(".", 1)[-1] in endungen:
+					return _("enthält {0}").format(innen.rsplit("/", 1)[-1])
+		except (zipfile.BadZipFile, ValueError):
+			pass
+	return ""
+
+
+def bekannte_absender(fm=None):
+	"""(Adressen, Domains) der Kunden-Kontakte und Lieferanten. Domains nur außerhalb der Freemail-Anbieter."""
+	fm = fm if fm is not None else freemail()
+	adressen = {(e or "").strip().lower() for e in frappe.get_all("Kunde Kontakt", filters={"parenttype": "Kunde", "email": ["is", "set"]}, pluck="email")}
+	for l in frappe.get_all("Lieferant", fields=["email", "weitere_emails"]):
+		adressen.add((l.email or "").strip().lower())
+		adressen.update(z.lower() for z in _zeilen(l.weitere_emails))
+	adressen = {a for a in adressen if "@" in a}
+	domains = {a.rsplit("@", 1)[1] for a in adressen} - set(fm)
+	return adressen, domains
+
+
+def ist_bekannt(adresse, adressen, domains):
+	a = (adresse or "").lower()
+	return bool(a) and (a in adressen or ("@" in a and a.rsplit("@", 1)[1] in domains))
+
+
+def lieferant_zur_adresse(adresse, fm=None):
+	"""Lieferant mit dieser Adresse (E-Mail oder weitere Adressen), sonst mit derselben Domain (nicht bei Freemail)."""
+	a = (adresse or "").strip().lower()
+	if "@" not in a:
+		return None
+	fm = fm if fm is not None else freemail()
+	liste = frappe.get_all("Lieferant", fields=["name", "email", "weitere_emails"])
+	for l in liste:
+		if a == (l.email or "").strip().lower() or a in {z.lower() for z in _zeilen(l.weitere_emails)}:
+			return l.name
+	domain = a.rsplit("@", 1)[1]
+	if domain in fm:
+		return None
+	for l in liste:
+		if any(x.endswith("@" + domain) for x in [(l.email or "").lower(), *(z.lower() for z in _zeilen(l.weitere_emails))]):
+			return l.name
+	return None
+
+
+def absender_pruefung(msg):
+	"""(Text, Warnung) aus der Prüfung des eigenen Postfachs (Authentication-Results, oberste Kopfzeile = unser Server)."""
+	kopf = msg.get_all("Authentication-Results") or []
+	if not kopf:
+		return "", False
+	text = str(kopf[0]).lower()
+	ergebnis = {}
+	for art in ("spf", "dkim", "dmarc"):
+		t = re.search(art + r"\s*=\s*([a-z]+)", text)
+		if t:
+			ergebnis[art] = t.group(1)
+	warnung = ergebnis.get("dmarc") == "fail" or (ergebnis.get("spf") in ("fail", "softfail") and ergebnis.get("dkim") != "pass")
+	return " · ".join(f"{k.upper()} {v}" for k, v in ergebnis.items()), warnung
+
+
+def _treffer(woerter, *texte):
+	"""Kommt eines der Wörter am Wortanfang in einem der Texte vor (Groß-/Kleinschreibung egal; „Rechnung“ trifft auch „Rechnungen“)?"""
+	for w in woerter:
+		muster = re.compile(r"(?<![\w])" + re.escape(w.lower()), re.I)
+		if any(muster.search(t or "") for t in texte):
+			return True
+	return False
+
+
+def einordnen(s, betreff, dateinamen, kunde=None, lieferant=None, erechnung=False):
+	"""Art der Mail: Anfrage, Bestellung, Rechnung, Lieferant oder Sonstiges.
+
+	E-Rechnung → Rechnung. Rechnungs-Stichwort von einem Lieferanten oder Unbekannten → Rechnung. Lieferant → Lieferant.
+	Bestell-Stichwort (Betreff oder Dateiname) → Bestellung. Anfrage-Stichwort → Anfrage. Ein bekannter Kunde mit
+	Zeichnungen oder CAD-Dateien ohne Stichwort → Anfrage (so fallen auch Anfragen ohne passendes Wort nicht durch).
+	Sonst Sonstiges. Umsortieren geht im Posteingang mit einem Klick."""
+	namen = " ".join(dateinamen or [])
+	if erechnung:
+		return "Rechnung"
+	if (lieferant or not kunde) and _treffer(_zeilen(s.get("woerter_rechnung")) or ["Rechnung", "Invoice"], betreff, namen):
+		return "Rechnung"
+	if lieferant and not kunde:
+		return "Lieferant"
+	if _treffer(_zeilen(s.get("woerter_bestellung")) or ["Bestellung", "Order"], betreff, namen):
+		return "Bestellung"
+	if _treffer(stichwoerter(s), betreff):
+		return "Anfrage"
+	if kunde and any((n or "").lower().endswith(CAD + (".pdf",)) for n in dateinamen or []):
+		return "Anfrage"
+	return "Sonstiges"
 
 
 # ----------------------------------------------------------------- Verbindung
@@ -199,8 +334,8 @@ def abholen(s=None):
 
 	s = s or einstellungen()
 	woerter = stichwoerter(s)
-	if not woerter:
-		frappe.throw(_("Bitte mindestens ein Stichwort für den Betreff eintragen."))
+	if not woerter and not s.bekannte_absender:
+		frappe.throw(_("Bitte mindestens ein Stichwort für den Betreff eintragen oder Mails bekannter Absender abholen."))
 	neu = 0
 	with filelock("cnc_one_mail_abruf", timeout=60):
 		m = imap_verbinden(s)
@@ -210,6 +345,15 @@ def abholen(s=None):
 				frappe.throw(_("Den Ordner {0} gibt es im Postfach nicht.").format(s.postfach_ordner or "INBOX"))
 			# dazu Antworten der Lieferanten auf unsere Anfragen (Anfragenummer LA-… im Betreff)
 			kandidaten = kopfzeilen(m, suchen(m, [*woerter, "LA-"], s.abholen_ab))
+			if s.bekannte_absender:
+				# Kopfzeilen der Mails seit dem letzten Abruf (3 Tage Puffer), nur bekannte Absender werden geladen
+				adressen, domains = bekannte_absender(freemail(s))
+				ab = max(d for d in (getdate(s.abholen_ab) if s.abholen_ab else None, getdate(add_days(s.letzter_abruf, -3)) if s.letzter_abruf else None, getdate(add_days(now_datetime(), -30))) if d)
+				_typ, daten = m.uid("SEARCH", "SINCE", _imap_datum(ab))
+				alle = [int(u) for u in (daten[0] or b"").split()]
+				for uid, kopf in kopfzeilen(m, [u for u in alle if u not in kandidaten]).items():
+					if ist_bekannt(kopf[1], adressen, domains):
+						kandidaten[uid] = kopf
 			bekannt = set(frappe.get_all("Mail Nachricht", filters={"message_id": ["in", [mid for mid, _v in kandidaten.values() if mid] or [""]]}, pluck="message_id"))
 			eigene = (s.benutzer or "").lower()
 			for uid, (mid, von) in kandidaten.items():
@@ -529,16 +673,66 @@ def verarbeiten(roh):
 		doc.append("nachrichten", zeile)
 		doc.save(ignore_permissions=True)
 	else:
-		kunde = kunde_zur_adresse(von)
+		s = einstellungen()
+		fm = freemail(s)
+		pruefung, warnung = absender_pruefung(msg)
+		# ein möglicherweise gefälschter Absender wird nie automatisch zugeordnet
+		kunde = None if warnung else kunde_zur_adresse(von)
+		lieferant = None if warnung else lieferant_zur_adresse(von, fm)
+		namen = [n for n, _x in _anhaenge(msg)]
+		erechnung = any(_ist_erechnung(n, x) for n, x in _anhaenge(msg) if n.lower().endswith((".pdf", ".xml")))
 		doc = frappe.get_doc({
 			"doctype": "Mail Anfrage", "status": "Neu", "betreff": betreff, "von_email": von, "von_name": von_name,
 			"datum": datum, "letzte_nachricht": datum, "kunde": kunde, "kunde_vorschlag": None if kunde else kunde_vorschlag(von),
+			"lieferant": lieferant, "kategorie": einordnen(s, betreff, namen, kunde, lieferant, erechnung),
+			"absender_warnung": 1 if warnung else 0, "absender_pruefung": pruefung,
 		})
 		doc.append("nachrichten", zeile)
 		doc.insert(ignore_permissions=True)
 
-	_dateien_ablegen(msg, doc, mid)
+	anhaenge = _dateien_ablegen(msg, doc, mid)
+	_eingangsrechnungen(msg, doc, anhaenge)
 	return doc
+
+
+def _ist_erechnung(name, daten):
+	from cnc_one.logic import eingangsrechnung
+
+	return bool(eingangsrechnung.erkennen(name, daten)[0])
+
+
+def _eingangsrechnungen(msg, doc, anhaenge):
+	"""E-Rechnungen im Anhang als Eingangsrechnung anlegen (ZUGFeRD-PDF oder XRechnung-XML); eine XML neben einem PDF
+	derselben Rechnung zählt einmal. Fehler halten den Abruf nicht auf, sie stehen als Hinweis an der Nachricht."""
+	from cnc_one.logic import eingangsrechnung
+
+	urls = {a["name"]: a["url"] for a in anhaenge or [] if not a.get("aus")}
+	pdf_urls = [u for n, u in urls.items() if n.lower().endswith(".pdf")]
+	hinweise = []
+	angelegt = False
+	for name, daten in _anhaenge(msg):
+		if name not in urls:
+			continue
+		try:
+			fmt, xml = eingangsrechnung.erkennen(name, daten)
+			if not fmt:
+				continue
+			pdf_url = urls[name] if fmt == "ZUGFeRD" else (pdf_urls[0] if len(pdf_urls) == 1 else "")
+			r, hinweis = eingangsrechnung.anlegen(fmt, xml, pdf_url=pdf_url, xml_url=urls[name] if fmt == "XRechnung" else "", mail=doc.name, absender=doc.von_email, freemail=freemail())
+			if r:
+				angelegt = True
+				hinweise.append(_("Eingangsrechnung {0} angelegt").format(r.name))
+			elif hinweis:
+				hinweise.append(hinweis)
+		except Exception as e:
+			frappe.clear_messages()
+			hinweise.append(_("{0}: E-Rechnung nicht lesbar ({1})").format(name, frappe.utils.strip_html(str(e))[:150]))
+	if hinweise:
+		z = next(x for x in doc.nachrichten if x.message_id == (msg.get("Message-ID") or "").strip()) if any(x.message_id == (msg.get("Message-ID") or "").strip() for x in doc.nachrichten) else None
+		if z:
+			z.db_set("hinweis", "\n".join(x for x in [(z.hinweis or ""), *hinweise] if x), update_modified=False)
+	if angelegt and doc.kategorie != "Rechnung" and doc.status == "Neu" and len(doc.nachrichten) == 1:
+		doc.db_set("kategorie", "Rechnung", update_modified=False)
 
 
 LA_NUMMER = re.compile(r"\bLA-\d{4}-\d{3,}\b", re.I)
@@ -573,7 +767,12 @@ def _dateien_ablegen(msg, doc, mid):
 	"""Anhänge (ZIPs ausgepackt), eingebettete Bilder und das bereinigte HTML einer eingegangenen Mail am Beleg ablegen
 	(Mail Anfrage oder Lieferantenanfrage); vermerkt an der Nachricht `mid`."""
 	anhaenge, hinweise = [], []
+	endungen = gesperrte_endungen()
 	for name, inhalt in _anhaenge(msg):
+		grund = gesperrt(name, inhalt, endungen)
+		if grund:
+			hinweise.append(_("{0} nicht übernommen: {1} (zum Schutz vor Schadsoftware)").format(name, grund))
+			continue
 		# Die ZIP bleibt als Original erhalten, ihre Zeichnungen und Modelle kommen als eigene Anhänge dazu (mit Herkunft)
 		dateien = [(name, inhalt, {})]
 		if name.lower().endswith(".zip"):
@@ -608,3 +807,4 @@ def _dateien_ablegen(msg, doc, mid):
 	if anhaenge or hinweise or html:
 		z = next(x for x in doc.nachrichten if x.message_id == mid)
 		z.db_set({"anhaenge": json.dumps(anhaenge, ensure_ascii=False), "hinweis": "\n".join(hinweise), "html": html}, update_modified=False)
+	return anhaenge

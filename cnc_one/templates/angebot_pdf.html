@@ -23,13 +23,15 @@
     <tr><td class="k">Angebot</td><td class="v"><strong>{{ a.id }}</strong></td></tr>
     <tr><td class="k">Datum</td><td class="v">{{ de(datum) }}</td></tr>
     <tr><td class="k">Gültig bis</td><td class="v">{{ de(gueltig_bis) }}</td></tr>
+    {% if a.vorgaenger %}<tr><td class="k">Ersetzt Angebot</td><td class="v">{{ a.vorgaenger }}</td></tr>{% endif %}
     {% if a.kopf.anfrageNr %}<tr><td class="k">Ihre Anfrage</td><td class="v">{{ a.kopf.anfrageNr }}</td></tr>{% endif %}
     {% if kunde.lieferantennr %}<tr><td class="k">Lieferanten-Nr.</td><td class="v">{{ kunde.lieferantennr }}</td></tr>{% endif %}
   </table>
 </div>
 
-<h1>Angebot</h1>
-<div class="einleitung">Vielen Dank für Ihre Anfrage. Gerne bieten wir Ihnen wie folgt an:</div>
+<h1>{% if a.vorgaenger %}Überarbeitetes Angebot{% else %}Angebot{% endif %}</h1>
+{% if a.vorgaenger %}<div class="einleitung">Wie besprochen erhalten Sie unser überarbeitetes Angebot. Es ersetzt unser Angebot {{ a.vorgaenger }}:</div>
+{% else %}<div class="einleitung">Vielen Dank für Ihre Anfrage. Gerne bieten wir Ihnen wie folgt an:</div>{% endif %}
 
 {{ posten | safe }}
 

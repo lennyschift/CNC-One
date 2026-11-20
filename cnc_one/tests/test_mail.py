@@ -166,8 +166,10 @@ class TestMailAnfragen(IntegrationTestCase):
 		ui = mail_api.einstellungen_speichern({"stichwoerter": " Anfrage \n\n RFQ ", "imapPort": "993", "aktiv": True})
 		self.assertEqual((ui["stichwoerter"], ui["imapPort"], ui["aktiv"], ui["passwortGesetzt"]), ("Anfrage\nRFQ", 993, True, True))
 		self.assertNotIn("passwort", ui)
+		# ohne Stichwort geht es nur, wenn Mails bekannter Absender geholt werden
 		with self.assertRaises(frappe.ValidationError):
-			mail_api.einstellungen_speichern({"stichwoerter": "  "})
+			mail_api.einstellungen_speichern({"stichwoerter": "  ", "bekannteAbsender": False})
+		self.assertFalse(mail_api.einstellungen_speichern({"stichwoerter": "  ", "bekannteAbsender": True})["stichwoerter"])
 		self.assertEqual(mail.ordnername("Gesendete Objekte"), '"Gesendete Objekte"')
 		self.assertEqual(mail.ordnername("Entwürfe"), '"Entw&APw-rfe"')
 
@@ -311,7 +313,7 @@ class TestAngebotPerMail(IntegrationTestCase):
 		a = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde}, "teile": [t]})
 		angebot.senden(a["id"])
 		au = auftrag.aus_angebot(a["id"], "PO-77", [{"angebotKey": "t1", "menge": 10, "termin": "2026-12-01"}])
-		self.assertEqual(au["ab"], {"gesendetAm": "", "gesendetAn": ""})
+		self.assertEqual(au["ab"], {"gesendetAm": "", "gesendetAn": "", "aenderung": 0})
 		v = mail_api.ab_vorschlag(au["id"])
 		self.assertEqual((v["an"], v["betreff"], v["bereit"]), ("einkauf@zz-kunde.de", f"Auftragsbestätigung {au['id']} zu Ihrer Bestellung PO-77", True))
 		self.assertTrue(v["text"].startswith("Sehr geehrter Herr Einkauf,\n\nvielen Dank für Ihren Auftrag PO-77."))
@@ -350,8 +352,9 @@ class TestAngebotPerMail(IntegrationTestCase):
 		self.assertIn("PO-78", h)
 		self.assertIn("Gleitgeschliffen", h)
 		self.assertIn("Liefertermin 01.12.2026", h)
-		self.assertIn("Summe Position", h)
-		self.assertNotIn("ZZ-Werkstoff-AB", h)  # Werkstoff nur, wenn am Angebot gewünscht
+		self.assertRegex(h, r"class=\"r s\">= [0-9]")  # Summe der Position: Strich nur über dem Betrag, davor „=“
+		self.assertNotIn("Summe Position", h)
+		self.assertNotIn("ZZ-Werkstoff-AB", h)  # Werkstoff nur, wenn an der Position gewünscht
 
 
 def zz_html_mail(mid="<zz-h1@zz-kunde.de>"):
@@ -427,7 +430,7 @@ class TestMailHtml(IntegrationTestCase):
 
 
 class TestTabellenvorlage(IntegrationTestCase):
-	"""Spalten der Anfrage-Tabellen je Kontakt und Kunde anlernen; Lieferzeit des Angebots aus den Liefertermin."""
+	"""Spalten der Anfrage-Tabellen je Kontakt und Kunde anlernen; Liefertermine je Position."""
 
 	def setUp(self):
 		self._dateien = dateien_vorher()
@@ -452,14 +455,16 @@ class TestTabellenvorlage(IntegrationTestCase):
 			mail_api.tabellenvorlage_lernen(d.name, {"menge": "Quantity"})
 		self.assertEqual(mail_api.tabellenvorlage_vergessen(d.name), {"spalten": {}, "quelle": ""})
 
-	def test_lieferzeit_ist_der_frueheste_liefertermin(self):
+	def test_lieferzeit_bleibt_wie_eingegeben(self):
+		"""Die Liefertermine je Position sind intern (Auftrag, Fertigung); die Lieferzeit im Kopf ändert sich nicht."""
 		from cnc_one.api import angebot
 		from cnc_one.tests.test_angebot import teil
 
 		a = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde, "lieferzeit": "Nach Absprache"}, "teile": [
 			teil("t1", "Platte", "ZZ-T-1", liefertermin="2026-12-04"), teil("t2", "Welle", "ZZ-T-2", liefertermin="2026-11-20"), teil("t3", "Ohne", "ZZ-T-3"),
 		]})
-		self.assertEqual(a["kopf"]["lieferzeit"], "20.11.2026")
+		self.assertEqual(a["kopf"]["lieferzeit"], "Nach Absprache")
+		self.assertEqual(a["positionen"][1]["teil"]["liefertermin"], "2026-11-20")
 		b = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde, "lieferzeit": "3 Wochen"}, "teile": [teil("t1", "Ohne", "ZZ-T-4")]})
 		self.assertEqual(b["kopf"]["lieferzeit"], "3 Wochen")
 

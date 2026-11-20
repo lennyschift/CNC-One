@@ -34,11 +34,30 @@ def kontakt_vorschlag(name):
 	return {"anrede": "", "vorname": " ".join(teile[:-1]), "nachname": teile[-1] if teile else ""}
 
 
+def _anhaenge(n):
+	a = n.anhaenge
+	return (json.loads(a) if isinstance(a, str) and a else a) or []
+
+
 def anfrage_kurz(d):
+	"""Kurzform für die Liste im Posteingang: mit Textanfang und Anhängen je Art (für Suche und Filter)."""
+	eingang = [n for n in sorted(d.nachrichten, key=lambda x: (x.datum or d.datum, x.idx)) if n.richtung == "Eingang"]
+	arten = {}
+	for n in eingang:
+		for a in _anhaenge(n):
+			art = _art(a.get("name"))
+			arten[art] = arten.get(art, 0) + 1
+	# Textanfang; kommt die Mail nur als HTML, der Text daraus
+	letzte = eingang[-1] if eingang else None
+	text = " ".join((letzte.text or frappe.utils.strip_html(letzte.html or "")).split()) if letzte else ""
 	return {
 		"id": d.name, "status": d.status, "betreff": d.betreff or "", "vonEmail": d.von_email or "", "vonName": d.von_name or "",
 		"datum": _iso(d.datum), "letzteNachricht": _iso(d.letzte_nachricht or d.datum), "neueAntwort": bool(d.neue_antwort),
 		"kundeId": d.kunde or "", "kundeName": d.kunde_name or "", "angebotId": d.angebot or "",
+		"vorschau": text[:160], "anhangArten": arten, "anzahlNachrichten": len(d.nachrichten),
+		"kategorie": d.kategorie or "Anfrage", "lieferantId": d.lieferant or "", "auftragId": d.auftrag or "",
+		"absenderWarnung": bool(d.absender_warnung), "absenderPruefung": d.absender_pruefung or "",
+		"eingangsrechnungen": frappe.get_all("Eingangsrechnung", filters={"mail": d.name}, pluck="name") if d.name else [],
 	}
 
 
@@ -54,7 +73,7 @@ def anfrage_ui(d):
 			{
 				"richtung": n.richtung, "datum": _iso(n.datum), "vonEmail": n.von_email or "", "vonName": n.von_name or "",
 				"an": n.an or "", "cc": n.cc or "", "betreff": n.betreff or "", "text": n.text or "", "html": n.html or "", "hinweis": n.hinweis or "",
-				"anhaenge": [{**a, "art": _art(a.get("name"))} for a in (json.loads(n.anhaenge) if isinstance(n.anhaenge, str) and n.anhaenge else n.anhaenge or [])],
+				"anhaenge": [{**a, "art": _art(a.get("name"))} for a in _anhaenge(n)],
 			}
 			for n in sorted(d.nachrichten, key=lambda x: (x.datum or d.datum, x.idx))
 		],
@@ -109,6 +128,53 @@ def gelesen(id):
 	d = _geladen(id)
 	if d.neue_antwort:
 		d.db_set("neue_antwort", 0, update_modified=False)
+	return anfrage_ui(d)
+
+
+@frappe.whitelist(methods=["POST"])
+def kategorie_setzen(id, kategorie):
+	"""Mail umsortieren (Anfrage, Bestellung, Rechnung, Lieferant, Sonstiges)."""
+	nur_cnc()
+	if kategorie not in mail.KATEGORIEN:
+		frappe.throw(_("Die Art {0} gibt es nicht.").format(kategorie))
+	d = _geladen(id)
+	d.db_set("kategorie", kategorie)
+	return anfrage_ui(d)
+
+
+@frappe.whitelist(methods=["POST"])
+def erledigt(id, erledigt=1, auftrag=""):
+	"""Bestellung, Rechnung oder sonstige Mail als erledigt markieren (oder wieder öffnen). Der Inhalt bleibt erhalten.
+	`auftrag`: der Auftrag, der aus der Bestellung dieser Mail entstanden ist."""
+	nur_cnc()
+	d = _geladen(id)
+	if auftrag and frappe.db.exists("Auftrag", auftrag):
+		d.db_set("auftrag", auftrag)
+	if int(erledigt):
+		d.db_set({"status": "Erledigt", "neue_antwort": 0})
+	elif d.status == "Erledigt":
+		d.db_set("status", "Neu")
+	return anfrage_ui(d)
+
+
+@frappe.whitelist(methods=["POST"])
+def lieferant_zuordnen(id, lieferant):
+	"""Mail einem Lieferanten zuordnen. Die Absenderadresse kommt zu dessen weiteren Adressen, damit seine nächsten Mails
+	(auch Rechnungen) von selbst im Posteingang landen."""
+	nur_cnc()
+	d = _geladen(id)
+	if not frappe.db.exists("Lieferant", lieferant):
+		frappe.throw(_("Den Lieferanten {0} gibt es nicht.").format(lieferant))
+	l = frappe.get_doc("Lieferant", lieferant)
+	adresse = (d.von_email or "").lower()
+	bekannt = {(l.email or "").lower(), *(z.strip().lower() for z in (l.weitere_emails or "").splitlines())}
+	if adresse and adresse not in bekannt:
+		l.weitere_emails = "\n".join(x for x in [(l.weitere_emails or "").strip(), adresse] if x)
+		l.save()
+	d.lieferant = l.name
+	if d.kategorie in ("Anfrage", "Sonstiges"):
+		d.kategorie = "Lieferant"
+	d.save()
 	return anfrage_ui(d)
 
 
@@ -209,6 +275,9 @@ def keine_anfrage(id):
 	d = _geladen(id)
 	if d.angebot:
 		frappe.throw(_("Zu dieser Anfrage gibt es schon das Angebot {0}.").format(d.angebot))
+	er = frappe.get_all("Eingangsrechnung", filters={"mail": d.name}, pluck="name")
+	if er:
+		frappe.throw(_("Aus dieser Mail gibt es schon die Eingangsrechnung {0}; bitte als erledigt markieren.").format(", ".join(er)))
 	for f in frappe.get_all("File", filters={"attached_to_doctype": "Mail Anfrage", "attached_to_name": d.name}, pluck="name"):
 		frappe.delete_doc("File", f, ignore_permissions=True)
 	for n in d.nachrichten:
@@ -227,7 +296,8 @@ FELDER = {
 	"aktiv": "aktiv", "benutzer": "benutzer", "absenderName": "absender_name", "verschluesselung": "verschluesselung",
 	"imapServer": "imap_server", "imapPort": "imap_port", "smtpServer": "smtp_server", "smtpPort": "smtp_port",
 	"stichwoerter": "stichwoerter", "abholenAb": "abholen_ab", "postfachOrdner": "postfach_ordner", "gesendetOrdner": "gesendet_ordner",
-	"antwortVorlage": "antwort_vorlage",
+	"antwortVorlage": "antwort_vorlage", "bekannteAbsender": "bekannte_absender", "freemailDomains": "freemail_domains",
+	"woerterBestellung": "woerter_bestellung", "woerterRechnung": "woerter_rechnung", "gesperrteEndungen": "gesperrte_endungen",
 }
 
 
@@ -237,6 +307,8 @@ def einstellungen_ui(s=None):
 	out.update(
 		aktiv=bool(s.aktiv), abholenAb=str(s.abholen_ab or ""), passwortGesetzt=bool(s.get_password("passwort", raise_exception=False)),
 		letzterAbruf=_iso(s.letzter_abruf), letzterFehler=s.letzter_fehler or "", antwortVorlage=s.antwort_vorlage or STANDARD_VORLAGE,
+		bekannteAbsender=bool(s.bekannte_absender),
+		standardFreemail="\n".join(sorted(mail.FREEMAIL)), standardGesperrt=" ".join(mail.GESPERRT),
 	)
 	return out
 
@@ -260,7 +332,7 @@ def einstellungen_speichern(daten):
 		wert = daten[ui]
 		if feld in ("imap_port", "smtp_port"):
 			wert = int(wert or 0) or None
-		elif feld == "aktiv":
+		elif feld in ("aktiv", "bekannte_absender"):
 			wert = 1 if wert else 0
 		elif feld == "stichwoerter":
 			wert = "\n".join(z.strip() for z in (wert or "").splitlines() if z.strip())
@@ -269,8 +341,8 @@ def einstellungen_speichern(daten):
 		s.set(feld, wert)
 	if daten.get("passwort"):
 		s.passwort = daten["passwort"]
-	if s.aktiv and not mail.stichwoerter(s):
-		frappe.throw(_("Bitte mindestens ein Stichwort für den Betreff eintragen."))
+	if s.aktiv and not mail.stichwoerter(s) and not s.bekannte_absender:
+		frappe.throw(_("Bitte mindestens ein Stichwort für den Betreff eintragen oder Mails bekannter Absender abholen."))
 	s.save()
 	return einstellungen_ui(s)
 
@@ -498,6 +570,13 @@ AB_VORLAGE = (
 )
 
 
+AB_AENDERUNG_VORLAGE = (
+	"{anrede},\n\nwie besprochen haben wir Ihren Auftrag{bestellung} geändert. Anbei erhalten Sie die geänderte "
+	"Auftragsbestätigung {auftrag}.\n\nBitte prüfen Sie die Angaben und geben Sie uns Bescheid, falls etwas nicht stimmt.\n\n"
+	"Mit freundlichen Grüßen\n{absender}"
+)
+
+
 def _ab_empfaenger(d):
 	if d.kontakt_email:
 		return d.kontakt_email
@@ -509,6 +588,7 @@ def _ab_empfaenger(d):
 def ab_vorschlag(auftrag):
 	"""Vorschlag für die Mail mit der Auftragsbestätigung: an den Ansprechpartner des Auftrags, sonst an den Kontakt des Kunden."""
 	nur_cnc()
+	from cnc_one.api import belegdruck
 	from cnc_one.api.firma import firma_ui
 
 	d = frappe.get_doc("Auftrag", auftrag)
@@ -520,10 +600,10 @@ def ab_vorschlag(auftrag):
 		anrede=_anrede(d.kunde, (an or "").lower()), auftrag=d.name, bestellung=f" {d.kundenbestellnr}" if d.kundenbestellnr else "",
 		absender=s.absender_name or firma, firma=firma,
 	)
-	betreff = f"Auftragsbestätigung {d.name}" + (f" zu Ihrer Bestellung {d.kundenbestellnr}" if d.kundenbestellnr else "")
+	betreff = f"Auftragsbestätigung {d.name}" + (f" (Änderung {d.aenderung_nr})" if d.aenderung_nr else "") + (f" zu Ihrer Bestellung {d.kundenbestellnr}" if d.kundenbestellnr else "")
 	bereit = bool(s.smtp_server and s.benutzer and s.get_password("passwort", raise_exception=False))
 	return {
-		"an": an, "cc": "", "betreff": betreff, "text": AB_VORLAGE.format_map(werte), "anhang": f"Auftragsbestätigung {d.name}.pdf",
+		"an": an, "cc": "", "betreff": betreff, "text": (AB_AENDERUNG_VORLAGE if d.aenderung_nr else AB_VORLAGE).format_map(werte), "anhang": belegdruck.ab_dateiname(d),
 		"bereit": bereit, "absender": s.benutzer or "", "gesendetAm": _iso(d.ab_gesendet_am) if d.ab_gesendet_am else "",
 	}
 
@@ -557,6 +637,7 @@ def ab_senden(auftrag, an, cc="", betreff="", text=""):
 	s = mail.einstellungen()
 	d.ab_gesendet_am = now_datetime()
 	datei = belegdruck.ab_pdf_ablegen(d)
+	d.ab_aenderung = d.aenderung_nr or 0
 	with open(datei.get_full_path(), "rb") as fh:
 		inhalt = fh.read()
 

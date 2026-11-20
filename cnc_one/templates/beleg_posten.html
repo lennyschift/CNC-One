@@ -1,6 +1,6 @@
 <table class="posten">
   <thead><tr>
-    <th class="c-nr">Pos</th><th colspan="2">Bauteil</th><th class="c-menge r">Menge</th><th class="c-einzel r">Stückpreis</th><th class="c-betrag r">Betrag</th>
+    <th class="c-nr">Pos</th><th>Bauteil</th><th class="c-menge r">Menge</th><th class="c-einzel r">Stückpreis</th><th class="c-betrag r">Betrag</th>
   </tr></thead>
   {% for p in positionen %}{% set pr = p.preis %}{% set haupt = pr.haupt or [None] %}{% set zeilen = (haupt | length) + (pr.kosten | length) + (pr.summen | length) %}
   <tbody>
@@ -8,15 +8,15 @@
     <tr class="{{ 'erste' if loop.first }} {{ 'letzte' if loop.last and zeilen == haupt | length }}">
       {% if loop.first %}
       <td class="c-nr" rowspan="{{ zeilen }}">{{ p.nr }}</td>
-      <td class="c-bild" rowspan="{{ zeilen }}">{% if p.bild %}<img class="bild" src="{{ p.bild }}">{% endif %}</td>
       <td class="text" rowspan="{{ haupt | length }}">
-        <div class="name">{{ p.teil.name }}</div>
+        <div class="name{{ ' entfallen' if p.entfallen }}">{{ p.teil.name }}</div>
         {% for x in p.angaben %}<div class="angaben">{{ x }}</div>{% endfor %}
         {% if p.info %}<div class="info">{{ p.info }}</div>{% endif %}
       </td>
       {% endif %}
       {% if h %}
       <td class="r">{{ h.menge }} Stk</td><td class="r">{{ eur(h.einzel) }}</td><td class="r">{{ eur(h.betrag) }}</td>
+      {% elif p.entfallen %}<td class="r entfaellt" colspan="3">entfällt</td>
       {% else %}<td></td><td></td><td></td>{% endif %}
     </tr>
     {% endfor %}
@@ -27,8 +27,7 @@
     {% endfor %}
     {% for x in pr.summen %}
     <tr class="summe {{ 'letzte' if loop.last }}">
-      <td class="text kl">{% if loop.first %}Summe Position{% endif %}</td>
-      <td class="r s">{% if x.menge %}{{ x.menge }} Stk{% endif %}</td><td class="s"></td><td class="r s">{{ eur(x.betrag) }}</td>
+      <td></td><td class="r">{% if x.menge %}{{ x.menge }} Stk{% endif %}</td><td></td><td class="r s">= {{ eur(x.betrag) }}</td>
     </tr>
     {% endfor %}
   </tbody>

@@ -5,6 +5,7 @@ Doctype-Berechtigungen. Was schon in Belegen verwendet wird, lässt sich nicht l
 """
 
 import json
+import re
 
 import frappe
 from frappe import _
@@ -103,7 +104,7 @@ def kunde_setzen(doc, d):
 
 # ----------------------------------------------------------------- Lieferant, Maschine, Material
 def lieferant_ui(d):
-	return {"id": d.name, "name": d.lieferantenname, "leistung": d.leistung or "", "email": d.email or "", "telefon": d.telefon or "", "adresse": d.adresse or "", "aktiv": bool(d.aktiv)}
+	return {"id": d.name, "name": d.lieferantenname, "leistung": d.leistung or "", "email": d.email or "", "weitereEmails": d.weitere_emails or "", "telefon": d.telefon or "", "adresse": d.adresse or "", "ustId": d.ust_id or "", "aktiv": bool(d.aktiv)}
 
 
 def lieferant_setzen(doc, d):
@@ -113,6 +114,10 @@ def lieferant_setzen(doc, d):
 	doc.email = _text(d.get("email"))
 	doc.telefon = _text(d.get("telefon"))
 	doc.adresse = _text(d.get("adresse"))
+	if "weitereEmails" in d:
+		doc.weitere_emails = "\n".join(z.strip().lower() for z in re.split(r"[\s,;]+", d.get("weitereEmails") or "") if "@" in z)
+	if "ustId" in d:
+		doc.ust_id = _text(d.get("ustId"))
 	doc.aktiv = 1 if d.get("aktiv", True) else 0
 
 

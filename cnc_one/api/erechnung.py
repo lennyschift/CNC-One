@@ -167,8 +167,9 @@ def _html(doc, firma):
 		"leistung": von if von == bis else f"{von} – {bis}" if von and bis else "",
 		"vorgaenger_nummer": frappe.db.get_value("Rechnung", doc.storno_zu, "rechnungsnummer") if doc.storno_zu else "",
 	}
-	with open(frappe.get_app_path("cnc_one", TEMPLATE), encoding="utf-8") as f:
-		return frappe.render_template(f.read(), kontext)
+	from cnc_one.logic import vorlagen
+
+	return frappe.render_template(vorlagen.lesen("rechnung_pdf.html"), kontext)
 
 
 # ------------------------------------------------------------------ Ablage

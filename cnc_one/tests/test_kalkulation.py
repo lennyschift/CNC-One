@@ -21,6 +21,16 @@ class TestKalkulation(UnitTestCase):
 			with self.subTest(f["name"]):
 				self.assertEqual(berechne(f["eingabe"]), f["erwartet"])
 
+	def test_arbeitsgang_direkt_in_euro(self):
+		"""Wie calc.test.js: Rüsten oder Stück je Arbeitsgang direkt in Euro statt Zeit × Satz."""
+		plan = [
+			{"id": "a", "name": "Drehen", "typ": "intern", "satz": 90, "ruestMin": 30, "stueckMin": 4, "ruestDirekt": True, "ruestEuro": 50},
+			{"id": "b", "name": "Fräsen", "typ": "intern", "satz": 120, "ruestMin": 60, "stueckMin": 3, "stueckDirekt": True, "stueckEuro": 2.5},
+		]
+		r = berechne({"name": "T", "menge": 10, "gewichtKg": 0.5, "materialPreisKg": 8, "arbeitsgaenge": plan, "inStueckpreis": {}, "staffel": {"aktiv": False, "stufen": []}})
+		self.assertEqual(r["setup"], 170)
+		self.assertEqual(r["unit"], 8.5)
+
 	def test_zahlen_wie_in_javascript(self):
 		self.assertEqual(num("12.5"), 12.5)
 		self.assertEqual(num("12,5"), 0)

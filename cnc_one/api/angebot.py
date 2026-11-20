@@ -63,7 +63,24 @@ def angebot_ui(d):
 		],
 		"netto": d.netto or 0,
 		"entwurfId": "",
-		"mailAnfrage": mail_api.zu_angebot(d.name),
+		# eine Überarbeitung gehört zur Mail-Anfrage des ursprünglichen Angebots
+		"mailAnfrage": mail_api.zu_angebot(d.name) or (mail_api.zu_angebot(d.ursprung) if d.ursprung else None),
+		**fassung_ui(d),
+	}
+
+
+def fassung_ui(d):
+	"""Fassung des Angebots: ursprüngliches Angebot (0) oder Überarbeitung (-1, -2 …), dazu alle Fassungen der Reihe."""
+	wurzel = d.ursprung or d.name
+	reihe = []
+	if d.ursprung or d.ersetzt_durch or (d.name and frappe.db.exists("Angebot", {"ursprung": d.name})):
+		reihe = [
+			{"id": r.name, "fassung": r.fassung or 0, "status": r.status, "versandt": _iso(r.versandt_am), "grund": r.aenderungsgrund or ""}
+			for r in frappe.get_all("Angebot", or_filters={"name": wurzel, "ursprung": wurzel}, fields=["name", "fassung", "status", "versandt_am", "aenderungsgrund"], order_by="fassung asc")
+		]
+	return {
+		"fassung": d.fassung or 0, "ursprung": d.ursprung or "", "vorgaenger": d.vorgaenger or "", "ersetztDurch": d.ersetzt_durch or "",
+		"aenderungsgrund": d.aenderungsgrund or "", "fassungen": reihe,
 	}
 
 
@@ -151,6 +168,52 @@ def senden(id):
 	doc.status = "Gesendet"
 	doc.versandt_am = now_datetime()
 	doc.save()
+	# Eine Überarbeitung ersetzt mit dem Senden die vorige Fassung; die bleibt unverändert (nur ansehen)
+	if doc.vorgaenger and frappe.db.exists("Angebot", doc.vorgaenger):
+		alt = frappe.get_doc("Angebot", doc.vorgaenger)
+		if alt.status != "Ersetzt":
+			alt.flags.status_wechsel = True
+			alt.status = "Ersetzt"
+			alt.ersetzt_durch = doc.name
+			alt.save(ignore_permissions=True)
+	return angebot_ui(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def ueberarbeiten(id, grund=""):
+	"""Neue Fassung eines gesendeten (oder abgelehnten) Angebots als Entwurf: gleiche Nummer mit -1, -2 … Das Original
+	bleibt unverändert; mit dem Senden der neuen Fassung gilt es als ersetzt. Gibt es schon eine offene Überarbeitung,
+	kommt diese zurück."""
+	nur_cnc()
+	alt = _geladen(id)
+	offen = frappe.db.get_value("Angebot", {"vorgaenger": alt.name, "status": "Entwurf"}, "name")
+	if offen:
+		return angebot_ui(frappe.get_doc("Angebot", offen))
+	if alt.status not in ("Gesendet", "Abgelehnt"):
+		frappe.throw(_("Überarbeiten lässt sich nur ein gesendetes oder abgelehntes Angebot."))
+	if alt.ersetzt_durch:
+		frappe.throw(_("Dieses Angebot ist schon durch {0} ersetzt.").format(alt.ersetzt_durch))
+	if beauftragt(alt.name):
+		frappe.throw(_("Zu diesem Angebot gibt es schon einen Auftrag. Änderungen bitte im Auftrag vornehmen („Auftrag ändern“)."))
+	wurzel = alt.ursprung or alt.name
+	nr = int(frappe.db.sql("select coalesce(max(fassung), 0) from `tabAngebot` where ursprung = %s", (wurzel,))[0][0] or 0) + 1
+	neu = frappe.new_doc("Angebot")
+	for f in ("kunde", "anfrage_nr", "projekt", "kontakt_name", "kontakt_email", "gueltig_wochen", "lieferzeit", "material_drucken"):
+		neu.set(f, alt.get(f))
+	neu.update({"status": "Entwurf", "ursprung": wurzel, "vorgaenger": alt.name, "fassung": nr, "aenderungsgrund": (grund or "").strip()})
+	for z in alt.positionen:
+		# Bauteile gehören schon dem ursprünglichen Angebot: die Überarbeitung legt keine neuen an und räumt keine ab
+		neu.append("positionen", {"kalkulation": z.kalkulation, "bauteil": z.bauteil, "bauteil_neu": 0, "revision": z.revision})
+	neu.insert(set_name=f"{wurzel}-{nr}")
+	return angebot_ui(neu)
+
+
+@frappe.whitelist(methods=["POST"])
+def grund_setzen(id, grund=""):
+	"""Grund der Überarbeitung (intern) auch nach dem Senden ändern."""
+	nur_cnc()
+	doc = _geladen(id)
+	doc.db_set("aenderungsgrund", (grund or "").strip())
 	return angebot_ui(doc)
 
 
@@ -166,7 +229,11 @@ def projekt_setzen(id, projekt=""):
 
 def beauftragt(name):
 	"""Gibt es zum Angebot einen Auftrag (nicht storniert)? Dann ist es angenommen: nicht mehr ablehnen, nicht neu senden."""
-	return bool(frappe.db.exists("Auftrag", {"angebot": name, "status": ["!=", "Storniert"]}))
+	if frappe.db.exists("Auftrag", {"angebot": name, "status": ["!=", "Storniert"]}):
+		return True
+	# auch Aufträge aus einer Bestellung, deren Positionen auf dieses Angebot verweisen
+	return bool(frappe.db.sql("""select 1 from `tabAuftragsposition` p join `tabAuftrag` a on a.name = p.parent
+		where p.angebot = %s and a.status != 'Storniert' limit 1""", (name,)))
 
 
 @frappe.whitelist(methods=["POST"])
@@ -223,6 +290,14 @@ def _preiszeilen(e, t):
 	return {"haupt": haupt, "kosten": kosten, "summen": summen, "staffel": False}
 
 
+def werkstoff_drucken(teil, angebot=None):
+	"""Ob der Werkstoff dieser Position im PDF steht: Schalter an der Position; ältere Angebote hatten ihn
+	nur für das ganze Angebot (material_drucken)."""
+	if "werkstoffDrucken" in (teil or {}):
+		return bool(teil["werkstoffDrucken"])
+	return bool(angebot and angebot.get("material_drucken"))
+
+
 def pdf_erzeugen(doc, zu_haenden=""):
 	"""Das Angebot als PDF (PDF/A-3, wie die Rechnung). Datum ist der Versandtag, sonst heute."""
 	from cnc_one.api.erechnung import _de, _eur
@@ -235,9 +310,9 @@ def pdf_erzeugen(doc, zu_haenden=""):
 		p["nr"] = nr
 		p["bild"] = _bild(t.get("vorschaubild") or bauteil_api.vorschau(p["bauteilId"]))
 		zeichnung = f"Zeichnung {t['zeichnungsnr']}" + (f" Rev. {t['revision']}" if t.get("revision") else "") if t.get("zeichnungsnr") else ""
-		termin = f"Liefertermin {_de(t['liefertermin'])}" if t.get("liefertermin") else ""
-		werkstoff = f"Werkstoff {t['material']}" if doc.material_drucken and t.get("material") else ""
-		p["angaben"] = [x for x in (f"Teilenummer {t['teilenummer']}" if t.get("teilenummer") else "", zeichnung, werkstoff, termin) if x]
+		# Liefertermin je Position bleibt intern (geht in Auftrag und Fertigung); im Angebot steht die Lieferzeit im Kopf
+		werkstoff = f"Werkstoff {t['material']}" if werkstoff_drucken(t, doc) and t.get("material") else ""
+		p["angaben"] = [x for x in (f"Teilenummer {t['teilenummer']}" if t.get("teilenummer") else "", zeichnung, werkstoff) if x]
 		p["info"] = (t.get("infoKunde") or "").strip()
 		t.setdefault("staffel", {"aktiv": False})
 		p["preis"] = _preiszeilen(p["ergebnis"], t)
@@ -250,8 +325,9 @@ def pdf_erzeugen(doc, zu_haenden=""):
 		"staffel": any(p["teil"]["staffel"].get("aktiv") for p in a["positionen"]), "de": _de, "eur": _eur,
 		"rahmen": briefbogen.rahmen(firma), "posten": briefbogen.posten(a["positionen"]),
 	}
-	with open(frappe.get_app_path("cnc_one", PDF_VORLAGE), encoding="utf-8") as f:
-		html = frappe.render_template(f.read(), kontext)
+	from cnc_one.logic import vorlagen
+
+	html = frappe.render_template(vorlagen.lesen("angebot_pdf.html"), kontext)
 	return pdf.pdf_a3(html, titel=f"Angebot {doc.name}", autor=firma.get("firmenname", ""))
 
 

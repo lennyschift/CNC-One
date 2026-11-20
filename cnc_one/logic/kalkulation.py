@@ -58,15 +58,25 @@ def hat_plan(p):
 	return len(_intern(p)) > 0
 
 
+def ag_ruest(a):
+	"""Rüstkosten eines internen Arbeitsgangs: direkt in Euro oder Rüstzeit × Satz."""
+	return num(a.get("ruestEuro")) if a.get("ruestDirekt") else num(a.get("ruestMin")) / 60 * num(a.get("satz"))
+
+
+def ag_stueck(a):
+	"""Stückkosten eines internen Arbeitsgangs: direkt in Euro oder Stückzeit × Satz."""
+	return num(a.get("stueckEuro")) if a.get("stueckDirekt") else num(a.get("stueckMin")) / 60 * num(a.get("satz"))
+
+
 def ruest_kosten(p):
 	if hat_plan(p):
-		return r2(_summe(num(a.get("ruestMin")) / 60 * num(a.get("satz")) for a in _intern(p)))
+		return r2(_summe(ag_ruest(a) for a in _intern(p)))
 	return r2(num(p.get("ruestMin")) / 60 * num(p.get("satzRuest")))
 
 
 def stueck_kosten(p):
 	if hat_plan(p):
-		return r2(_summe(num(a.get("stueckMin")) / 60 * num(a.get("satz")) for a in _intern(p)))
+		return r2(_summe(ag_stueck(a) for a in _intern(p)))
 	return r2(num(p.get("stueckMin")) / 60 * num(p.get("satzStueck")))
 
 

@@ -16,7 +16,7 @@ from frappe.utils import get_datetime, getdate, now_datetime
 # Belege, an denen Dokumente hängen können, und woher der Kunde kommt
 BELEGE = {
 	"Bauteil": "kunde", "Angebot": "kunde", "Auftrag": "kunde", "Rechnung": "kunde", "Lieferschein": "kunde",
-	"Mail Anfrage": "kunde", "Mahnung": "kunde", "Kunde": None,
+	"Mail Anfrage": "kunde", "Mahnung": "kunde", "Kunde": None, "Eingangsrechnung": None,
 }
 # Je mehr Aussage, desto weiter vorne: ein Dokument an mehreren Belegen bekommt die genaueste Art
 RANG = ["Rechnung", "E-Rechnung (XML)", "Angebot", "Lieferschein", "Mahnung", "Bestellung", "Zeichnung", "3D-Modell", "Mail-Anhang", "Sonstiges"]
@@ -34,7 +34,7 @@ def art_von(f):
 	"""Art eines einzelnen Dateieintrags aus dem Beleg, dem Feld und der Endung."""
 	endung = _endung(f.file_name)
 	dt = f.attached_to_doctype
-	if dt == "Rechnung":
+	if dt in ("Rechnung", "Eingangsrechnung"):
 		return "E-Rechnung (XML)" if endung == "xml" else "Rechnung"
 	if dt in ("Lieferschein", "Mahnung"):
 		return dt
@@ -81,6 +81,9 @@ class _Belege:
 			return {"kunde": kunde, "bezeichnung": bez, "teil": t}
 		if dt == "Rechnung":
 			bez = frappe.db.get_value("Rechnung", name, "rechnungsnummer") or name
+		elif dt == "Eingangsrechnung":
+			r = frappe.db.get_value("Eingangsrechnung", name, ["lieferant_name", "rechnungsnr"], as_dict=True)
+			bez = f"{name} · {r.lieferant_name or ''} {r.rechnungsnr or ''}".strip()
 		elif dt == "Mail Anfrage":
 			bez = f"{name} · {(frappe.db.get_value('Mail Anfrage', name, 'betreff') or '')[:60]}"
 			return {"kunde": kunde, "bezeichnung": bez, "aus_zip": _aus_zip(name)}

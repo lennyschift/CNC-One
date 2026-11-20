@@ -73,10 +73,10 @@ def bild_zur_auftragsposition(auftrag, position_key, bauteil=None):
 	"""Bild über die Auftragsposition (Lieferschein, Rechnung, Fertigung): bestellte Revision, sonst das Angebot."""
 	pos = None
 	if auftrag and position_key:
-		pos = frappe.db.get_value("Auftragsposition", {"parent": auftrag, "position_key": position_key}, ["bauteil", "revision", "angebot_position_key"], as_dict=True)
+		pos = frappe.db.get_value("Auftragsposition", {"parent": auftrag, "position_key": position_key}, ["bauteil", "revision", "angebot", "angebot_position_key"], as_dict=True)
 	if not pos:
 		return vorschau(bauteil)
-	return bild(pos.bauteil or bauteil, pos.revision, frappe.db.get_value("Auftrag", auftrag, "angebot"), pos.angebot_position_key)
+	return bild(pos.bauteil or bauteil, pos.revision, pos.angebot or frappe.db.get_value("Auftrag", auftrag, "angebot"), pos.angebot_position_key)
 
 
 def dateien_fuer(name, revision=""):

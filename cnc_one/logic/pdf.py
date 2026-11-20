@@ -77,7 +77,8 @@ def pdf_a3(html, xml=None, titel="", autor=""):
 	if xml:
 		anhaenge.append(Attachment(file_obj=io.BytesIO(xml), name=FX_DATEINAME, description="Factur-X Rechnungsdaten (EN 16931)", relationship="Alternative"))
 	dokument = HTML(string=html)
-	optionen = {"pdf_variant": "pdf/a-3b", "attachments": anhaenge}
+	# hinting: Hinting der Schrift mit einbetten, sonst zeichnen PDF-Betrachter dünne Striche (I, l) ungleich dick
+	optionen = {"pdf_variant": "pdf/a-3b", "attachments": anhaenge, "hinting": True}
 	if xml:
 		optionen["finisher"] = _finisher
 	return dokument.write_pdf(**optionen)

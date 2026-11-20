@@ -23,14 +23,24 @@
   <table class="meta">
     <tr><td class="k">Auftrag</td><td class="v"><strong>{{ a.id }}</strong></td></tr>
     <tr><td class="k">Datum</td><td class="v">{{ de(datum) }}</td></tr>
+    {% if aenderung %}<tr><td class="k">Änderung</td><td class="v">{{ aenderung }}</td></tr>{% endif %}
     {% if a.kundenbestellnr %}<tr><td class="k">Ihre Bestellung</td><td class="v">{{ a.kundenbestellnr }}</td></tr>{% endif %}
     {% if a.angebotId %}<tr><td class="k">Unser Angebot</td><td class="v">{{ a.angebotId }}</td></tr>{% endif %}
     {% if kunde.lieferantennr %}<tr><td class="k">Lieferanten-Nr.</td><td class="v">{{ kunde.lieferantennr }}</td></tr>{% endif %}
   </table>
 </div>
 
+{% if aenderung %}
+<h1>Auftragsbestätigung – Änderung {{ aenderung }}</h1>
+<div class="einleitung">Wie besprochen haben wir Ihren Auftrag{% if a.kundenbestellnr %} {{ a.kundenbestellnr }}{% endif %} geändert. Diese Bestätigung ersetzt die bisherige; es gelten folgende Positionen:</div>
+{% if aenderungen %}<div class="aenderungen">
+  <div class="label">Geändert</div>
+  {% for x in aenderungen %}{% for z in x.zeilen %}<div class="aenderung">{{ z }}</div>{% endfor %}{% endfor %}
+</div>{% endif %}
+{% else %}
 <h1>Auftragsbestätigung</h1>
 <div class="einleitung">Vielen Dank für Ihren Auftrag{% if a.kundenbestellnr %} {{ a.kundenbestellnr }}{% endif %}. Wir bestätigen Ihnen folgende Positionen:</div>
+{% endif %}
 
 {{ posten | safe }}
 

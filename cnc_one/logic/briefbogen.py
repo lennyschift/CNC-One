@@ -30,8 +30,10 @@ SYMBOLE = {k: _symbol(v) for k, v in _SVG.items()}
 
 
 def _datei(name):
-	with open(frappe.get_app_path("cnc_one", "templates", name), encoding="utf-8") as f:
-		return f.read()
+	"""Stand der Vorlage: in der Oberfläche geändert (Druckvorlage) oder die Datei im Code."""
+	from cnc_one.logic import vorlagen
+
+	return vorlagen.lesen(name)
 
 
 def _web(url):

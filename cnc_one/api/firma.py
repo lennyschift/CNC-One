@@ -25,6 +25,7 @@ def firma_ui(d=None):
 		"zahlungszielTage": d.zahlungsziel_tage or 14,
 		"mahnfristTage": d.mahnfrist_tage or 7,
 		"mahngebuehr": d.mahngebuehr or 0,
+		"bestellungToleranz": d.bestellung_toleranz if d.bestellung_toleranz is not None else 0.5,
 		"briefkopf": d.briefkopf or "",
 	}
 
@@ -59,6 +60,8 @@ def speichern(daten):
 		d.mahnfrist_tage = max(0, int(daten["mahnfristTage"] or 0))
 	if "mahngebuehr" in daten:
 		d.mahngebuehr = max(0, float(daten["mahngebuehr"] or 0))
+	if "bestellungToleranz" in daten:
+		d.bestellung_toleranz = min(20, max(0, float(daten["bestellungToleranz"] or 0)))
 	if "briefkopf" in daten and (daten["briefkopf"] or "") != (d.briefkopf or ""):
 		_alte_kopfzeile_entfernen(d.briefkopf)
 		d.briefkopf = daten["briefkopf"] or ""

@@ -19,8 +19,9 @@ from cnc_one.logic.serien import formatiert
 def _vorlage(name, kontext):
 	from cnc_one.api.erechnung import _de, _eur
 
-	with open(frappe.get_app_path("cnc_one", "templates", name), encoding="utf-8") as f:
-		return frappe.render_template(f.read(), {**kontext, "de": _de, "eur": _eur, "rahmen": briefbogen.rahmen(kontext["f"])})
+	from cnc_one.logic import vorlagen
+
+	return frappe.render_template(vorlagen.lesen(name), {**kontext, "de": _de, "eur": _eur, "rahmen": briefbogen.rahmen(kontext["f"])})
 
 
 def _ablegen(doctype, doc, dateiname, offen, erzeugen, neu=False):
@@ -55,7 +56,9 @@ def lieferschein_pdf_erzeugen(doc):
 	for p, z in zip(l["positionen"], doc.positionen):
 		t = p["teil"]
 		p["bild"] = _bild(vorschau(z.bauteil))
+		bestellpos = frappe.db.get_value("Auftragsposition", {"parent": z.auftrag, "position_key": z.auftragsposition_key}, "bestellposition") if z.get("auftrag") and z.get("auftragsposition_key") else ""
 		p["angaben"] = " · ".join(x for x in (
+			f"Ihre Pos. {bestellpos}" if bestellpos else "",
 			f"Teilenummer {t['teilenummer']}" if t.get("teilenummer") else "", f"Zeichnung {t['zeichnungsnr']}" if t.get("zeichnungsnr") else "",
 		) if x)
 		p["serien"] = _serien(z)
@@ -87,19 +90,20 @@ def mahnung_pdf_ablegen(doc, neu=False):
 
 # ----------------------------------------------------------------- Auftragsbestätigung
 def _angebotsangaben(doc):
-	"""{ angebot_position_key: kalkulation } des Angebots, für die Kundeninfo; dazu, ob der Werkstoff gedruckt wird."""
-	if not doc.angebot:
-		return {}, False
+	"""{ (angebot, angebot_position_key): kalkulation } der Angebote des Auftrags, für die Kundeninfo; dazu die Angebote
+	(Werkstoff drucken). Positionen aus einer Bestellung können aus verschiedenen Angeboten stammen."""
 	import json
 
-	ang = frappe.get_doc("Angebot", doc.angebot)
-	kalk = {}
-	for z in ang.positionen:
-		try:
-			kalk[z.position_key] = json.loads(z.kalkulation or "{}") or {}
-		except (TypeError, ValueError):
-			kalk[z.position_key] = {}
-	return kalk, bool(ang.material_drucken)
+	kalk, angebote = {}, {}
+	for name in dict.fromkeys(x for x in [doc.angebot] + [z.angebot for z in doc.positionen] if x):
+		ang = frappe.get_doc("Angebot", name)
+		angebote[name] = ang
+		for z in ang.positionen:
+			try:
+				kalk[(name, z.position_key)] = json.loads(z.kalkulation or "{}") or {}
+			except (TypeError, ValueError):
+				kalk[(name, z.position_key)] = {}
+	return kalk, angebote
 
 
 def ab_pdf_erzeugen(doc, zu_haenden=""):
@@ -109,19 +113,31 @@ def ab_pdf_erzeugen(doc, zu_haenden=""):
 	from cnc_one.api.erechnung import _de
 
 	a = auftrag_ui(doc)
-	kalk, werkstoff = _angebotsangaben(doc)
+	from cnc_one.api.angebot import werkstoff_drucken
+
+	kalk, angebote = _angebotsangaben(doc)
 	for nr, (p, z) in enumerate(zip(a["positionen"], doc.positionen), 1):
 		t = p["teil"]
 		p["nr"] = nr
 		p["bild"] = _bild(t.get("vorschaubild") or vorschau(z.bauteil))
 		zeichnung = f"Zeichnung {t['zeichnungsnr']}" + (f" Rev. {z.revision}" if z.revision else "") if t.get("zeichnungsnr") else ""
+		ang_name = z.angebot or doc.angebot
+		k = kalk.get((ang_name, z.angebot_position_key))
 		p["angaben"] = [x for x in (
+			f"Ihre Pos. {z.bestellposition}" if z.bestellposition else "",
 			f"Teilenummer {t['teilenummer']}" if t.get("teilenummer") else "", zeichnung,
-			f"Werkstoff {t['material']}" if werkstoff and t.get("material") else "",
+			f"Werkstoff {t['material']}" if werkstoff_drucken(k, angebote.get(ang_name)) and t.get("material") else "",
 			f"Liefertermin {_de(z.liefertermin)}" if z.liefertermin else "",
 			f"Seriennummern {_serien(z)}" if z.serien_von else "",
 		) if x]
-		p["info"] = ((kalk.get(z.angebot_position_key) or {}).get("infoKunde") or "").strip()
+		p["info"] = ((k or {}).get("infoKunde") or "").strip()
+		if z.menge_urspruenglich and not z.entfallen and z.menge_urspruenglich != z.menge:
+			p["angaben"].append(f"Menge geändert, bisher {z.menge_urspruenglich} Stk")
+		if z.entfallen:
+			p["entfallen"] = True
+			p["angaben"] = [x for x in p["angaben"] if not x.startswith(("Liefertermin", "Seriennummern"))]
+			p["preis"] = {"haupt": [None], "kosten": [], "summen": [], "staffel": False}
+			continue
 		einzel = p["einzelpreis"] or 0
 		haupt = [{"menge": p["menge"], "einzel": einzel, "betrag": round(einzel * (p["menge"] or 0), 2)}]
 		p["preis"] = {"haupt": haupt, "kosten": p["kosten"], "summen": [{"menge": None, "betrag": p["summe"]}] if p["kosten"] else [], "staffel": False}
@@ -129,15 +145,35 @@ def ab_pdf_erzeugen(doc, zu_haenden=""):
 	firma = firma_ui()
 	html = _vorlage("auftragsbestaetigung_pdf.html", {
 		"a": a, "f": firma, "kunde": kunde, "zu_haenden": zu_haenden or doc.kontakt_name or "",
+		"aenderung": doc.aenderung_nr or 0, "aenderungen": ab_aenderungen(doc),
 		"datum": getdate(doc.ab_gesendet_am) if doc.ab_gesendet_am else getdate(), "mwst": round((doc.netto or 0) * 0.19, 2),
 		"posten": briefbogen.posten(a["positionen"]), "stempel": "STORNIERT" if doc.status == "Storniert" else "",
 	})
 	return pdf.pdf_a3(html, titel=f"Auftragsbestätigung {doc.name}", autor=firma.get("firmenname", ""))
 
 
+def ab_aenderungen(doc):
+	"""Änderungen, die diese Auftragsbestätigung bestätigt: alle seit der zuletzt gesendeten AB (ist die aktuelle schon
+	gesendet, die letzte). Je Änderung { nr, datum, zeilen } ohne interne Hinweise (Fertigung)."""
+	nr = doc.aenderung_nr or 0
+	if not nr:
+		return []
+	ab = doc.ab_aenderung or 0
+	seit = ab if ab < nr else nr - 1
+	return [
+		{"nr": z.nr, "datum": z.datum, "zeilen": [x for x in (z.details or "").splitlines() if x.strip() and not x.startswith("Fertigung:")]}
+		for z in doc.aenderungen if z.nr > seit
+	]
+
+
+def ab_dateiname(doc):
+	"""Jede Änderung bekommt ihre eigene AB-Datei; die früheren bleiben am Auftrag."""
+	return f"Auftragsbestätigung {doc.name}" + (f" Änderung {doc.aenderung_nr}" if doc.aenderung_nr else "") + ".pdf"
+
+
 def ab_pdf_ablegen(doc):
-	"""Beim Senden: das verschickte PDF am Auftrag ablegen (ein erneutes Senden ersetzt es)."""
-	return _ablegen("Auftrag", doc, f"Auftragsbestätigung {doc.name}.pdf", True, lambda: ab_pdf_erzeugen(doc))
+	"""Beim Senden: das verschickte PDF am Auftrag ablegen (ein erneutes Senden derselben Änderung ersetzt es)."""
+	return _ablegen("Auftrag", doc, ab_dateiname(doc), True, lambda: ab_pdf_erzeugen(doc))
 
 
 # ----------------------------------------------------------------- Abruf
@@ -195,7 +231,7 @@ def _mahnung(doc):
 
 
 def _auftrag(doc):
-	return f"Auftragsbestätigung {doc.name}.pdf", ab_pdf_erzeugen(doc)
+	return ab_dateiname(doc), ab_pdf_erzeugen(doc)
 
 
 ANSEHEN = {"Auftrag": _auftrag, "Angebot": _angebot, "Rechnung": _rechnung, "Lieferschein": _lieferschein, "Mahnung": _mahnung}

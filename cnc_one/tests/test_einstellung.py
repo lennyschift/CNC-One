@@ -25,3 +25,9 @@ class TestListenfilter(IntegrationTestCase):
 		frappe.set_user("Guest")
 		frappe.session.user = "Guest"
 		self.assertIsNone(frappe.db.get_value("Listenfilter", {"benutzer": "Guest", "modul": "zz-liste"}, "daten"))
+
+	def test_sortierung(self):
+		einstellung.filter_speichern("zz-sort", {"filter": [], "sortierung": {"pfad": "termin", "richtung": "ab", "x": 1}})
+		self.assertEqual(einstellung.filter_holen("zz-sort")["sortierung"], {"pfad": "termin", "richtung": "ab"})
+		einstellung.filter_speichern("zz-sort", {"filter": [], "sortierung": {"richtung": "ab"}})
+		self.assertIsNone(einstellung.filter_holen("zz-sort")["sortierung"])

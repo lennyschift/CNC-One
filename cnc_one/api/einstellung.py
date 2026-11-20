@@ -34,7 +34,14 @@ def filter_speichern(modul, daten):
 		daten = frappe.parse_json(daten)
 	if not isinstance(daten, dict):
 		frappe.throw(_("Ungültige Filter."))
-	text = json.dumps({k: daten.get(k) or [] for k in ("filter", "angeheftet", "ansichten")}, ensure_ascii=False)
+	sortierung = daten.get("sortierung")
+	if not (isinstance(sortierung, dict) and sortierung.get("pfad")):
+		sortierung = None
+	else:
+		sortierung = {"pfad": str(sortierung["pfad"])[:200], "richtung": "ab" if sortierung.get("richtung") == "ab" else "auf"}
+	stand = {k: daten.get(k) or [] for k in ("filter", "angeheftet", "ansichten")}
+	stand["sortierung"] = sortierung
+	text = json.dumps(stand, ensure_ascii=False)
 	if len(text) > MAX_GROESSE:
 		frappe.throw(_("Zu viele gespeicherte Filter."))
 	modul = _modul(modul)

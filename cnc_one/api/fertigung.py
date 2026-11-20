@@ -89,6 +89,26 @@ def _laden(id):
 
 
 # ----------------------------------------------------------------- Starten
+def fb_anlegen(auf, pos):
+	"""Fertigungsbauteil zu einer Auftragsposition (auch für eine Position, die eine Auftragsänderung später dazunimmt).
+	Liefert, ob es einen Arbeitsplan gab."""
+	plan = auftrag_api.plan_fuer_position(auf, pos)
+	fb = frappe.new_doc("Fertigungsbauteil")
+	fb.update({
+		"auftrag": auf.name, "auftragsposition_key": pos.position_key, "bauteil": pos.bauteil or None,
+		"kunde": auf.kunde, "kunde_name": auf.kunde_name, "teilenummer": pos.teilenummer,
+		"bezeichnung": pos.bezeichnung, "zeichnungsnr": pos.zeichnungsnr, "revision": pos.revision or "", "material": pos.material,
+		"menge": pos.menge, "termin": pos.liefertermin, "prioritaet": "Normal", "status": "Offen",
+		"roh_werkstoff": pos.material or "",
+		"serien_von": pos.serien_von or None, "serien_bis": pos.serien_bis or None, "serien_stellen": pos.serien_stellen or 4,
+	})
+	for a in plan:
+		zeile = arbeitsgang_zeile({**a, "id": None})
+		fb.append("arbeitsgaenge", {**zeile, "status": "Offen", "gebucht": 0})
+	fb.insert(ignore_permissions=True)
+	return bool(plan)
+
+
 @frappe.whitelist(methods=["POST"])
 def starten(auftrag):
 	"""Legt je Auftragsposition ein Fertigungsbauteil an. Der Arbeitsplan darf fehlen und kommt dann später in der Fertigung."""
@@ -98,22 +118,10 @@ def starten(auftrag):
 		frappe.throw(_("Für diesen Auftrag läuft die Fertigung schon."))
 	ohne_plan = 0
 	for pos in auf.positionen:
-		plan = auftrag_api.plan_fuer_position(auf, pos)
-		if not plan:
+		if pos.entfallen:
+			continue
+		if not fb_anlegen(auf, pos):
 			ohne_plan += 1
-		fb = frappe.new_doc("Fertigungsbauteil")
-		fb.update({
-			"auftrag": auf.name, "auftragsposition_key": pos.position_key, "bauteil": pos.bauteil or None,
-			"kunde": auf.kunde, "kunde_name": auf.kunde_name, "teilenummer": pos.teilenummer,
-			"bezeichnung": pos.bezeichnung, "zeichnungsnr": pos.zeichnungsnr, "revision": pos.revision or "", "material": pos.material,
-			"menge": pos.menge, "termin": pos.liefertermin, "prioritaet": "Normal", "status": "Offen",
-			"roh_werkstoff": pos.material or "",
-			"serien_von": pos.serien_von or None, "serien_bis": pos.serien_bis or None, "serien_stellen": pos.serien_stellen or 4,
-		})
-		for a in plan:
-			zeile = arbeitsgang_zeile({**a, "id": None})
-			fb.append("arbeitsgaenge", {**zeile, "status": "Offen", "gebucht": 0})
-		fb.insert(ignore_permissions=True)
 	return {
 		"auftrag": auftrag_api.auftrag_ui(frappe.get_doc("Auftrag", auftrag)),
 		"fertigung": [fb_ui(frappe.get_doc("Fertigungsbauteil", n)) for n in frappe.get_all("Fertigungsbauteil", filters={"auftrag": auftrag}, pluck="name", order_by="creation asc")],
@@ -260,6 +268,12 @@ def felder_speichern(id, felder):
 		ag.satz = neu.get("satz") or 0
 		ag.ruest_min = neu.get("ruestMin") or 0
 		ag.stueck_min = neu.get("stueckMin") or 0
+		for ui, feld in (("ruestDirekt", "ruest_direkt"), ("stueckDirekt", "stueck_direkt")):
+			if ui in neu:
+				ag.set(feld, 1 if neu.get(ui) else 0)
+		for ui, feld in (("ruestEuro", "ruest_euro"), ("stueckEuro", "stueck_euro")):
+			if ui in neu:
+				ag.set(feld, neu.get(ui) or 0)
 		ag.lieferant = neu.get("lieferant") or None
 		ag.fremd_pro_stk = neu.get("fremdProStk") or 0
 		ag.fremd_einmal = neu.get("fremdEinmal") or 0

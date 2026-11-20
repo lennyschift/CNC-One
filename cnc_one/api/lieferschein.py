@@ -78,6 +78,8 @@ def vorschlag(auftrag):
 	positionen = []
 	for p in auf.positionen:
 		g = geliefert.get(p.position_key, {}).get("menge", 0)
+		if p.entfallen and not g:
+			continue  # durch eine Auftragsänderung gestrichen
 		fertig = gefertigt.get(p.position_key, 0)
 		offen = max(0, p.menge - g)
 		positionen.append({

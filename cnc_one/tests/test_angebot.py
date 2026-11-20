@@ -99,9 +99,19 @@ class TestAngebot(IntegrationTestCase):
 		html = self._pdf_html(ohne["id"])
 		self.assertNotIn("ZZ-Werkstoff-Test", html)
 		self.assertIn("Gleitgeschliffen, entgratet", html)
-		mit = self.speichern([t], ohne["id"], materialDrucken=True)
-		self.assertTrue(mit["kopf"]["materialDrucken"])
-		self.assertIn("Werkstoff ZZ-Werkstoff-Test", self._pdf_html(mit["id"]))
+		# Schalter je Position
+		mit = self.speichern([{**t, "werkstoffDrucken": True}, teil("t2", "Welle", "ZZ-101", material="ZZ-Werkstoff-Zwei", werkstoffDrucken=False)], ohne["id"])
+		html = self._pdf_html(mit["id"])
+		self.assertIn("Werkstoff ZZ-Werkstoff-Test", html)
+		self.assertNotIn("ZZ-Werkstoff-Zwei", html)
+		# ältere Angebote: Schalter am ganzen Angebot gilt für Positionen ohne eigenen Schalter
+		alt = self.speichern([t], ohne["id"], materialDrucken=True)
+		self.assertTrue(alt["kopf"]["materialDrucken"])
+		self.assertIn("Werkstoff ZZ-Werkstoff-Test", self._pdf_html(alt["id"]))
+
+	def test_liefertermin_der_position_nicht_im_angebot(self):
+		a = self.speichern([teil("t1", liefertermin="2026-12-04")])
+		self.assertNotIn("04.12.2026", self._pdf_html(a["id"]))
 
 	def _pdf_html(self, id):
 		"""Das HTML, aus dem das PDF entsteht (ohne den PDF-Druck selbst)."""

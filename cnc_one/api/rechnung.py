@@ -65,7 +65,8 @@ def rechnung_ui(d):
 		"positionen": [
 			{
 				"zeile": p.zeilen_id, "art": p.art, "bauteilId": p.bauteil or "",
-				"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": bild_zur_auftragsposition(d.auftrag, p.auftragsposition_key, p.bauteil)},
+				"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": bild_zur_auftragsposition(d.auftrag, p.auftragsposition_key, p.bauteil),
+					"bestellposition": (frappe.db.get_value("Auftragsposition", {"parent": d.auftrag, "position_key": p.auftragsposition_key}, "bestellposition") or "") if d.auftrag and p.auftragsposition_key else ""},
 				"bezeichnung": p.bezeichnung or "", "menge": p.menge, "einheit": p.einheit or "Stk", "einzelpreis": p.einzelpreis or 0, "netto": p.netto or 0,
 				"auftragPosKey": p.auftragsposition_key or "", "auftragskosten": p.auftragskosten_name or "",
 				"lieferungen": json.loads(p.lieferungen) if p.lieferungen and isinstance(p.lieferungen, str) else (p.lieferungen or []),
@@ -117,6 +118,8 @@ def vorschlag(auftrag):
 	positionen = []
 	for p in auf.positionen:
 		b = berechnet.get(p.position_key, {}).get("menge", 0)
+		if p.entfallen and not b:
+			continue  # durch eine Auftragsänderung gestrichen
 		positionen.append({
 			"key": p.position_key, "bauteilId": p.bauteil or "",
 			"teil": {"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "", "vorschaubild": bild(p.bauteil, p.revision, auf.angebot, p.angebot_position_key)},
