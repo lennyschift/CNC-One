@@ -29,7 +29,8 @@
   "zahlungsziel_tage",
   "sb_mahn",
   "mahnfrist_tage",
-  "mahngebuehr"
+  "mahngebuehr",
+  "bestellung_toleranz"
  ],
  "fields": [
   {
@@ -170,6 +171,13 @@
    "label": "Mahngebühr je Mahnung",
    "precision": "2",
    "default": "0"
+  },
+  {
+   "fieldname": "bestellung_toleranz",
+   "fieldtype": "Float",
+   "label": "Toleranz beim Preisabgleich der Bestellung (%)",
+   "default": "0.5",
+   "description": "So weit darf der Betrag einer Bestellposition vom Angebot abweichen (Rundung beim Umlegen der Kosten auf den Stückpreis)"
   }
  ],
  "links": [],

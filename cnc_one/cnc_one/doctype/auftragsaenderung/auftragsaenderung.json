@@ -1,0 +1,58 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "nr",
+  "datum",
+  "benutzer",
+  "grund",
+  "details"
+ ],
+ "fields": [
+  {
+   "fieldname": "nr",
+   "fieldtype": "Int",
+   "label": "Änderung",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "datum",
+   "fieldtype": "Datetime",
+   "label": "Datum",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "benutzer",
+   "fieldtype": "Data",
+   "label": "Von",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "grund",
+   "fieldtype": "Small Text",
+   "label": "Grund",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "details",
+   "fieldtype": "Long Text",
+   "label": "Was geändert wurde",
+   "description": "Eine Änderung je Zeile"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Auftragsaenderung",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "autoname": "hash"
+}

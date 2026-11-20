@@ -16,6 +16,12 @@
   "smtp_port",
   "sb_abruf",
   "stichwoerter",
+  "bekannte_absender",
+  "freemail_domains",
+  "sb_einordnen",
+  "woerter_bestellung",
+  "woerter_rechnung",
+  "gesperrte_endungen",
   "abholen_ab",
   "postfach_ordner",
   "gesendet_ordner",
@@ -29,8 +35,8 @@
   {
    "fieldname": "aktiv",
    "fieldtype": "Check",
-   "label": "Anfragen automatisch abholen",
-   "description": "Alle 5 Minuten; geholt werden nur Mails mit einem Stichwort im Betreff"
+   "label": "Mails automatisch abholen",
+   "description": "Alle 5 Minuten; geholt werden Mails bekannter Absender und Mails mit einem Stichwort im Betreff"
   },
   {
    "fieldname": "sb_server",
@@ -95,7 +101,45 @@
    "fieldtype": "Small Text",
    "label": "Stichwörter im Betreff",
    "default": "Anfrage",
-   "description": "Eines je Zeile, Groß-/Kleinschreibung egal"
+   "description": "Eines je Zeile, Groß-/Kleinschreibung egal; holt auch Mails unbekannter Absender (neue Kunden)"
+  },
+  {
+   "fieldname": "bekannte_absender",
+   "fieldtype": "Check",
+   "label": "Mails bekannter Absender abholen",
+   "default": "1",
+   "description": "Kontakte der Kunden, Lieferanten und deren Domains (ohne Freemail-Anbieter)"
+  },
+  {
+   "fieldname": "freemail_domains",
+   "fieldtype": "Small Text",
+   "label": "Freemail-Anbieter",
+   "description": "Eine Domain je Zeile; dort zählt nur die genaue Adresse, nicht die Domain. Leer = Standardliste"
+  },
+  {
+   "fieldname": "sb_einordnen",
+   "fieldtype": "Section Break",
+   "label": "Einordnen"
+  },
+  {
+   "fieldname": "woerter_bestellung",
+   "fieldtype": "Small Text",
+   "label": "Stichwörter für Bestellungen",
+   "default": "Bestellung\nOrder\nAbruf",
+   "description": "im Betreff oder Dateinamen eines Anhangs"
+  },
+  {
+   "fieldname": "woerter_rechnung",
+   "fieldtype": "Small Text",
+   "label": "Stichwörter für Rechnungen",
+   "default": "Rechnung\nInvoice\nGutschrift",
+   "description": "im Betreff oder Dateinamen; E-Rechnungen (ZUGFeRD, XRechnung) werden immer erkannt"
+  },
+  {
+   "fieldname": "gesperrte_endungen",
+   "fieldtype": "Small Text",
+   "label": "Gesperrte Dateiendungen",
+   "description": "Anhänge mit diesen Endungen werden nicht übernommen (Programme, Office mit Makros). Leer = Standardliste"
   },
   {
    "fieldname": "abholen_ab",

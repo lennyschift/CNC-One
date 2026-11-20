@@ -1,0 +1,250 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "status",
+  "lieferant",
+  "lieferant_name",
+  "lieferant_ust_id",
+  "rechnungsnr",
+  "rechnungsdatum",
+  "faellig_am",
+  "art",
+  "format",
+  "sb_betraege",
+  "netto",
+  "steuer",
+  "brutto",
+  "waehrung",
+  "iban",
+  "bestellreferenz",
+  "sb_pos",
+  "positionen",
+  "sb_herkunft",
+  "mail",
+  "pdf_datei",
+  "xml_datei",
+  "pruefhinweise",
+  "bemerkung",
+  "geprueft_von",
+  "geprueft_am"
+ ],
+ "fields": [
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Neu\nGeprüft\nBezahlt\nAbgelehnt",
+   "default": "Neu",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "lieferant",
+   "fieldtype": "Link",
+   "label": "Lieferant",
+   "options": "Lieferant",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "lieferant_name",
+   "fieldtype": "Data",
+   "label": "Rechnungssteller",
+   "in_list_view": 1,
+   "description": "Name laut Rechnung"
+  },
+  {
+   "fieldname": "lieferant_ust_id",
+   "fieldtype": "Data",
+   "label": "USt-IdNr. laut Rechnung"
+  },
+  {
+   "fieldname": "rechnungsnr",
+   "fieldtype": "Data",
+   "label": "Rechnungsnummer",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "rechnungsdatum",
+   "fieldtype": "Date",
+   "label": "Rechnungsdatum",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "faellig_am",
+   "fieldtype": "Date",
+   "label": "Fällig am"
+  },
+  {
+   "fieldname": "art",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Rechnung\nGutschrift",
+   "default": "Rechnung"
+  },
+  {
+   "fieldname": "format",
+   "fieldtype": "Select",
+   "label": "Format",
+   "options": "ZUGFeRD\nXRechnung\nPDF\nPapier",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sb_betraege",
+   "fieldtype": "Section Break",
+   "label": "Beträge"
+  },
+  {
+   "fieldname": "netto",
+   "fieldtype": "Currency",
+   "label": "Netto",
+   "precision": "2",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "steuer",
+   "fieldtype": "Currency",
+   "label": "Umsatzsteuer",
+   "precision": "2"
+  },
+  {
+   "fieldname": "brutto",
+   "fieldtype": "Currency",
+   "label": "Brutto",
+   "precision": "2"
+  },
+  {
+   "fieldname": "waehrung",
+   "fieldtype": "Data",
+   "label": "Währung",
+   "default": "EUR"
+  },
+  {
+   "fieldname": "iban",
+   "fieldtype": "Data",
+   "label": "IBAN des Lieferanten"
+  },
+  {
+   "fieldname": "bestellreferenz",
+   "fieldtype": "Data",
+   "label": "Unsere Bestellung laut Rechnung"
+  },
+  {
+   "fieldname": "sb_pos",
+   "fieldtype": "Section Break",
+   "label": "Positionen"
+  },
+  {
+   "fieldname": "positionen",
+   "fieldtype": "Table",
+   "label": "Positionen",
+   "options": "Eingangsrechnungsposition"
+  },
+  {
+   "fieldname": "sb_herkunft",
+   "fieldtype": "Section Break",
+   "label": "Herkunft"
+  },
+  {
+   "fieldname": "mail",
+   "fieldtype": "Link",
+   "label": "Aus der Mail",
+   "options": "Mail Anfrage"
+  },
+  {
+   "fieldname": "pdf_datei",
+   "fieldtype": "Data",
+   "label": "PDF",
+   "read_only": 1
+  },
+  {
+   "fieldname": "xml_datei",
+   "fieldtype": "Data",
+   "label": "E-Rechnung (XML)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pruefhinweise",
+   "fieldtype": "Small Text",
+   "label": "Hinweise beim Einlesen",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung"
+  },
+  {
+   "fieldname": "geprueft_von",
+   "fieldtype": "Data",
+   "label": "Geprüft von",
+   "read_only": 1
+  },
+  {
+   "fieldname": "geprueft_am",
+   "fieldtype": "Datetime",
+   "label": "Geprüft am",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Eingangsrechnung",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "read": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "ER-.YYYY.-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "receipt",
+ "search_fields": "lieferant_name,rechnungsnr"
+}

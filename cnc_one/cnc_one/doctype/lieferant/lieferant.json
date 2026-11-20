@@ -7,8 +7,10 @@
   "lieferantenname",
   "leistung",
   "email",
+  "weitere_emails",
   "telefon",
   "adresse",
+  "ust_id",
   "aktiv"
  ],
  "fields": [
@@ -34,6 +36,12 @@
    "options": "Email"
   },
   {
+   "fieldname": "weitere_emails",
+   "fieldtype": "Small Text",
+   "label": "Weitere E-Mail-Adressen",
+   "description": "Eine je Zeile, z. B. rechnung@… oder Ansprechpartner; Mails von dort kommen in den Posteingang"
+  },
+  {
    "fieldname": "telefon",
    "fieldtype": "Data",
    "label": "Telefon"
@@ -42,6 +50,12 @@
    "fieldname": "adresse",
    "fieldtype": "Small Text",
    "label": "Adresse"
+  },
+  {
+   "fieldname": "ust_id",
+   "fieldtype": "Data",
+   "label": "USt-IdNr.",
+   "description": "Ordnet E-Rechnungen dem Lieferanten zu"
   },
   {
    "fieldname": "aktiv",

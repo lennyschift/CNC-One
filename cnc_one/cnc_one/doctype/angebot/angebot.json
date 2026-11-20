@@ -8,6 +8,12 @@
   "kunde_name",
   "status",
   "netto",
+  "sb_fassung",
+  "ursprung",
+  "vorgaenger",
+  "fassung",
+  "ersetzt_durch",
+  "aenderungsgrund",
   "sb_kopf",
   "anfrage_nr",
   "projekt",
@@ -40,7 +46,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Entwurf\nGesendet\nAbgelehnt",
+   "options": "Entwurf\nGesendet\nAbgelehnt\nErsetzt",
    "default": "Entwurf",
    "read_only": 1,
    "in_list_view": 1,
@@ -53,6 +59,46 @@
    "precision": "2",
    "read_only": 1,
    "in_list_view": 1
+  },
+  {
+   "fieldname": "sb_fassung",
+   "fieldtype": "Section Break",
+   "label": "Fassung"
+  },
+  {
+   "fieldname": "ursprung",
+   "fieldtype": "Link",
+   "label": "Ursprüngliches Angebot",
+   "options": "Angebot",
+   "read_only": 1,
+   "description": "Erste Fassung; jede Überarbeitung bekommt dessen Nummer mit -1, -2 …"
+  },
+  {
+   "fieldname": "vorgaenger",
+   "fieldtype": "Link",
+   "label": "Ersetzt Fassung",
+   "options": "Angebot",
+   "read_only": 1
+  },
+  {
+   "fieldname": "fassung",
+   "fieldtype": "Int",
+   "label": "Fassung",
+   "read_only": 1,
+   "description": "0 = ursprüngliches Angebot"
+  },
+  {
+   "fieldname": "ersetzt_durch",
+   "fieldtype": "Link",
+   "label": "Ersetzt durch",
+   "options": "Angebot",
+   "read_only": 1
+  },
+  {
+   "fieldname": "aenderungsgrund",
+   "fieldtype": "Small Text",
+   "label": "Grund der Überarbeitung",
+   "description": "intern, z. B. Position entfällt, Preis nachverhandelt"
   },
   {
    "fieldname": "sb_kopf",

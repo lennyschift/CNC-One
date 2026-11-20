@@ -5,6 +5,7 @@
  "engine": "InnoDB",
  "field_order": [
   "status",
+  "kategorie",
   "betreff",
   "von_email",
   "von_name",
@@ -14,7 +15,11 @@
   "kunde",
   "kunde_name",
   "kunde_vorschlag",
+  "lieferant",
   "angebot",
+  "auftrag",
+  "absender_warnung",
+  "absender_pruefung",
   "sb_nachrichten",
   "nachrichten"
  ],
@@ -23,8 +28,17 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Neu\nIn Bearbeitung\nBeantwortet\nKeine Anfrage",
+   "options": "Neu\nIn Bearbeitung\nBeantwortet\nErledigt\nKeine Anfrage",
    "default": "Neu",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "kategorie",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Anfrage\nBestellung\nRechnung\nLieferant\nSonstiges",
+   "default": "Anfrage",
    "in_list_view": 1,
    "in_standard_filter": 1
   },
@@ -86,10 +100,37 @@
    "read_only": 1
   },
   {
+   "fieldname": "lieferant",
+   "fieldtype": "Link",
+   "label": "Lieferant",
+   "options": "Lieferant",
+   "in_standard_filter": 1
+  },
+  {
    "fieldname": "angebot",
    "fieldtype": "Link",
    "label": "Angebot",
    "options": "Angebot"
+  },
+  {
+   "fieldname": "auftrag",
+   "fieldtype": "Link",
+   "label": "Auftrag",
+   "options": "Auftrag",
+   "description": "Auftrag aus einer Bestellung dieser Mail"
+  },
+  {
+   "fieldname": "absender_warnung",
+   "fieldtype": "Check",
+   "label": "Absender nicht bestätigt",
+   "read_only": 1,
+   "description": "SPF/DKIM/DMARC-Prüfung des Postfachs ist fehlgeschlagen: Absender könnte gefälscht sein"
+  },
+  {
+   "fieldname": "absender_pruefung",
+   "fieldtype": "Data",
+   "label": "Prüfung des Absenders",
+   "read_only": 1
   },
   {
    "fieldname": "sb_nachrichten",

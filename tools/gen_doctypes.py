@@ -40,6 +40,7 @@ def Date(n, label=None, **kw): return F(n, "Date", label, **kw)
 def Table(n, to, label=None, **kw): return F(n, "Table", label, options=to, **kw)
 def Section(n, label=None, **kw): return F(n, "Section Break", label, **kw)
 def Json(n, label=None, **kw): return F(n, "JSON", label, **kw)
+def LongText(n, label=None, **kw): return F(n, "Long Text", label, **kw)
 
 
 # ---------------------------------------------------------------- Berechtigungen
@@ -72,6 +73,10 @@ DOCTYPES = [
         Money("satz", "Satz (€/h)"),
         Num("ruest_min", "Rüstzeit (min)"),
         Num("stueck_min", "Stückzeit (min)"),
+        Check("ruest_direkt", "Rüstkosten direkt in €", description="statt Rüstzeit × Satz"),
+        Money("ruest_euro", "Rüstkosten (€)"),
+        Check("stueck_direkt", "Stückkosten direkt in €", description="statt Stückzeit × Satz"),
+        Money("stueck_euro", "Stückkosten (€ je Stück)"),
         Link("lieferant", "Lieferant", "Lieferant"),
         Money("fremd_pro_stk", "Fremdvergabe je Stück"),
         Money("fremd_einmal", "Fremdvergabe einmalig"),
@@ -114,8 +119,10 @@ DOCTYPES = [
         Data("lieferantenname", "Lieferant", reqd=1, unique=1, in_list_view=1),
         Data("leistung", "Leistung", in_list_view=1, description="z. B. Eloxieren, Härten"),
         Data("email", "E-Mail", options="Email"),
+        Text("weitere_emails", "Weitere E-Mail-Adressen", description="Eine je Zeile, z. B. rechnung@… oder Ansprechpartner; Mails von dort kommen in den Posteingang"),
         Data("telefon", "Telefon"),
         Text("adresse", "Adresse"),
+        Data("ust_id", "USt-IdNr.", description="Ordnet E-Rechnungen dem Lieferanten zu"),
         Check("aktiv", "Aktiv", default="1", in_list_view=1),
     ]),
     dict(name="Arbeitsgangart", autoname="AA-.####", title="bezeichnung", rechte=stamm_rechte(), icon="list-tree", fields=[
@@ -141,6 +148,7 @@ DOCTYPES = [
         Table("kontakte", "Kunde Kontakt", "Kontakte"),
         Section("sb_zeichnung", "Zeichnungen"),
         Json("zeichnungsvorlage", "Zeichnungsvorlage", read_only=1, description="Angelernte Regeln, wo auf den Zeichnungen dieses Kunden Teilenummer, Werkstoff usw. stehen"),
+        Json("bestellvorlage", "Bestellvorlage (PDF)", read_only=1, description="Angelernte Spalten und Kopfangaben der Bestell-PDFs dieses Kunden"),
         Json("tabellenvorlage", "Tabellenvorlage (Mail)", read_only=1, description="Angelernte Spalten der Anfrage-Tabellen in Mails: je Kontakt und als Standard des Kunden"),
     ]),
     dict(name="Arbeitsplan Vorlage", autoname="VL-.####", title="vorlagenname", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung")), icon="workflow", fields=[
@@ -197,8 +205,14 @@ DOCTYPES += [
     dict(name="Angebot", autoname="ANG-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="file-text", extra={"search_fields": "kunde_name,anfrage_nr,projekt"}, fields=[
         Link("kunde", "Kunde", "Kunde", in_list_view=1, in_standard_filter=1),
         Data("kunde_name", "Kundenname", read_only=1, in_list_view=1),
-        Select("status", ["Entwurf", "Gesendet", "Abgelehnt"], "Status", default="Entwurf", read_only=1, in_list_view=1, in_standard_filter=1),
+        Select("status", ["Entwurf", "Gesendet", "Abgelehnt", "Ersetzt"], "Status", default="Entwurf", read_only=1, in_list_view=1, in_standard_filter=1),
         Money("netto", "Netto", read_only=1, in_list_view=1),
+        Section("sb_fassung", "Fassung"),
+        Link("ursprung", "Angebot", "Ursprüngliches Angebot", read_only=1, description="Erste Fassung; jede Überarbeitung bekommt dessen Nummer mit -1, -2 …"),
+        Link("vorgaenger", "Angebot", "Ersetzt Fassung", read_only=1),
+        Int("fassung", "Fassung", read_only=1, description="0 = ursprüngliches Angebot"),
+        Link("ersetzt_durch", "Angebot", "Ersetzt durch", read_only=1),
+        Text("aenderungsgrund", "Grund der Überarbeitung", description="intern, z. B. Position entfällt, Preis nachverhandelt"),
         Section("sb_kopf", "Angaben"),
         Data("anfrage_nr", "Anfrage-Nr. des Kunden"),
         Data("projekt", "Projekt", in_list_view=1, in_standard_filter=1, description="Interner Name zum Wiedererkennen, steht nicht auf den Belegen"),
@@ -218,6 +232,7 @@ DOCTYPES += [
 DOCTYPES += [
     dict(name="Auftragsposition", istable=1, fields=[
         Data("position_key", "Schlüssel", read_only=1),
+        Link("angebot", "Angebot", "Angebot", read_only=1, description="Angebot, aus dem die Position stammt (auch ein früheres bei Wiederholbestellungen)"),
         Data("angebot_position_key", "Position im Angebot", read_only=1),
         Link("bauteil", "Bauteil", "Bauteil", in_list_view=1),
         Data("teilenummer", "Teilenummer", read_only=1, in_list_view=1),
@@ -234,6 +249,18 @@ DOCTYPES += [
         Int("serien_von", "Seriennummer von"),
         Int("serien_bis", "Seriennummer bis"),
         Int("serien_stellen", "Stellen der Seriennummer"),
+        Data("bestellposition", "Position in der Bestellung des Kunden"),
+        Money("bestellpreis", "Stückpreis laut Bestellung"),
+        Select("preisform", ["Angebot", "Bestellung"], "Preisform", default="Angebot", description="Angebot: Stückpreis und Kosten wie angeboten; Bestellung: alles im Stückpreis der Bestellung"),
+        Check("entfallen", "Entfallen", read_only=1, description="Durch eine Auftragsänderung gestrichen (Menge 0)"),
+        Int("menge_urspruenglich", "Ursprünglich bestellte Menge", read_only=1),
+    ]),
+    dict(name="Auftragsaenderung", istable=1, fields=[
+        Int("nr", "Änderung", in_list_view=1),
+        F("datum", "Datetime", "Datum", in_list_view=1),
+        Data("benutzer", "Von", in_list_view=1),
+        Text("grund", "Grund", in_list_view=1),
+        LongText("details", "Was geändert wurde", description="Eine Änderung je Zeile"),
     ]),
     dict(name="Auftragskosten", istable=1, fields=[
         Data("position_key", "Position", read_only=1, in_list_view=1),
@@ -244,11 +271,13 @@ DOCTYPES += [
     dict(name="Auftrag", autoname="AUF-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="clipboard-list", extra={"search_fields": "kunde_name,kundenbestellnr,projekt"}, fields=[
         Link("kunde", "Kunde", "Kunde", reqd=1, in_list_view=1, in_standard_filter=1),
         Data("kunde_name", "Kundenname", read_only=1, in_list_view=1),
-        Link("angebot", "Angebot", "Angebot", reqd=1, in_list_view=1, in_standard_filter=1),
+        Link("angebot", "Angebot", "Angebot", in_list_view=1, in_standard_filter=1, description="Leer bei Aufträgen direkt aus einer Bestellung"),
         Select("status", ["Offen", "In Fertigung", "Fertig", "Storniert"], "Status", default="Offen", read_only=1, in_list_view=1, in_standard_filter=1),
         Money("netto", "Netto", read_only=1, in_list_view=1),
         Section("sb_kopf", "Angaben"),
         Data("kundenbestellnr", "Bestellnummer des Kunden"),
+        Date("bestelldatum", "Bestelldatum"),
+        Data("bestellung_datei", "Bestellung des Kunden (PDF)", read_only=1),
         Data("projekt", "Projekt", in_list_view=1, in_standard_filter=1, description="Interner Name zum Wiedererkennen, steht nicht auf den Belegen"),
         Data("kontakt_name", "Ansprechpartner", description="Einkäufer beim Kunden (z. Hd. im Angebot)"),
         Data("kontakt_email", "E-Mail des Ansprechpartners"),
@@ -258,6 +287,10 @@ DOCTYPES += [
         Section("sb_ab", "Auftragsbestätigung"),
         F("ab_gesendet_am", "Datetime", "Auftragsbestätigung gesendet am", read_only=1),
         Data("ab_gesendet_an", "Auftragsbestätigung gesendet an", read_only=1),
+        Int("ab_aenderung", "AB gesendet zu Änderung", read_only=1, description="Stand der zuletzt gesendeten Auftragsbestätigung (0 = ursprünglicher Auftrag)"),
+        Section("sb_aenderungen", "Änderungen"),
+        Int("aenderung_nr", "Letzte Änderung", read_only=1),
+        Table("aenderungen", "Auftragsaenderung", "Änderungen"),
     ]),
     dict(name="Fertigungsarbeitsgang", istable=1, fields=[
         Data("ag_id", "Id", read_only=1),
@@ -267,6 +300,10 @@ DOCTYPES += [
         Money("satz", "Satz (€/h)"),
         Num("ruest_min", "Rüstzeit (min)"),
         Num("stueck_min", "Stückzeit (min)"),
+        Check("ruest_direkt", "Rüstkosten direkt in €", description="statt Rüstzeit × Satz"),
+        Money("ruest_euro", "Rüstkosten (€)"),
+        Check("stueck_direkt", "Stückkosten direkt in €", description="statt Stückzeit × Satz"),
+        Money("stueck_euro", "Stückkosten (€ je Stück)"),
         Select("status", ["Offen", "Läuft", "Fertig"], "Status", default="Offen", in_list_view=1),
         Int("gebucht", "Gebucht", in_list_view=1),
         Link("lieferant", "Lieferant", "Lieferant"),
@@ -451,6 +488,7 @@ DOCTYPES += [
         Section("sb_mahn", "Mahnwesen"),
         Int("mahnfrist_tage", "Frist je Mahnung (Tage)", default="7"),
         Money("mahngebuehr", "Mahngebühr je Mahnung", default="0"),
+        F("bestellung_toleranz", "Float", "Toleranz beim Preisabgleich der Bestellung (%)", default="0.5", description="So weit darf der Betrag einer Bestellposition vom Angebot abweichen (Rundung beim Umlegen der Kosten auf den Stückpreis)"),
     ]),
     dict(name="Steuerschluessel", autoname="field:bezeichnung", title="bezeichnung", rechte=stamm_rechte(("CNC Buchhaltung",)), icon="percent", fields=[
         Data("bezeichnung", "Bezeichnung", reqd=1, unique=1, in_list_view=1),
@@ -556,13 +594,12 @@ DOCTYPES += [
 ]
 
 
-# ---- Mail-Anbindung: Anfragen aus dem gemeinsamen Postfach (nur Mails mit Stichwort im Betreff)
-def LongText(n, label=None, **kw): return F(n, "Long Text", label, **kw)
+# ---- Mail-Anbindung: Posteingang aus dem gemeinsamen Postfach (bekannte Absender und Mails mit Stichwort im Betreff)
 
 
 DOCTYPES += [
     dict(name="Mail Einstellungen", rechte=[recht("System Manager", *ALLE), recht("CNC Admin", *ALLE)], icon="mail", extra={"issingle": 1}, fields=[
-        Check("aktiv", "Anfragen automatisch abholen", description="Alle 5 Minuten; geholt werden nur Mails mit einem Stichwort im Betreff"),
+        Check("aktiv", "Mails automatisch abholen", description="Alle 5 Minuten; geholt werden Mails bekannter Absender und Mails mit einem Stichwort im Betreff"),
         Section("sb_server", "Postfach"),
         Data("benutzer", "Benutzer (E-Mail-Adresse)", description="z. B. info@cnc-hohenstein.de"),
         F("passwort", "Password", "Passwort"),
@@ -573,7 +610,13 @@ DOCTYPES += [
         Data("smtp_server", "SMTP-Server", default="smtp.ionos.de"),
         Int("smtp_port", "SMTP-Port", default="465"),
         Section("sb_abruf", "Abruf"),
-        Text("stichwoerter", "Stichwörter im Betreff", default="Anfrage", description="Eines je Zeile, Groß-/Kleinschreibung egal"),
+        Text("stichwoerter", "Stichwörter im Betreff", default="Anfrage", description="Eines je Zeile, Groß-/Kleinschreibung egal; holt auch Mails unbekannter Absender (neue Kunden)"),
+        Check("bekannte_absender", "Mails bekannter Absender abholen", default="1", description="Kontakte der Kunden, Lieferanten und deren Domains (ohne Freemail-Anbieter)"),
+        Text("freemail_domains", "Freemail-Anbieter", description="Eine Domain je Zeile; dort zählt nur die genaue Adresse, nicht die Domain. Leer = Standardliste"),
+        Section("sb_einordnen", "Einordnen"),
+        Text("woerter_bestellung", "Stichwörter für Bestellungen", default="Bestellung\nOrder\nAbruf", description="im Betreff oder Dateinamen eines Anhangs"),
+        Text("woerter_rechnung", "Stichwörter für Rechnungen", default="Rechnung\nInvoice\nGutschrift", description="im Betreff oder Dateinamen; E-Rechnungen (ZUGFeRD, XRechnung) werden immer erkannt"),
+        Text("gesperrte_endungen", "Gesperrte Dateiendungen", description="Anhänge mit diesen Endungen werden nicht übernommen (Programme, Office mit Makros). Leer = Standardliste"),
         Date("abholen_ab", "Mails ab", description="Ältere Mails werden nicht geholt"),
         Data("postfach_ordner", "Ordner im Postfach", default="INBOX"),
         Data("gesendet_ordner", "Ordner für gesendete Mails", default="Gesendete Objekte"),
@@ -601,7 +644,8 @@ DOCTYPES += [
         Text("hinweis", "Hinweis", description="z. B. Anhang zu groß"),
     ]),
     dict(name="Mail Anfrage", autoname="MAIL-.YYYY.-.#####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="inbox", extra={"search_fields": "betreff,von_email,kunde_name"}, fields=[
-        Select("status", ["Neu", "In Bearbeitung", "Beantwortet", "Keine Anfrage"], "Status", default="Neu", in_list_view=1, in_standard_filter=1),
+        Select("status", ["Neu", "In Bearbeitung", "Beantwortet", "Erledigt", "Keine Anfrage"], "Status", default="Neu", in_list_view=1, in_standard_filter=1),
+        Select("kategorie", ["Anfrage", "Bestellung", "Rechnung", "Lieferant", "Sonstiges"], "Art", default="Anfrage", in_list_view=1, in_standard_filter=1),
         Data("betreff", "Betreff", in_list_view=1, ignore_xss_filter=1),
         Data("von_email", "Von (Adresse)", in_list_view=1, in_standard_filter=1),
         Data("von_name", "Von (Name)", ignore_xss_filter=1),
@@ -611,12 +655,57 @@ DOCTYPES += [
         Link("kunde", "Kunde", "Kunde", in_standard_filter=1),
         Data("kunde_name", "Kundenname", read_only=1),
         Link("kunde_vorschlag", "Kunde", "Kundenvorschlag (gleiche Domain)", read_only=1),
+        Link("lieferant", "Lieferant", "Lieferant", in_standard_filter=1),
         Link("angebot", "Angebot", "Angebot"),
+        Link("auftrag", "Auftrag", "Auftrag", description="Auftrag aus einer Bestellung dieser Mail"),
+        Check("absender_warnung", "Absender nicht bestätigt", read_only=1, description="SPF/DKIM/DMARC-Prüfung des Postfachs ist fehlgeschlagen: Absender könnte gefälscht sein"),
+        Data("absender_pruefung", "Prüfung des Absenders", read_only=1),
         Section("sb_nachrichten", "Nachrichten"),
         Table("nachrichten", "Mail Nachricht", "Nachrichten"),
     ]),
 ]
 
+
+
+# ---- Eingangsrechnungen (Rechnungen der Lieferanten), aus dem Posteingang oder hochgeladen
+DOCTYPES += [
+    dict(name="Eingangsrechnungsposition", istable=1, fields=[
+        Data("bezeichnung", "Bezeichnung", in_list_view=1),
+        Num("menge", "Menge", in_list_view=1),
+        Data("einheit", "Einheit"),
+        Money("einzelpreis", "Einzelpreis", in_list_view=1),
+        Money("betrag", "Betrag netto", in_list_view=1),
+        Num("steuersatz", "Steuersatz (%)"),
+    ]),
+    dict(name="Eingangsrechnung", autoname="ER-.YYYY.-.#####", rechte=stamm_rechte(("CNC Buchhaltung",)), icon="receipt", extra={"search_fields": "lieferant_name,rechnungsnr"}, fields=[
+        Select("status", ["Neu", "Geprüft", "Bezahlt", "Abgelehnt"], "Status", default="Neu", in_list_view=1, in_standard_filter=1),
+        Link("lieferant", "Lieferant", "Lieferant", in_list_view=1, in_standard_filter=1),
+        Data("lieferant_name", "Rechnungssteller", in_list_view=1, description="Name laut Rechnung"),
+        Data("lieferant_ust_id", "USt-IdNr. laut Rechnung"),
+        Data("rechnungsnr", "Rechnungsnummer", in_list_view=1),
+        Date("rechnungsdatum", "Rechnungsdatum", in_list_view=1),
+        Date("faellig_am", "Fällig am"),
+        Select("art", ["Rechnung", "Gutschrift"], "Art", default="Rechnung"),
+        Select("format", ["ZUGFeRD", "XRechnung", "PDF", "Papier"], "Format", read_only=1, in_list_view=1),
+        Section("sb_betraege", "Beträge"),
+        Money("netto", "Netto", in_list_view=1),
+        Money("steuer", "Umsatzsteuer"),
+        Money("brutto", "Brutto"),
+        Data("waehrung", "Währung", default="EUR"),
+        Data("iban", "IBAN des Lieferanten"),
+        Data("bestellreferenz", "Unsere Bestellung laut Rechnung"),
+        Section("sb_pos", "Positionen"),
+        Table("positionen", "Eingangsrechnungsposition", "Positionen"),
+        Section("sb_herkunft", "Herkunft"),
+        Link("mail", "Mail Anfrage", "Aus der Mail"),
+        Data("pdf_datei", "PDF", read_only=1),
+        Data("xml_datei", "E-Rechnung (XML)", read_only=1),
+        Text("pruefhinweise", "Hinweise beim Einlesen", read_only=1),
+        Text("bemerkung", "Bemerkung"),
+        Data("geprueft_von", "Geprüft von", read_only=1),
+        F("geprueft_am", "Datetime", "Geprüft am", read_only=1),
+    ]),
+]
 
 
 # ---- Dokumentenmanagement: ein Eintrag je Dokument (Inhalt), gleiche Datei an mehreren Belegen = ein Dokument
@@ -680,6 +769,24 @@ DOCTYPES += [
         Section("sb_text", "Text für die Suche", collapsible=1),
         Check("text_gelesen", "Text gelesen", read_only=1),
         LongText("inhalt", "Text aus der Datei", read_only=1, ignore_xss_filter=1),
+    ]),
+]
+
+
+# ---- Druckvorlagen: Belege (HTML/CSS) in der Oberfläche ändern. Ohne Eintrag gilt die Datei im Code (templates/);
+# „In den Code übernehmen“ schreibt den Stand zurück in die Datei, damit er mit Git ins Produktivsystem kommt.
+DOCTYPES += [
+    dict(name="Druckvorlage", autoname="field:datei", title="bezeichnung", rechte=stamm_rechte(), icon="file-code", fields=[
+        Data("datei", "Datei", reqd=1, unique=1, in_list_view=1, description="Name der Vorlage im Ordner templates, z. B. angebot_pdf.html"),
+        Data("bezeichnung", "Bezeichnung", in_list_view=1),
+        F("inhalt", "Code", "Inhalt", options="HTML"),
+        Data("code_hash", "Prüfsumme der Datei beim Ändern", read_only=1, description="Hat sich die Datei im Code seither geändert, wird darauf hingewiesen"),
+    ]),
+    dict(name="Druckvorlage Stand", autoname="hash", rechte=stamm_rechte(), icon="history", fields=[
+        Data("vorlage", "Vorlage (Datei)", reqd=1, in_list_view=1, in_standard_filter=1),
+        LongText("inhalt", "Inhalt"),
+        Data("aktion", "Aktion", in_list_view=1, description="gespeichert, zurückgesetzt, in den Code übernommen"),
+        Data("notiz", "Notiz"),
     ]),
 ]
 

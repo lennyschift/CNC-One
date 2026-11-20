@@ -11,6 +11,8 @@
   "netto",
   "sb_kopf",
   "kundenbestellnr",
+  "bestelldatum",
+  "bestellung_datei",
   "projekt",
   "kontakt_name",
   "kontakt_email",
@@ -19,7 +21,11 @@
   "kosten",
   "sb_ab",
   "ab_gesendet_am",
-  "ab_gesendet_an"
+  "ab_gesendet_an",
+  "ab_aenderung",
+  "sb_aenderungen",
+  "aenderung_nr",
+  "aenderungen"
  ],
  "fields": [
   {
@@ -43,9 +49,9 @@
    "fieldtype": "Link",
    "label": "Angebot",
    "options": "Angebot",
-   "reqd": 1,
    "in_list_view": 1,
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "description": "Leer bei Aufträgen direkt aus einer Bestellung"
   },
   {
    "fieldname": "status",
@@ -74,6 +80,17 @@
    "fieldname": "kundenbestellnr",
    "fieldtype": "Data",
    "label": "Bestellnummer des Kunden"
+  },
+  {
+   "fieldname": "bestelldatum",
+   "fieldtype": "Date",
+   "label": "Bestelldatum"
+  },
+  {
+   "fieldname": "bestellung_datei",
+   "fieldtype": "Data",
+   "label": "Bestellung des Kunden (PDF)",
+   "read_only": 1
   },
   {
    "fieldname": "projekt",
@@ -127,6 +144,30 @@
    "fieldtype": "Data",
    "label": "Auftragsbestätigung gesendet an",
    "read_only": 1
+  },
+  {
+   "fieldname": "ab_aenderung",
+   "fieldtype": "Int",
+   "label": "AB gesendet zu Änderung",
+   "read_only": 1,
+   "description": "Stand der zuletzt gesendeten Auftragsbestätigung (0 = ursprünglicher Auftrag)"
+  },
+  {
+   "fieldname": "sb_aenderungen",
+   "fieldtype": "Section Break",
+   "label": "Änderungen"
+  },
+  {
+   "fieldname": "aenderung_nr",
+   "fieldtype": "Int",
+   "label": "Letzte Änderung",
+   "read_only": 1
+  },
+  {
+   "fieldname": "aenderungen",
+   "fieldtype": "Table",
+   "label": "Änderungen",
+   "options": "Auftragsaenderung"
   }
  ],
  "links": [],

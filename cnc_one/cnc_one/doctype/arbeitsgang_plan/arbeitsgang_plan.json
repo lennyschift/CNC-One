@@ -11,6 +11,10 @@
   "satz",
   "ruest_min",
   "stueck_min",
+  "ruest_direkt",
+  "ruest_euro",
+  "stueck_direkt",
+  "stueck_euro",
   "lieferant",
   "fremd_pro_stk",
   "fremd_einmal",
@@ -61,6 +65,30 @@
    "fieldname": "stueck_min",
    "fieldtype": "Float",
    "label": "Stückzeit (min)"
+  },
+  {
+   "fieldname": "ruest_direkt",
+   "fieldtype": "Check",
+   "label": "Rüstkosten direkt in €",
+   "description": "statt Rüstzeit × Satz"
+  },
+  {
+   "fieldname": "ruest_euro",
+   "fieldtype": "Currency",
+   "label": "Rüstkosten (€)",
+   "precision": "2"
+  },
+  {
+   "fieldname": "stueck_direkt",
+   "fieldtype": "Check",
+   "label": "Stückkosten direkt in €",
+   "description": "statt Stückzeit × Satz"
+  },
+  {
+   "fieldname": "stueck_euro",
+   "fieldtype": "Currency",
+   "label": "Stückkosten (€ je Stück)",
+   "precision": "2"
   },
   {
    "fieldname": "lieferant",

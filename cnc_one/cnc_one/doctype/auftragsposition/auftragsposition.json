@@ -5,6 +5,7 @@
  "engine": "InnoDB",
  "field_order": [
   "position_key",
+  "angebot",
   "angebot_position_key",
   "bauteil",
   "teilenummer",
@@ -20,7 +21,12 @@
   "arbeitsplan",
   "serien_von",
   "serien_bis",
-  "serien_stellen"
+  "serien_stellen",
+  "bestellposition",
+  "bestellpreis",
+  "preisform",
+  "entfallen",
+  "menge_urspruenglich"
  ],
  "fields": [
   {
@@ -28,6 +34,14 @@
    "fieldtype": "Data",
    "label": "Schlüssel",
    "read_only": 1
+  },
+  {
+   "fieldname": "angebot",
+   "fieldtype": "Link",
+   "label": "Angebot",
+   "options": "Angebot",
+   "read_only": 1,
+   "description": "Angebot, aus dem die Position stammt (auch ein früheres bei Wiederholbestellungen)"
   },
   {
    "fieldname": "angebot_position_key",
@@ -125,6 +139,38 @@
    "fieldname": "serien_stellen",
    "fieldtype": "Int",
    "label": "Stellen der Seriennummer"
+  },
+  {
+   "fieldname": "bestellposition",
+   "fieldtype": "Data",
+   "label": "Position in der Bestellung des Kunden"
+  },
+  {
+   "fieldname": "bestellpreis",
+   "fieldtype": "Currency",
+   "label": "Stückpreis laut Bestellung",
+   "precision": "2"
+  },
+  {
+   "fieldname": "preisform",
+   "fieldtype": "Select",
+   "label": "Preisform",
+   "options": "Angebot\nBestellung",
+   "default": "Angebot",
+   "description": "Angebot: Stückpreis und Kosten wie angeboten; Bestellung: alles im Stückpreis der Bestellung"
+  },
+  {
+   "fieldname": "entfallen",
+   "fieldtype": "Check",
+   "label": "Entfallen",
+   "read_only": 1,
+   "description": "Durch eine Auftragsänderung gestrichen (Menge 0)"
+  },
+  {
+   "fieldname": "menge_urspruenglich",
+   "fieldtype": "Int",
+   "label": "Ursprünglich bestellte Menge",
+   "read_only": 1
   }
  ],
  "links": [],
