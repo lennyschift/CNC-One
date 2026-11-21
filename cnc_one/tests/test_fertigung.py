@@ -35,6 +35,10 @@ class TestFertigung(IntegrationTestCase):
 	def ag(self, fb, name):
 		return next(a for a in fb["arbeitsgaenge"] if a["name"] == name)
 
+	def zeiten(self, fb, ruest=30, bearb=60):
+		"""Ist-Zeiten für alle internen Arbeitsgänge (beim Abschließen Pflicht)."""
+		return [{"agId": a["id"], "ruestMin": ruest, "bearbMin": bearb} for a in fb["arbeitsgaenge"] if a["typ"] == "intern"]
+
 	# ------------------------------------------------------------- Starten
 	def test_starten_legt_pro_position_ein_fertigungsbauteil_an(self):
 		a = self.auftrag(PLAN, 10, teile=[teil("t1", teilenummer="ZZ-F1"), teil("t2", "Welle", "ZZ-F2")])
@@ -95,7 +99,7 @@ class TestFertigung(IntegrationTestCase):
 	def test_fortschritt_ist_das_minimum_und_ueberproduktion_ist_erlaubt(self):
 		fb = self.start()
 		ids = [a["id"] for a in fb["arbeitsgaenge"]]
-		fertigung.buchen(fb["id"], ids[2], 12)
+		fertigung.buchen(fb["id"], ids[2], 12, self.zeiten(fb))
 		d = frappe.get_doc("Fertigungsbauteil", fb["id"])
 		self.assertEqual((d.produziert, d.ueberproduktion, d.status), (12, 2, "Fertig"))
 		self.assertEqual(frappe.db.get_value("Auftrag", fb["auftragId"], "status"), "Fertig")
@@ -189,7 +193,7 @@ class TestFertigung(IntegrationTestCase):
 	# ------------------------------------------------------------- Status von Hand
 	def test_status_fertig_bucht_den_rest(self):
 		fb = self.start()
-		neu = fertigung.status_setzen(fb["id"], "Fertig")
+		neu = fertigung.status_setzen(fb["id"], "Fertig", self.zeiten(fb))
 		self.assertEqual([a["gebucht"] for a in neu["fb"]["arbeitsgaenge"]], [10, 10, 10])
 		self.assertEqual(neu["fb"]["status"], "Fertig")
 		self.assertEqual(neu["auftragStatus"], "Fertig")
@@ -211,8 +215,8 @@ class TestFertigung(IntegrationTestCase):
 		a = self.auftrag(PLAN, 5, teile=[teil("t1", teilenummer="ZZ-F1"), teil("t2", "Welle", "ZZ-F2")])
 		r = fertigung.starten(a["id"])
 		erstes, zweites = r["fertigung"]
-		self.assertEqual(fertigung.status_setzen(erstes["id"], "Fertig")["auftragStatus"], "In Fertigung")
-		self.assertEqual(fertigung.status_setzen(zweites["id"], "Fertig")["auftragStatus"], "Fertig")
+		self.assertEqual(fertigung.status_setzen(erstes["id"], "Fertig", self.zeiten(erstes))["auftragStatus"], "In Fertigung")
+		self.assertEqual(fertigung.status_setzen(zweites["id"], "Fertig", self.zeiten(zweites))["auftragStatus"], "Fertig")
 
 	# ------------------------------------------------------------- Felder
 	def test_felder_speichern_aendert_nur_bearbeitbares(self):
@@ -233,6 +237,59 @@ class TestFertigung(IntegrationTestCase):
 		self.assertEqual((neu["name"], neu["stueckMin"]), ("Drehen CNC", 4.5))
 		self.assertEqual(neu["gebucht"], 3)
 		self.assertEqual(neu["status"], "Läuft")
+
+	# ------------------------------------------------------------- Ist-Zeiten und Planung
+	def test_abschliessen_ohne_zeiten_wird_abgelehnt(self):
+		fb = self.start()
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.status_setzen(fb["id"], "Fertig")
+		# Teilbuchung braucht noch keine Zeiten, erst das Fertigwerden
+		fertigung.buchen(fb["id"], self.ag(fb, "Drehen")["id"], 4)
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.buchen(fb["id"], self.ag(fb, "Drehen")["id"], 6)
+
+	def test_zeiten_beim_abschliessen_werden_gespeichert(self):
+		fb = self.start()
+		drehen = self.ag(fb, "Drehen")
+		r = fertigung.buchen(fb["id"], drehen["id"], 10, [{"agId": drehen["id"], "ruestMin": 45, "bearbMin": 25}])["fb"]
+		neu = self.ag(r, "Drehen")
+		self.assertEqual((neu["status"], neu["istRuestMin"], neu["istBearbMin"], neu["istVon"]), ("Fertig", 45, 25, "Administrator"))
+		self.assertTrue(neu["istAm"])
+		# korrigieren
+		r = fertigung.zeiten_melden(fb["id"], [{"agId": drehen["id"], "ruestMin": 40, "bearbMin": 30}])["fb"]
+		self.assertEqual(self.ag(r, "Drehen")["istBearbMin"], 30)
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.zeiten_melden(fb["id"], [{"agId": drehen["id"], "ruestMin": -1, "bearbMin": 0}])
+
+	def test_intern_extern_und_planung_aendern(self):
+		fb = self.start()
+		pruefen = self.ag(fb, "Prüfen")
+		r = fertigung.felder_speichern(fb["id"], {"arbeitsgaenge": [{**pruefen, "typ": "fremd", "geplantAm": "2026-12-03"}]})["fb"]
+		neu = self.ag(r, "Prüfen")
+		self.assertEqual((neu["typ"], neu["geplantAm"]), ("fremd", "2026-12-03"))
+		drehen = self.ag(r, "Drehen")
+		fertigung.buchen(fb["id"], drehen["id"], 1)
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.felder_speichern(fb["id"], {"arbeitsgaenge": [{**drehen, "typ": "fremd"}]})
+
+	def test_arbeitsgang_hinzu_nimmt_den_standard_der_art(self):
+		frappe.get_doc({"doctype": "Arbeitsgangart", "bezeichnung": "ZZ Eloxieren", "typ": "Fremd"}).insert()
+		fb = self.start()
+		r = fertigung.arbeitsgang_hinzu(fb["id"], "", "ZZ Eloxieren")["fb"]
+		self.assertEqual(self.ag(r, "ZZ Eloxieren")["typ"], "fremd")
+		r = fertigung.arbeitsgang_hinzu(fb["id"], "intern", "ZZ Eloxieren")["fb"]
+		self.assertEqual([a["typ"] for a in r["arbeitsgaenge"] if a["name"] == "ZZ Eloxieren"], ["fremd", "intern"])
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.arbeitsgang_hinzu(fb["id"], "", "ZZ gibt es nicht")
+
+	def test_maschine_mit_arbeitsgaengen_und_stunden(self):
+		from cnc_one.api import stammdaten
+		frappe.get_doc({"doctype": "Maschine", "maschinenname": "ZZ C42 Auto", "satz": 60}).insert()
+		d = frappe.get_doc("Maschine", "ZZ C42 Auto")
+		stammdaten.maschine_setzen(d, {"satz": 60, "arbeitsgaenge": ["Fräsen", "Drehfräsen"], "automation": "ja", "stundenTag": 20})
+		d.save()
+		ui = stammdaten.maschine_ui(frappe.get_doc("Maschine", "ZZ C42 Auto"))
+		self.assertEqual((ui["arbeitsgaenge"], ui["automation"], ui["stundenTag"]), (["Fräsen", "Drehfräsen"], "ja", 20))
 
 	def test_gast_hat_keinen_zugriff(self):
 		frappe.set_user("Guest")

@@ -4,7 +4,7 @@
 // props: { arbeitsgaenge, kundeId, teilenummer, teil?, teilInfo? }
 import { ref, computed, onMounted, watch } from 'vue';
 import { repo } from '../data/repo.js';
-import { leererArbeitsgang } from './fertigung.js';
+import { leererArbeitsgang, maschinenFuer } from './fertigung.js';
 import { preisFuerMenge } from './anfrage.js';
 import { uid } from './format.js';
 import { agRuest, agStueck } from './calc.js';
@@ -45,7 +45,14 @@ export function useArbeitsplan(props) {
   }
 
   function serienArbeitsgang() { props.arbeitsgaenge.push({ ...leererArbeitsgang('intern', uid), name: stamm.serienart }); }
-  function hinzu(typ) { props.arbeitsgaenge.push(leererArbeitsgang(typ, uid)); }
+  // Neuer Arbeitsgang einer Arbeitsgangart; intern/extern nach dem Standard der Art
+  function hinzu(name, el) {
+    if (el) el.value = '';
+    const art = stamm.arten.find((a) => a.name === name);
+    if (!art) return;
+    props.arbeitsgaenge.push(leererArbeitsgang(art.typ, uid, art.name));
+  }
+  function typSetzen(ag, typ) { ag.typ = typ; }
   function weg(i) { props.arbeitsgaenge.splice(i, 1); }
   function schieben(i, d) {
     const j = i + d;
@@ -66,6 +73,12 @@ export function useArbeitsplan(props) {
     if (m) ag.satz = m.satz;
   }
   const arten = (typ) => stamm.arten.filter((a) => a.typ === typ);
+  // Maschinen, die den Arbeitsgang können; eine schon gewählte bleibt sichtbar
+  const maschinenFuerAg = (ag) => {
+    const l = maschinenFuer(maschinen.value, ag.name);
+    return ag.maschine && !l.some((m) => m.name === ag.maschine) ? [...l, { name: ag.maschine, satz: ag.satz }] : l;
+  };
+  const unbekannteArt = (ag) => !!ag.name && !stamm.arten.some((a) => a.name === ag.name);
 
   function anfragenZu(ag) { return anfragen.fuerArbeitsgang(ag.id); }
   function preisUebernehmen(ag, a) {
@@ -97,5 +110,5 @@ export function useArbeitsplan(props) {
   const zeitNoetig = (ag) => !ag.ruestDirekt || !ag.stueckDirekt;
   const summe = computed(() => props.arbeitsgaenge.filter((a) => a.typ === 'intern').reduce((s, a) => ({ ruest: s.ruest + agRuest(a), stueck: s.stueck + agStueck(a) }), { ruest: 0, stueck: 0 }));
   const fremdSumme = computed(() => props.arbeitsgaenge.filter((a) => a.typ === 'fremd').reduce((s, a) => ({ ruest: s.ruest + (Number(a.fremdEinmal) || 0), stueck: s.stueck + (Number(a.fremdProStk) || 0) }), { ruest: 0, stueck: 0 }));
-  return { stamm, anfragen, ui, maschinen, lieferanten, vorlagen, gespeichert, schluesselOk, ausBauteilLaden, bauteilSpeichern, serienArbeitsgang, hinzu, weg, schieben, vorlageAnwenden, maschineWechsel, arten, anfragenZu, preisUebernehmen, farbe, SPALTEN, umschalten, zeitNoetig, summe, fremdSumme };
+  return { stamm, anfragen, ui, maschinen, lieferanten, vorlagen, gespeichert, schluesselOk, ausBauteilLaden, bauteilSpeichern, serienArbeitsgang, hinzu, typSetzen, maschinenFuerAg, unbekannteArt, weg, schieben, vorlageAnwenden, maschineWechsel, arten, anfragenZu, preisUebernehmen, farbe, SPALTEN, umschalten, zeitNoetig, summe, fremdSumme };
 }

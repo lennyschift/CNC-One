@@ -30,7 +30,7 @@ const plan = useArbeitsplan({
   get teil() { return props.teil; },
   teilInfo: null,
 });
-const { stamm, maschinen, lieferanten, vorlagen, gespeichert, schluesselOk, ausBauteilLaden, bauteilSpeichern, serienArbeitsgang, hinzu, weg, schieben, vorlageAnwenden, maschineWechsel, arten, anfragenZu, preisUebernehmen, farbe, SPALTEN, umschalten } = plan;
+const { stamm, maschinen, lieferanten, vorlagen, gespeichert, schluesselOk, ausBauteilLaden, bauteilSpeichern, serienArbeitsgang, hinzu, typSetzen, maschinenFuerAg, unbekannteArt, weg, schieben, vorlageAnwenden, maschineWechsel, arten, anfragenZu, preisUebernehmen, farbe, SPALTEN, umschalten } = plan;
 
 const fest = computed(() => festerPreis(props.teil));
 const staffel = computed(() => !!props.teil.staffel?.aktiv);
@@ -126,8 +126,10 @@ const einzelnGesamt = computed(() => t.value.einzeln.some((v) => v > 0));
                 <option value="">Vorlage …</option>
                 <option v-for="v in vorlagen" :key="v.id" :value="v.id">{{ v.name }}{{ v.kundeId ? ' (Kunde)' : '' }}</option>
               </select>
-              <button type="button" class="mini" @click="hinzu('intern')"><Plus :size="12" /> Arbeitsgang</button>
-              <button type="button" class="mini" @click="hinzu('fremd')"><Truck :size="12" /> Fremdvergabe</button>
+              <select class="field !w-auto !py-0.5 !text-xs" aria-label="Arbeitsgang hinzufügen" @change="hinzu($event.target.value, $event.target)">
+                <option value="">+ Arbeitsgang …</option>
+                <option v-for="a in stamm.arten" :key="a.id" :value="a.name">{{ a.name }}{{ a.typ === 'fremd' ? ' (extern)' : '' }}</option>
+              </select>
               <button v-if="gespeichert && !teil.arbeitsgaenge.length" type="button" class="mini" @click="ausBauteilLaden()"><DownloadCloud :size="12" /> Vom Bauteil</button>
               <button type="button" class="mini" :disabled="!schluesselOk" :class="!schluesselOk ? 'pointer-events-none opacity-40' : ''" :title="schluesselOk ? 'Arbeitsplan am Bauteil speichern (für spätere Angebote und Aufträge)' : 'Dafür braucht das Bauteil einen Kunden und eine Teilenummer'" @click="bauteilSpeichern"><Save :size="12" /> Am Bauteil speichern</button>
             </span>
@@ -161,10 +163,18 @@ const einzelnGesamt = computed(() => t.value.einzeln.some((v) => v > 0));
                 <div class="min-w-0 pl-1">
                   <div class="flex items-center gap-2">
                     <span class="nr tnum">{{ i + 1 }}</span>
-                    <input v-model="ag.name" :list="'arten-' + ag.typ" class="name" placeholder="Arbeitsgang, z. B. Drehen" />
+                    <select v-model="ag.name" class="name" :class="!ag.name || unbekannteArt(ag) ? '!border-warn' : ''" aria-label="Arbeitsgang">
+                      <option value="" disabled>Arbeitsgang wählen …</option>
+                      <option v-if="unbekannteArt(ag)" :value="ag.name">{{ ag.name }} (nicht in den Stammdaten)</option>
+                      <option v-for="a in stamm.arten" :key="a.id" :value="a.name">{{ a.name }}</option>
+                    </select>
+                    <span class="modus" role="radiogroup" aria-label="Intern oder extern">
+                      <button type="button" :class="ag.typ === 'intern' ? 'aktiv' : ''" title="Intern" @click="typSetzen(ag, 'intern')">intern</button>
+                      <button type="button" :class="ag.typ === 'fremd' ? 'aktiv' : ''" title="Extern (Fremdvergabe)" @click="typSetzen(ag, 'fremd')">extern</button>
+                    </span>
                   </div>
                   <div class="mt-1.5 flex items-center gap-1.5 pl-7">
-                    <select class="field min-w-0 flex-1 !py-1 !text-xs" :value="ag.maschine" @change="maschineWechsel(ag, $event.target.value)"><option value="">Maschine …</option><option v-for="m in maschinen" :key="m.name" :value="m.name">{{ m.name }}</option></select>
+                    <select class="field min-w-0 flex-1 !py-1 !text-xs" :value="ag.maschine" @change="maschineWechsel(ag, $event.target.value)"><option value="">Maschine (optional) …</option><option v-for="m in maschinenFuerAg(ag)" :key="m.name" :value="m.name">{{ m.name }}</option></select>
                     <NumField v-model="ag.satz" unit="€/h" class="mikro w-[84px] shrink-0" :class="ag.ruestDirekt && ag.stueckDirekt ? 'opacity-50' : ''" />
                   </div>
                   <p v-if="stamm.istSerienart(ag.name)" class="mt-1 flex items-center gap-1 pl-7 text-[11px] text-accent"><Hash :size="11" /> bringt die Seriennummern an</p>
@@ -196,7 +206,15 @@ const einzelnGesamt = computed(() => t.value.einzeln.some((v) => v > 0));
                 <div class="min-w-0 pl-1">
                   <div class="flex items-center gap-2">
                     <span class="nr"><Truck :size="12" /></span>
-                    <input v-model="ag.name" :list="'arten-' + ag.typ" class="name" placeholder="Fremdvergabe, z. B. Härten" />
+                    <select v-model="ag.name" class="name" :class="!ag.name || unbekannteArt(ag) ? '!border-warn' : ''" aria-label="Arbeitsgang">
+                      <option value="" disabled>Arbeitsgang wählen …</option>
+                      <option v-if="unbekannteArt(ag)" :value="ag.name">{{ ag.name }} (nicht in den Stammdaten)</option>
+                      <option v-for="a in stamm.arten" :key="a.id" :value="a.name">{{ a.name }}</option>
+                    </select>
+                    <span class="modus" role="radiogroup" aria-label="Intern oder extern">
+                      <button type="button" :class="ag.typ === 'intern' ? 'aktiv' : ''" title="Intern" @click="typSetzen(ag, 'intern')">intern</button>
+                      <button type="button" :class="ag.typ === 'fremd' ? 'aktiv' : ''" title="Extern (Fremdvergabe)" @click="typSetzen(ag, 'fremd')">extern</button>
+                    </span>
                   </div>
                   <div class="mt-1.5 pl-7">
                     <select v-model="ag.lieferant" class="field !py-1 !text-xs"><option value="">Lieferant …</option><option v-for="l in lieferanten" :key="l.id" :value="l.name">{{ l.name }}</option></select>
@@ -227,8 +245,6 @@ const einzelnGesamt = computed(() => t.value.einzeln.some((v) => v > 0));
               </div>
             </template>
           </div>
-          <datalist id="arten-intern"><option v-for="a in arten('intern')" :key="a.id" :value="a.name" /></datalist>
-          <datalist id="arten-fremd"><option v-for="a in arten('fremd')" :key="a.id" :value="a.name" /></datalist>
 
           <div v-if="teil.seriennummern && !teil.arbeitsgaenge.some((a) => stamm.istSerienart(a.name))" class="hinweis">
             <Hash :size="13" /> Seriennummern sind aktiv, der Arbeitsgang „{{ stamm.serienart }}“ fehlt.

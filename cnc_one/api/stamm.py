@@ -188,8 +188,8 @@ def stammdaten():
 			for r in frappe.get_list("Lieferant", filters={"aktiv": 1}, fields=["name", "leistung"], order_by="name asc", limit_page_length=0)
 		],
 		"maschinen": [
-			{"name": r.name, "satz": r.satz or 0}
-			for r in frappe.get_list("Maschine", filters={"aktiv": 1}, fields=["name", "satz"], order_by="name asc", limit_page_length=0)
+			{"name": r.name, "satz": r.satz or 0, "arbeitsgaenge": schreibweisen(r.arbeitsgaenge), "automation": bool(r.automation), "stundenTag": r.stunden_tag or 8}
+			for r in frappe.get_list("Maschine", filters={"aktiv": 1}, fields=["name", "satz", "arbeitsgaenge", "automation", "stunden_tag"], order_by="name asc", limit_page_length=0)
 		],
 		"materialien": [
 			{"name": r.name, "preisKg": r.preis_kg or 0, "dichte": r.dichte or 0, "schreibweisen": schreibweisen(r.schreibweisen), "isoGruppe": r.iso_gruppe or ""}

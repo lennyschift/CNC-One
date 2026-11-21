@@ -1,11 +1,11 @@
 <script setup>
 import { computed } from 'vue';
-import { Truck, Cog, CalendarClock, Flame } from '@lucide/vue';
+import { Truck, Cog, CalendarClock, Flame, AlertTriangle } from '@lucide/vue';
 import PartImage from './PartImage.vue';
 import ProjektMarke from './ProjektMarke.vue';
 import { useBelege } from '../stores/belege.js';
 import { bereichText } from '../lib/serien.js';
-import { produziert, fortschritt, ueberproduktion, tageBis } from '../lib/fertigung.js';
+import { produziert, fortschritt, ueberproduktion, tageBis, zeitenFehlen } from '../lib/fertigung.js';
 
 const props = defineProps({ fb: { type: Object, required: true } });
 defineEmits(['drag']);
@@ -62,5 +62,6 @@ const weg = computed(() => props.fb.arbeitsgaenge.some((a) => a.typ === 'fremd' 
       <span class="inline-flex shrink-0 items-center gap-1 text-[11px]" :class="terminFarbe"><CalendarClock :size="12" />{{ terminText }}</span>
     </div>
     <div v-if="weg" class="mt-2 inline-flex items-center gap-1 rounded-md bg-surface2 px-2 py-0.5 text-[11px] text-warn"><Truck :size="11" /> Beim Lieferanten</div>
+    <div v-if="zeitenFehlen(fb).length" class="ml-1 mt-2 inline-flex items-center gap-1 rounded-md bg-surface2 px-2 py-0.5 text-[11px] text-warn"><AlertTriangle :size="11" /> Zeiten fehlen</div>
   </RouterLink>
 </template>

@@ -12,6 +12,7 @@
   "datum",
   "letzte_nachricht",
   "neue_antwort",
+  "wichtig",
   "kunde",
   "kunde_name",
   "kunde_vorschlag",
@@ -78,6 +79,13 @@
    "fieldtype": "Check",
    "label": "Neue Nachricht des Kunden",
    "description": "Der Kunde hat im Verlauf geantwortet"
+  },
+  {
+   "fieldname": "wichtig",
+   "fieldtype": "Check",
+   "label": "Wichtig",
+   "in_standard_filter": 1,
+   "description": "Rotes Ausrufezeichen zur Priorisierung"
   },
   {
    "fieldname": "kunde",

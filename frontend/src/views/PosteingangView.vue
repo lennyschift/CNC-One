@@ -5,7 +5,7 @@
 import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Inbox, RefreshCw, Paperclip, FileText, Box, Table2, File, FileArchive, Building2, UserPlus, Check, Ban, Reply, Settings, MailWarning, Calculator, ArrowRight, Search, X, MessagesSquare, ShoppingCart, Receipt, Truck, Shapes, ShieldAlert, CheckCircle2, RotateCcw, FileCode2 } from '@lucide/vue';
+import { Inbox, RefreshCw, Paperclip, FileText, Box, Table2, File, FileArchive, Building2, UserPlus, Check, Ban, Reply, Settings, MailWarning, Calculator, ArrowRight, Search, X, MessagesSquare, ShoppingCart, Receipt, Truck, Shapes, ShieldAlert, CheckCircle2, RotateCcw, FileCode2, AlertCircle } from '@lucide/vue';
 import BestellungDialog from '../components/BestellungDialog.vue';
 import { repo } from '../data/repo.js';
 import FilterLeiste from '../components/FilterLeiste.vue';
@@ -17,6 +17,7 @@ import TabelleDialog from '../components/TabelleDialog.vue';
 import { useMail } from '../stores/mail.js';
 import { benutzer } from '../data/repo.js';
 import { zahl } from '../lib/format.js';
+import { bauteilGruppen } from '../lib/anhaenge.js';
 
 const DrawingViewer = defineAsyncComponent(() => import('../components/DrawingViewer.vue'));
 const ModelViewer = defineAsyncComponent(() => import('../components/ModelViewer.vue'));
@@ -46,6 +47,7 @@ const kategorie = ref('');
 const nachArt = (k) => mail.liste.filter((x) => (!k || (x.kategorie || 'Anfrage') === k) && FILTER.find((f) => f.id === filter.value).passt(x)).length;
 // Schnellfilter (kombinierbar) und Suche über Betreff, Absender, Kunde, Text und Nummern
 const SCHNELL = [
+  { id: 'wichtig', label: 'Wichtig', icon: AlertCircle, passt: (x) => x.wichtig },
   { id: 'ohneKunde', label: 'Kunde fehlt', icon: UserPlus, passt: (x) => !x.kundeId },
   { id: 'antwort', label: 'Neue Antwort', icon: MessagesSquare, passt: (x) => x.neueAntwort },
   { id: 'zeichnung', label: 'Mit Zeichnung', icon: FileText, passt: (x) => !!x.anhangArten?.Zeichnung },
@@ -88,6 +90,8 @@ const gruppen = computed(() => {
     if (g.at(-1)?.name !== name) g.push({ name, zeilen: [] });
     g.at(-1).zeilen.push(x);
   }
+  // wichtige Mails zuerst, sonst wie sortiert
+  for (const x of g) x.zeilen = [...x.zeilen.filter((z) => z.wichtig), ...x.zeilen.filter((z) => !z.wichtig)];
   return g;
 });
 const hervor = (text) => {
@@ -201,14 +205,9 @@ async function verwerfen() {
 // ---- Anhänge
 const vorschau = ref(null);
 const ICON = { Zeichnung: FileText, STEP: Box, Tabelle: Table2, ZIP: FileArchive, Datei: File };
-// Anhänge der Nachricht: die direkten (auch die ZIP selbst) und je ZIP die daraus ausgepackten Dateien
-function ausZip(n) {
-  const je = new Map();
-  for (const a of n.anhaenge) if (a.aus) je.set(a.aus, [...(je.get(a.aus) ?? []), a]);
-  return [...je].map(([zip, dateien]) => ({ zip, dateien }));
-}
 const groesse = (b) => (!b ? '' : b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)} KB`);
 const ansehbar = (a) => a.art === 'Zeichnung' || a.art === 'STEP';
+const anhangGruppen = (n) => bauteilGruppen(n.anhaenge);
 // Je Nachricht: HTML (wie im Mailprogramm) oder reiner Text
 const alsText = ref({});
 // Beim Wechsel der Anfrage: laden, Vorschau und Rückfrage zurücksetzen
@@ -275,6 +274,7 @@ const kurzZeit = (iso) => {
             <RouterLink v-for="x in g.zeilen" :key="x.id" :to="`/posteingang/${x.id}`" class="relative block px-4 py-3 transition hover:bg-surface2" :class="x.id === id ? 'bg-accent-soft/60' : ''">
               <span v-if="x.id === id" class="absolute inset-y-0 left-0 w-0.5 bg-accent" />
               <div class="flex items-center gap-2">
+                <button type="button" class="wichtig" :class="x.wichtig ? 'wichtig-an' : ''" :title="x.wichtig ? 'Wichtig – Kennzeichen entfernen' : 'Als wichtig kennzeichnen'" @click.prevent.stop="mail.wichtigSetzen(x.id, !x.wichtig)">!</button>
                 <span v-if="x.status === 'Neu' || x.neueAntwort" class="h-2 w-2 shrink-0 rounded-full bg-accent" />
                 <ShieldAlert v-if="x.absenderWarnung" :size="13" class="shrink-0 text-warn" title="Absender nicht bestätigt" />
                 <component :is="artIcon(x.kategorie)" v-if="!kategorie" :size="13" class="shrink-0 text-mute" :title="x.kategorie" />
@@ -312,6 +312,7 @@ const kurzZeit = (iso) => {
           <div class="flex flex-wrap items-start gap-3">
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
+                <button type="button" class="wichtig !h-6 !w-6 !text-sm" :class="d.wichtig ? 'wichtig-an' : ''" :title="d.wichtig ? 'Wichtig – Kennzeichen entfernen' : 'Als wichtig kennzeichnen'" @click="mail.wichtigSetzen(d.id, !d.wichtig)">!</button>
                 <span class="text-xs text-mute tnum">{{ d.id }}</span><StatusBadge :status="d.status" />
                 <label class="inline-flex items-center gap-1 rounded-full border border-line bg-surface2 py-0.5 pl-2 pr-1 text-xs" title="Art der Mail (umsortieren)">
                   <component :is="artIcon(d.kategorie)" :size="12" class="text-mute" />
@@ -395,47 +396,67 @@ const kurzZeit = (iso) => {
             <span class="ml-auto text-xs text-mute tnum">{{ zeit(n.datum) }}</span>
           </div>
           <p v-if="i > 0 && n.betreff !== d.betreff" class="mb-2 text-xs text-mute">Betreff: {{ n.betreff }}</p>
-          <!-- Anhänge oben zwischen Kopf und Text -->
-          <div v-if="n.anhaenge.length || n.hinweis" class="mb-4 border-b border-line pb-3">
-            <div v-if="n.anhaenge.length" class="flex flex-wrap gap-2">
-              <span class="mr-1 inline-flex items-center gap-1 text-xs text-mute"><Paperclip :size="13" /> {{ n.anhaenge.filter((x) => !x.aus).length }}</span>
-              <component
-                :is="ansehbar(a) ? 'button' : 'a'" v-for="a in n.anhaenge.filter((x) => !x.aus)" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
-                class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
-              >
-                <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
-              </component>
-            </div>
-            <div v-for="z in ausZip(n)" :key="z.zip" class="mt-2 flex flex-wrap gap-2 rounded-lg bg-surface2/60 p-2">
-              <span class="mr-1 inline-flex w-full items-center gap-1 text-[11px] text-mute"><FileArchive :size="12" /> Ausgepackt aus {{ z.zip }} · {{ z.dateien.length }} Datei{{ z.dateien.length === 1 ? '' : 'en' }}</span>
-              <component
-                :is="ansehbar(a) ? 'button' : 'a'" v-for="a in z.dateien" :key="a.url" :href="ansehbar(a) ? undefined : a.url" :target="ansehbar(a) ? undefined : '_blank'"
-                class="datei" :class="vorschau?.url === a.url ? 'datei-aktiv' : ''" :title="a.ordner ? `${a.name}
-im Ordner ${a.ordner}` : a.name" @click="ansehbar(a) && (vorschau = vorschau?.url === a.url ? null : a)"
-              >
-                <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
-              </component>
-            </div>
-            <div v-if="n.richtung === 'Eingang' && ['Bestellung', 'Rechnung', 'Lieferant'].includes(d.kategorie) && n.anhaenge.some((a) => !a.aus && pdfOderXml(a))" class="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              <template v-for="a in n.anhaenge.filter((x) => !x.aus && pdfOderXml(x))" :key="`akt-${a.url}`">
-                <button v-if="d.kategorie === 'Bestellung' && /\.pdf$/i.test(a.name) && !d.auftragId" class="btn !py-1 text-xs" :disabled="!d.kundeId" :title="d.kundeId ? 'Bestellung einlesen, mit dem Angebot abgleichen und als Auftrag anlegen' : 'Bitte zuerst den Kunden zuordnen'" @click="bestellungOeffnen(a)"><ShoppingCart :size="13" /> Auftrag aus {{ a.name }}</button>
-                <button v-if="d.kategorie !== 'Bestellung'" class="btn !py-1 text-xs" title="Als Eingangsrechnung übernehmen (E-Rechnung wird gelesen, PDF zum Ausfüllen)" @click="alsRechnung(a)"><component :is="/\.xml$/i.test(a.name) ? FileCode2 : Receipt" :size="13" /> Rechnung aus {{ a.name }}</button>
+          <!-- Text links, Anhänge rechts: je Bauteil Zeichnung und 3D-Modell nebeneinander, darunter die übrigen Dateien -->
+          <div class="grid gap-5" :class="n.anhaenge.length || n.hinweis ? 'lg:grid-cols-[minmax(0,1fr)_300px]' : ''">
+            <div class="min-w-0">
+              <template v-if="n.html && !alsText[i]">
+                <MailHtml :html="n.html" />
+                <button class="mt-1 text-[11px] text-mute hover:text-ink" @click="alsText[i] = true">Als Text anzeigen</button>
+              </template>
+              <template v-else>
+                <div class="max-h-[520px] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed">{{ n.text || '(kein Text)' }}</div>
+                <button v-if="n.html" class="mt-1 text-[11px] text-mute hover:text-ink" @click="alsText[i] = false">Wie im Mailprogramm anzeigen</button>
               </template>
             </div>
-            <p v-if="n.hinweis" class="mt-2 flex items-start gap-1.5 whitespace-pre-line text-xs text-warn"><MailWarning :size="13" class="mt-0.5 shrink-0" /> {{ n.hinweis }}</p>
-            <div v-if="vorschau && n.anhaenge.some((a) => a.url === vorschau.url)" class="mt-3 h-[520px]">
-              <DrawingViewer v-if="vorschau.art === 'Zeichnung'" :key="vorschau.url" :url="vorschau.url" :name="vorschau.name" />
-              <ModelViewer v-else :key="vorschau.url" :url="vorschau.url" :name="vorschau.name" nur-ansehen />
-            </div>
+
+            <aside v-if="n.anhaenge.length || n.hinweis" class="space-y-3 lg:border-l lg:border-line lg:pl-5">
+              <template v-for="ag in [anhangGruppen(n)]" :key="'ag'">
+                <div v-if="ag.gruppen.length">
+                  <div class="mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-mute">
+                    <span class="inline-flex items-center gap-1"><Paperclip :size="12" /> Bauteile</span>
+                    <span class="normal-case tracking-normal">{{ ag.gruppen.filter((g) => g.pdf && g.step).length }}/{{ ag.gruppen.length }} vollständig</span>
+                  </div>
+                  <div class="space-y-1.5">
+                    <div v-for="g in ag.gruppen" :key="g.schluessel + (g.pdf?.url || g.step?.url)" class="rounded-xl bg-surface2/70 p-1.5">
+                      <div class="truncate px-1 pb-1 text-xs font-medium" :title="g.name">{{ g.name }}</div>
+                      <div class="grid grid-cols-2 gap-1.5">
+                        <template v-for="(x, art) in { pdf: g.pdf, step: g.step }" :key="art">
+                          <button v-if="x" type="button" class="kachel" :class="vorschau?.url === x.url ? 'kachel-aktiv' : ''" :title="x.aus ? `${x.name}\naus ${x.aus}` : x.name" @click="vorschau = vorschau?.url === x.url ? null : x">
+                            <component :is="art === 'pdf' ? FileText : Box" :size="15" class="shrink-0" />
+                            <span class="min-w-0"><span class="block text-[11px] font-semibold">{{ art === 'pdf' ? 'Zeichnung' : '3D-Modell' }}</span><span class="block truncate text-[10px] opacity-70 tnum">{{ groesse(x.groesse) }}{{ x.aus ? ' · ZIP' : '' }}</span></span>
+                          </button>
+                          <div v-else class="kachel kachel-fehlt" :title="art === 'pdf' ? 'Keine Zeichnung zu diesem Bauteil' : 'Kein 3D-Modell zu diesem Bauteil'">
+                            <component :is="art === 'pdf' ? FileText : Box" :size="15" class="shrink-0" />
+                            <span class="text-[11px]">{{ art === 'pdf' ? 'Zeichnung fehlt' : '3D fehlt' }}</span>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="ag.sonstige.length">
+                  <div class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute">Weitere Dateien</div>
+                  <div class="flex flex-col gap-1.5">
+                    <a v-for="a in ag.sonstige" :key="a.url" :href="a.url" target="_blank" rel="noopener" class="datei !max-w-none" :title="a.aus ? `${a.name}\naus ${a.aus}` : a.name">
+                      <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="min-w-0 flex-1 truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
+                    </a>
+                  </div>
+                </div>
+              </template>
+              <div v-if="n.richtung === 'Eingang' && ['Bestellung', 'Rechnung', 'Lieferant'].includes(d.kategorie) && n.anhaenge.some((a) => !a.aus && pdfOderXml(a))" class="flex flex-col gap-1.5">
+                <template v-for="a in n.anhaenge.filter((x) => !x.aus && pdfOderXml(x))" :key="`akt-${a.url}`">
+                  <button v-if="d.kategorie === 'Bestellung' && /\.pdf$/i.test(a.name) && !d.auftragId" class="btn justify-start !py-1 text-xs" :disabled="!d.kundeId" :title="d.kundeId ? 'Bestellung einlesen, mit dem Angebot abgleichen und als Auftrag anlegen' : 'Bitte zuerst den Kunden zuordnen'" @click="bestellungOeffnen(a)"><ShoppingCart :size="13" /> <span class="truncate">Auftrag aus {{ a.name }}</span></button>
+                  <button v-if="d.kategorie !== 'Bestellung'" class="btn justify-start !py-1 text-xs" title="Als Eingangsrechnung übernehmen (E-Rechnung wird gelesen, PDF zum Ausfüllen)" @click="alsRechnung(a)"><component :is="/\.xml$/i.test(a.name) ? FileCode2 : Receipt" :size="13" /> <span class="truncate">Rechnung aus {{ a.name }}</span></button>
+                </template>
+              </div>
+              <p v-if="n.hinweis" class="flex items-start gap-1.5 whitespace-pre-line text-xs text-warn"><MailWarning :size="13" class="mt-0.5 shrink-0" /> {{ n.hinweis }}</p>
+            </aside>
           </div>
-          <template v-if="n.html && !alsText[i]">
-            <MailHtml :html="n.html" />
-            <button class="mt-1 text-[11px] text-mute hover:text-ink" @click="alsText[i] = true">Als Text anzeigen</button>
-          </template>
-          <template v-else>
-            <div class="max-h-[420px] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed">{{ n.text || '(kein Text)' }}</div>
-            <button v-if="n.html" class="mt-1 text-[11px] text-mute hover:text-ink" @click="alsText[i] = false">Wie im Mailprogramm anzeigen</button>
-          </template>
+          <!-- Vorschau über die volle Breite -->
+          <div v-if="vorschau && n.anhaenge.some((a) => a.url === vorschau.url)" class="mt-4 h-[560px]">
+            <DrawingViewer v-if="vorschau.art === 'Zeichnung'" :key="vorschau.url" :url="vorschau.url" :name="vorschau.name" />
+            <ModelViewer v-else :key="vorschau.url" :url="vorschau.url" :name="vorschau.name" nur-ansehen />
+          </div>
         </section>
       </div>
       <div v-else class="card hidden flex-col items-center justify-center p-14 text-sm text-mute lg:flex"><Inbox :size="30" :stroke-width="1.4" class="mb-2" /> Mail links auswählen</div>
@@ -450,4 +471,12 @@ im Ordner ${a.ordner}` : a.name" @click="ansehbar(a) && (vorschau = vorschau?.ur
 .datei { display: inline-flex; max-width: 18rem; align-items: center; gap: 0.4rem; border-radius: 0.6rem; background: var(--surface-2); padding: 0.3rem 0.6rem; font-size: 0.75rem; color: var(--ink); transition: background 0.15s; }
 .datei:hover { background: color-mix(in srgb, var(--accent) 10%, var(--surface-2)); }
 .datei-aktiv { background: var(--accent-soft); color: var(--accent); }
+.wichtig { display: grid; height: 1.15rem; width: 1.15rem; flex: none; place-items: center; border-radius: 9999px; font-size: 0.75rem; font-weight: 800; line-height: 1; color: color-mix(in srgb, var(--mute) 55%, transparent); border: 1px solid color-mix(in srgb, var(--mute) 30%, transparent); transition: all 0.15s; }
+.wichtig:hover { color: #dc2626; background: color-mix(in srgb, #dc2626 10%, transparent); }
+.wichtig-an { background: #dc2626; border-color: #dc2626; color: #fff; }
+.wichtig-an:hover { background: #b91c1c; color: #fff; }
+.kachel { display: flex; min-width: 0; align-items: center; gap: 0.4rem; border-radius: 0.55rem; border: 1px solid var(--line); background: var(--surface); padding: 0.35rem 0.5rem; text-align: left; color: var(--ink); transition: all 0.15s; }
+button.kachel:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent); }
+.kachel-aktiv { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.kachel-fehlt { border-style: dashed; background: transparent; color: var(--mute); opacity: 0.8; }
 </style>

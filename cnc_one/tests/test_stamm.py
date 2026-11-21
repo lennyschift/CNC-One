@@ -22,7 +22,7 @@ class TestStamm(IntegrationTestCase):
 		daten = stamm.bootstrap()
 		for key in ("benutzer", "kunden", "lieferanten", "maschinen", "materialien", "arten", "vorlagen"):
 			self.assertIn(key, daten)
-		self.assertIn({"name": "ZZ Testmaschine", "satz": 99}, daten["maschinen"])
+		self.assertIn({"name": "ZZ Testmaschine", "satz": 99, "arbeitsgaenge": [], "automation": False, "stundenTag": 8}, daten["maschinen"])
 		self.assertEqual(daten["benutzer"]["id"], "Administrator")
 
 	def test_gast_hat_keinen_zugriff(self):

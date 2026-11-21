@@ -116,6 +116,7 @@ export const useMail = defineStore('mail', () => {
       return null;
     }
   }
+  const wichtigSetzen = (id, wert) => aktion('wichtig_setzen', { id, wichtig: wert ? 1 : 0 }, wert ? 'Als wichtig gekennzeichnet' : '');
   const kategorieSetzen = (id, kategorie) => aktion('kategorie_setzen', { id, kategorie }, `Verschoben nach „${kategorie}“`);
   const erledigt = (id, wert = 1, auftrag = '') => aktion('erledigt', { id, erledigt: wert ? 1 : 0, auftrag }, wert ? 'Als erledigt markiert' : 'Wieder offen');
   const lieferantZuordnen = (id, lieferant) => aktion('lieferant_zuordnen', { id, lieferant }, (d) => `Lieferant ${d.lieferantId} zugeordnet; seine Mails kommen künftig von selbst`);
@@ -133,5 +134,5 @@ export const useMail = defineStore('mail', () => {
     }
   }
 
-  return { liste, anzahl, geladen, ruft, details, laden, zaehlen, abrufen, detail, kundeZuordnen, keineAnfrage, angebotAnlegen, tabellenvorlageLernen, kategorieSetzen, erledigt, lieferantZuordnen, eingangsrechnung };
+  return { liste, anzahl, geladen, ruft, details, laden, zaehlen, abrufen, detail, kundeZuordnen, keineAnfrage, angebotAnlegen, tabellenvorlageLernen, kategorieSetzen, erledigt, lieferantZuordnen, eingangsrechnung, wichtigSetzen };
 });

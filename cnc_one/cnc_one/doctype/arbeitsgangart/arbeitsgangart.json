@@ -20,11 +20,12 @@
   {
    "fieldname": "typ",
    "fieldtype": "Select",
-   "label": "Art",
+   "label": "Standard",
    "options": "Intern\nFremd",
    "default": "Intern",
    "reqd": 1,
-   "in_list_view": 1
+   "in_list_view": 1,
+   "description": "Intern oder extern (Fremdvergabe) als Vorgabe; im Arbeitsplan je Arbeitsgang änderbar"
   },
   {
    "fieldname": "aktiv",

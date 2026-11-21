@@ -22,5 +22,7 @@ export const useUi = defineStore('ui', () => {
     setTimeout(() => { toasts.value = toasts.value.filter((t) => t.id !== id); }, 3200);
   }
 
-  return { dark, paletteOffen, bauteilWahlOffen, toasts, setDark, toggleDark, toast };
+  // Per Drag and Drop abgelegte Dateien für eine Seite, die sie selbst verarbeitet (z. B. Eingangsrechnungen)
+  const abgelegt = ref(null);
+  return { dark, paletteOffen, bauteilWahlOffen, toasts, abgelegt, setDark, toggleDark, toast };
 });

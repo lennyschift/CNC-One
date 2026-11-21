@@ -11,6 +11,7 @@ import { FORMEN, FELD_LABEL, ZEUGNISSE, leeresRoh, rohGewicht, rohText, vollstae
 import { dichteSchaetzen } from '../lib/erkennung.js';
 import { materialProStueck } from '../lib/calc.js';
 import { eur, zahl } from '../lib/format.js';
+import { aufmassText } from '../lib/aufmass.js';
 
 const props = defineProps({
   teil: { type: Object, required: true },
@@ -195,7 +196,7 @@ const proStueck = computed(() => materialProStueck(props.teil));
                   </div>
                   <div v-if="vorschlagText" class="mt-3 flex flex-wrap items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs" :class="vorschlagNeu ? 'bg-accent-soft text-accent' : 'bg-surface2 text-mute'">
                     <Wand2 :size="14" class="shrink-0" />
-                    <span>3D-Modell: <strong class="tnum">{{ vorschlagText }} mm</strong> (auf volle mm, Aufmaß {{ zahl(teil.aufmass || 0, 1) }} mm je Seite)</span>
+                    <span>3D-Modell: <strong class="tnum">{{ vorschlagText }} mm</strong> (auf volle mm, Aufmaß {{ aufmassText(teil.aufmass, vorschlag.form === 'Rund' ? 'Rund' : 'Quader') }})</span>
                     <button v-if="vorschlagNeu" type="button" class="btn ml-auto !py-0.5 text-xs" @click="vorschlagUebernehmen">Übernehmen</button>
                     <span v-else class="ml-auto flex items-center gap-1"><Check :size="13" /> übernommen</span>
                   </div>

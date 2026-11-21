@@ -7,6 +7,8 @@ from frappe import _
 from cnc_one.api import auftrag as auftrag_api
 from cnc_one.api import bauteil as bauteil_api
 from cnc_one.api.stamm import arbeitsgang_ui, arbeitsgang_zeile, ist_serienart, nur_cnc, serienart_namen, typ_db, typ_ui
+from frappe.utils import now_datetime
+
 from cnc_one.logic.daten import datum, iso
 
 FERTIGUNG_ROLLEN = ("CNC Admin", "CNC Vertrieb", "CNC Fertigung", "System Manager")
@@ -25,6 +27,11 @@ def fb_ui(d):
 			"bestellung": a.bestellung or "",
 			"status": a.status,
 			"gebucht": a.gebucht or 0,
+			"geplantAm": datum(a.geplant_am),
+			"istRuestMin": a.ist_ruest_min or 0,
+			"istBearbMin": a.ist_bearb_min or 0,
+			"istVon": a.ist_von or "",
+			"istAm": iso(a.ist_am) if a.ist_am else "",
 			"sendungen": [
 				{
 					"id": s.name, "menge": s.menge, "datumWeg": datum(s.datum_weg), "datumZurueck": datum(s.datum_zurueck),
@@ -129,11 +136,54 @@ def starten(auftrag):
 	}
 
 
+# ----------------------------------------------------------------- Ist-Zeiten
+def _zeiten_setzen(doc, zeiten):
+	"""Ist-Zeiten aus der Oberfläche: [{ agId, ruestMin, bearbMin, maschine }]. Wer und wann wird mitgeschrieben."""
+	if isinstance(zeiten, str):
+		zeiten = frappe.parse_json(zeiten)
+	for z in zeiten or []:
+		ag = doc.arbeitsgang(z.get("agId"))
+		if ag.typ == "Fremd":
+			continue
+		ruest, bearb = float(z.get("ruestMin") or 0), float(z.get("bearbMin") or 0)
+		if ruest < 0 or bearb < 0:
+			frappe.throw(_("Zeiten können nicht negativ sein."))
+		ag.ist_ruest_min = ruest
+		ag.ist_bearb_min = bearb
+		if z.get("maschine"):
+			ag.maschine = z.get("maschine")
+		ag.ist_von = frappe.session.user
+		ag.ist_am = now_datetime()
+
+
+def _zeiten_pruefen(doc, vorher_fertig):
+	"""Interne Arbeitsgänge, die mit dieser Änderung fertig werden, brauchen gemeldete Zeiten."""
+	fehlen = [a.bezeichnung or "Arbeitsgang" for a in doc.arbeitsgaenge if a.typ != "Fremd" and a.status == "Fertig" and a.ag_id not in vorher_fertig and not a.ist_am]
+	if fehlen:
+		frappe.throw(_("Bitte beim Abschließen die Zeiten eintragen: {0}").format(", ".join(fehlen)))
+
+
+def _fertige(doc):
+	return {a.ag_id for a in doc.arbeitsgaenge if a.status == "Fertig"}
+
+
+@frappe.whitelist(methods=["POST"])
+def zeiten_melden(id, zeiten):
+	"""Ist-Zeiten (nach-)tragen oder korrigieren."""
+	doc = _laden(id)
+	_zeiten_setzen(doc, zeiten)
+	doc.save()
+	return _antwort(doc)
+
+
 # ----------------------------------------------------------------- Buchen
 @frappe.whitelist(methods=["POST"])
-def buchen(id, ag_id, menge):
+def buchen(id, ag_id, menge, zeiten=None):
 	doc = _laden(id)
+	vorher = _fertige(doc)
+	_zeiten_setzen(doc, zeiten)
 	nachgeholt = doc.buchen(ag_id, menge)
+	_zeiten_pruefen(doc, vorher)
 	doc.save()
 	return {**_antwort(doc), "nachgeholt": nachgeholt, "ueberproduktion": doc.ueberproduktion}
 
@@ -148,9 +198,14 @@ def buchung_loeschen(id, buchung):
 
 # ----------------------------------------------------------------- Arbeitsplan
 @frappe.whitelist(methods=["POST"])
-def arbeitsgang_hinzu(id, typ="intern"):
+def arbeitsgang_hinzu(id, typ="intern", name=""):
+	"""Neuer Arbeitsgang einer Arbeitsgangart; ohne Angabe von intern/extern gilt der Standard der Art."""
 	doc = _laden(id)
-	doc.arbeitsgaenge_hinzu([arbeitsgang_zeile({"typ": typ, "name": ""})])
+	if name and not frappe.db.exists("Arbeitsgangart", {"bezeichnung": name}):
+		frappe.throw(_("Die Arbeitsgangart {0} gibt es nicht.").format(name))
+	if name and not typ:
+		typ = typ_ui(frappe.db.get_value("Arbeitsgangart", {"bezeichnung": name}, "typ"))
+	doc.arbeitsgaenge_hinzu([arbeitsgang_zeile({"typ": typ or "intern", "name": name})])
 	doc.save()
 	return _antwort(doc)
 
@@ -227,9 +282,12 @@ def sendung_loeschen(id, ag_id, sendung):
 
 # ----------------------------------------------------------------- Status und Felder
 @frappe.whitelist(methods=["POST"])
-def status_setzen(id, status):
+def status_setzen(id, status, zeiten=None):
 	doc = _laden(id)
+	vorher = _fertige(doc)
+	_zeiten_setzen(doc, zeiten)
 	doc.status_setzen(status)
+	_zeiten_pruefen(doc, vorher)
 	doc.save()
 	return _antwort(doc)
 
@@ -264,6 +322,12 @@ def felder_speichern(id, felder):
 		if not ag:
 			continue
 		ag.bezeichnung = (neu.get("name") or "").strip()
+		if "typ" in neu and typ_db(neu.get("typ")) != ag.typ:
+			if (ag.gebucht or 0) or doc.sendungen_von(ag.ag_id):
+				frappe.throw(_("{0}: Intern/extern lässt sich nach Buchungen oder Sendungen nicht mehr ändern.").format(ag.bezeichnung or "Arbeitsgang"))
+			ag.typ = typ_db(neu.get("typ"))
+		if "geplantAm" in neu:
+			ag.geplant_am = neu.get("geplantAm") or None
 		ag.maschine = neu.get("maschine") or None
 		ag.satz = neu.get("satz") or 0
 		ag.ruest_min = neu.get("ruestMin") or 0

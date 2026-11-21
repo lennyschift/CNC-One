@@ -51,3 +51,83 @@ def filter_speichern(modul, daten):
 	else:
 		frappe.get_doc({"doctype": "Listenfilter", "benutzer": frappe.session.user, "modul": modul, "daten": text}).insert(ignore_permissions=True)
 	return {"ok": True}
+
+
+# ----------------------------------------------------------------- Mail-Einstellungen je Benutzer
+PROFIL = {"anzeigename": "anzeigename", "funktion": "funktion", "telefon": "telefon", "mobil": "mobil", "email": "email", "nameAlsAbsender": "name_als_absender", "signatur": "signatur"}
+
+
+def _profil(user=None):
+	user = user or frappe.session.user
+	return frappe.get_doc("Benutzereinstellung", user) if frappe.db.exists("Benutzereinstellung", user) else None
+
+
+def signatur_erzeugen(d, firma):
+	"""Signatur aus den Angaben: Name, Funktion, Firma, Telefon und Mobil, E-Mail (leere Zeilen fallen weg)."""
+	telefone = " · ".join(x for x in (f"Telefon {d['telefon']}" if d.get("telefon") else "", f"Mobil {d['mobil']}" if d.get("mobil") else "") if x)
+	return "\n".join(x for x in (d.get("anzeigename"), d.get("funktion"), firma, telefone, d.get("email")) if x)
+
+
+def absender_fuer(firma, absender_name="", user=None):
+	"""(Signatur, Absendername) für Mails des angemeldeten Benutzers. `firma`: Absendername der Mail-Einstellungen bzw.
+	Firmenname. Ohne eigene Einstellungen bleibt es beim gemeinsamen Absender (Signatur = Firmenname)."""
+	basis = absender_name or firma
+	p = _profil(user)
+	if not p:
+		return basis, basis
+	user = p.benutzer
+	name = (p.anzeigename or "").strip() or frappe.db.get_value("User", user, "full_name") or ""
+	d = {"anzeigename": name, "funktion": p.funktion or "", "telefon": p.telefon or "", "mobil": p.mobil or "", "email": (p.email or "").strip() or user}
+	text = (p.signatur or "").strip() or signatur_erzeugen(d, firma)
+	return text, (f"{name} | {basis}" if p.name_als_absender and name else basis)
+
+
+def profil_ui(user=None):
+	user = user or frappe.session.user
+	p = _profil(user)
+	voll = frappe.db.get_value("User", user, "full_name") or ""
+	out = {ui: (p.get(feld) if p else None) for ui, feld in PROFIL.items()}
+	out.update(
+		benutzer=user, angelegt=bool(p), nameAlsAbsender=bool(p.name_als_absender) if p else True,
+		vorschlagName=voll, vorschlagEmail=user if "@" in user else "",
+	)
+	for k in ("anzeigename", "funktion", "telefon", "mobil", "email", "signatur"):
+		out[k] = out[k] or ""
+	return out
+
+
+@frappe.whitelist(methods=["POST"])
+def profil():
+	"""Die Mail-Einstellungen des angemeldeten Benutzers mit Vorschau der Signatur und des Absenders."""
+	nur_cnc()
+	from cnc_one.api.firma import firma_ui
+	from cnc_one.logic import mail
+
+	s = mail.einstellungen()
+	firma = firma_ui().get("firmenname", "")
+	text, name = absender_fuer(firma, s.absender_name)
+	return {**profil_ui(), "vorschauSignatur": text, "vorschauAbsender": name, "firma": firma}
+
+
+@frappe.whitelist(methods=["POST"])
+def profil_speichern(daten):
+	"""Speichert die Mail-Einstellungen des angemeldeten Benutzers (nur die eigenen)."""
+	nur_cnc()
+	daten = frappe.parse_json(daten) if isinstance(daten, str) else (daten or {})
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Bitte anmelden."))
+	p = _profil(user) or frappe.get_doc({"doctype": "Benutzereinstellung", "benutzer": user})
+	for ui, feld in PROFIL.items():
+		if ui not in daten:
+			continue
+		wert = daten[ui]
+		if feld == "name_als_absender":
+			wert = 1 if wert else 0
+		else:
+			wert = str(wert or "").strip()[:2000 if feld == "signatur" else 140]
+		p.set(feld, wert)
+	if p.email and "@" not in p.email:
+		frappe.throw(_("Bitte eine gültige E-Mail-Adresse eintragen."))
+	p.save(ignore_permissions=True) if not p.is_new() else p.insert(ignore_permissions=True)
+	return profil()

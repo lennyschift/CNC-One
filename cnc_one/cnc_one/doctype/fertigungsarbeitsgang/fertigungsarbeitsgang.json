@@ -22,7 +22,12 @@
   "fremd_einmal",
   "anfrage",
   "bestellung",
-  "serie"
+  "serie",
+  "geplant_am",
+  "ist_ruest_min",
+  "ist_bearb_min",
+  "ist_von",
+  "ist_am"
  ],
  "fields": [
   {
@@ -138,6 +143,35 @@
    "fieldname": "serie",
    "fieldtype": "Check",
    "label": "Bringt die Seriennummer an",
+   "read_only": 1
+  },
+  {
+   "fieldname": "geplant_am",
+   "fieldtype": "Date",
+   "label": "Geplant am",
+   "description": "Tag, an dem der Arbeitsgang laufen soll (Planung)"
+  },
+  {
+   "fieldname": "ist_ruest_min",
+   "fieldtype": "Float",
+   "label": "Ist-Rüstzeit (min)"
+  },
+  {
+   "fieldname": "ist_bearb_min",
+   "fieldtype": "Float",
+   "label": "Ist-Bearbeitungszeit (min)",
+   "description": "Gesamte Bearbeitungszeit für die gebuchte Menge"
+  },
+  {
+   "fieldname": "ist_von",
+   "fieldtype": "Data",
+   "label": "Zeiten gemeldet von",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ist_am",
+   "fieldtype": "Datetime",
+   "label": "Zeiten gemeldet am",
    "read_only": 1
   }
  ],

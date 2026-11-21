@@ -91,7 +91,7 @@ const titel = computed(() => [props.teil.teilenummer, props.teil.name].filter(Bo
 const inhaltZ = computed(() => ({ teilId: props.teil.id, titel: titel.value, url: zeichnung.value?.url ?? '', name: zeichnung.value?.name ?? '' }));
 const inhaltM = computed(() => ({
   teilId: props.teil.id, titel: titel.value, url: modell.value?.url ?? '', name: modell.value?.name ?? '',
-  dichte: dichte.value, dichteGeschaetzt: dichteGeschaetzt.value, aufmass: aufmass.value, vorschauFehlt: !props.teil.vorschaubild && !nurAnsicht.value, nurAnsicht: nurAnsicht.value,
+  dichte: dichte.value, dichteGeschaetzt: dichteGeschaetzt.value, aufmass: JSON.parse(JSON.stringify(aufmass.value ?? 0)), vorschauFehlt: !props.teil.vorschaubild && !nurAnsicht.value, nurAnsicht: nurAnsicht.value,
 }));
 watch(inhaltZ, (v) => senden('zeichnung', v), { immediate: true });
 watch(inhaltM, (v) => senden('modell', v), { immediate: true });

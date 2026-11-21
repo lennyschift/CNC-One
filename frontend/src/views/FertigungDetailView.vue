@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { ArrowLeft, Hash, Cog, Truck, ChevronUp, ChevronDown, Trash2, Plus, Layers, NotebookPen, History, Send, PackageCheck, Save, Workflow, X } from '@lucide/vue';
+import { ArrowLeft, Hash, Cog, Truck, Timer, AlertTriangle, ChevronUp, ChevronDown, Trash2, Plus, Layers, NotebookPen, History, Send, PackageCheck, Save, Workflow, X } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import BauteilDateienAnsicht from '../components/BauteilDateienAnsicht.vue';
 import NumField from '../components/NumField.vue';
@@ -10,7 +10,7 @@ import StatusBadge from '../components/StatusBadge.vue';
 import { repo } from '../data/repo.js';
 import { useFertigung } from '../stores/fertigung.js';
 import { useStamm } from '../stores/stamm.js';
-import { STATUS, produziert, fortschritt, ueberproduktion, nochNichtGesendet, felderVon } from '../lib/fertigung.js';
+import { STATUS, produziert, fortschritt, ueberproduktion, nochNichtGesendet, felderVon, maschinenFuer, sollMinuten, zeitGemeldet } from '../lib/fertigung.js';
 import { zahl } from '../lib/format.js';
 import { bereichText, erledigt, offen as serieOffen } from '../lib/serien.js';
 
@@ -43,7 +43,23 @@ const tag = (d) => (d ? new Date(d).toLocaleDateString('de-DE', { day: '2-digit'
 const geplantMin = (ag) => (ag.typ === 'fremd' ? 0 : ag.ruestMin + ag.stueckMin * fb.value.menge);
 const rest = (ag) => Math.max(0, fb.value.menge - ag.gebucht);
 const vorlagen = computed(() => (fb.value ? stamm.vorlagenFuer(fb.value.kundeId) : []));
-const arten = (typ) => stamm.arten.filter((a) => a.typ === typ);
+const unbekannteArt = (ag) => !!ag.name && !stamm.arten.some((a) => a.name === ag.name);
+const maschinenFuerAg = (ag) => {
+  const l = maschinenFuer(maschinen.value, ag.name);
+  return ag.maschine && !l.some((m) => m.name === ag.maschine) ? [...l, { name: ag.maschine }] : l;
+};
+// intern/extern lässt sich nur ändern, solange nichts gebucht und nichts versendet ist
+const typFest = (ag) => ag.gebucht > 0 || (ag.sendungen ?? []).length > 0;
+function neuerArbeitsgang(e) {
+  if (e.target.value) f.arbeitsgangHinzu(fb.value.id, '', e.target.value);
+  e.target.value = '';
+}
+const minText = (min) => (min >= 90 ? `${zahl(min / 60, 1)} h` : `${zahl(min, 0)} min`);
+const abweichung = (ag) => {
+  const soll = sollMinuten(ag, Math.max(ag.gebucht, fb.value.menge));
+  const ist = (ag.istRuestMin || 0) + (ag.istBearbMin || 0);
+  return soll > 0 ? Math.round((ist / soll - 1) * 100) : null;
+};
 
 function buchen(ag, menge) {
   f.buchen(fb.value.id, ag.id, menge ?? buchMenge.value[ag.id]);
@@ -118,8 +134,7 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
         <div class="flex flex-wrap items-center gap-2">
           <h3 class="mr-auto text-sm font-semibold">Arbeitsgänge</h3>
           <select class="field !w-auto" @change="vorlageWahl"><option value="">Vorlage anwenden …</option><option v-for="v in vorlagen" :key="v.id" :value="v.id">{{ v.name }}{{ v.kundeId ? ' (Kunde)' : '' }}</option></select>
-          <button class="btn" @click="f.arbeitsgangHinzu(fb.id, 'intern')"><Plus :size="15" /> Arbeitsgang</button>
-          <button class="btn" @click="f.arbeitsgangHinzu(fb.id, 'fremd')"><Truck :size="15" /> Fremdvergabe</button>
+          <select class="field !w-auto" aria-label="Arbeitsgang hinzufügen" @change="neuerArbeitsgang"><option value="">+ Arbeitsgang hinzufügen …</option><option v-for="a in stamm.arten" :key="a.id" :value="a.name">{{ a.name }}{{ a.typ === 'fremd' ? ' (extern)' : '' }}</option></select>
           <button class="btn" :disabled="!fb.arbeitsgaenge.length" :class="!fb.arbeitsgaenge.length ? 'pointer-events-none opacity-40' : ''" title="Arbeitsplan für künftige Angebote und Aufträge am Bauteil speichern" @click="f.planAmBauteilSpeichern(fb.id)"><Save :size="15" /> Am Bauteil speichern</button>
         </div>
 
@@ -133,9 +148,15 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
           <article v-for="(ag, i) in fb.arbeitsgaenge" :key="ag.id" class="card p-5">
             <div class="flex items-center gap-3">
               <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-semibold tnum" :class="ag.status === 'Fertig' ? 'bg-ok text-white' : ag.status === 'Läuft' ? 'bg-accent text-white' : 'bg-surface2 text-mute'">{{ i + 1 }}</span>
-              <input v-model="ag.name" :list="'arten-' + ag.typ" class="min-w-0 flex-1 bg-transparent text-base font-semibold outline-none placeholder:font-normal placeholder:text-mute" :placeholder="ag.typ === 'fremd' ? 'Name der Fremdvergabe' : 'Name des Arbeitsgangs'" />
-              <datalist :id="'arten-' + ag.typ"><option v-for="a in arten(ag.typ)" :key="a.id" :value="a.name" /></datalist>
-              <span class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2.5 py-0.5 text-xs text-mute"><component :is="ag.typ === 'fremd' ? Truck : Cog" :size="12" /> {{ ag.typ === 'fremd' ? 'Fremdvergabe' : 'Intern' }}</span>
+              <select v-model="ag.name" class="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-base font-semibold outline-none hover:border-line focus:border-accent" :class="!ag.name || unbekannteArt(ag) ? '!border-warn' : ''" aria-label="Arbeitsgang">
+                <option value="" disabled>Arbeitsgang wählen …</option>
+                <option v-if="unbekannteArt(ag)" :value="ag.name">{{ ag.name }} (nicht in den Stammdaten)</option>
+                <option v-for="a in stamm.arten" :key="a.id" :value="a.name">{{ a.name }}</option>
+              </select>
+              <span class="flex shrink-0 rounded-lg border border-line bg-surface2 p-0.5 text-xs" role="radiogroup" aria-label="Intern oder extern" :title="typFest(ag) ? 'Nach Buchungen oder Sendungen nicht mehr änderbar' : ''">
+                <button type="button" class="inline-flex items-center gap-1 rounded-md px-2 py-0.5" :class="ag.typ === 'intern' ? 'bg-surface font-medium text-accent shadow-sm' : 'text-mute'" :disabled="typFest(ag)" @click="ag.typ = 'intern'"><Cog :size="12" /> Intern</button>
+                <button type="button" class="inline-flex items-center gap-1 rounded-md px-2 py-0.5" :class="ag.typ === 'fremd' ? 'bg-surface font-medium text-accent shadow-sm' : 'text-mute'" :disabled="typFest(ag)" @click="ag.typ = 'fremd'"><Truck :size="12" /> Extern</button>
+              </span>
               <span v-if="ag.serie" class="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-0.5 text-xs text-accent"><Hash :size="12" /> Seriennummern</span>
               <StatusBadge :status="ag.status" />
               <div class="flex">
@@ -146,10 +167,11 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
             </div>
 
             <!-- intern -->
-            <div v-if="ag.typ === 'intern'" class="mt-4 grid gap-3 sm:grid-cols-4">
+            <div v-if="ag.typ === 'intern'" class="mt-4 grid gap-3 sm:grid-cols-5">
               <label class="block"><span class="label mb-1 block">Maschine</span>
-                <select class="field" :value="ag.maschine" @change="maschineWechsel(ag, $event.target.value)"><option value="">– wählen –</option><option v-for="m in maschinen" :key="m.name" :value="m.name">{{ m.name }}</option></select>
+                <select class="field" :class="!ag.maschine && ag.status !== 'Fertig' ? '!border-warn' : ''" :value="ag.maschine" @change="maschineWechsel(ag, $event.target.value)"><option value="">– wählen –</option><option v-for="m in maschinenFuerAg(ag)" :key="m.name" :value="m.name">{{ m.name }}</option></select>
               </label>
+              <label class="block"><span class="label mb-1 block">Geplant am</span><input v-model="ag.geplantAm" type="date" class="field" /></label>
               <NumField v-model="ag.satz" label="Satz" unit="€/h" />
               <NumField v-model="ag.ruestMin" label="Rüstzeit" unit="min" :step="5" />
               <NumField v-model="ag.stueckMin" label="Stückzeit" unit="min" :step="0.5" :hint="`geplant ${stunden(geplantMin(ag))} h`" />
@@ -203,7 +225,19 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
                 <span v-if="erledigt(fb.serienVon, fb.serienBis, ag.gebucht)" class="text-ok">angebracht: <span class="font-semibold tnum">{{ bereichText(erledigt(fb.serienVon, fb.serienBis, ag.gebucht).von, erledigt(fb.serienVon, fb.serienBis, ag.gebucht).bis, fb.serienStellen) }}</span></span>
                 <span v-if="serieOffen(fb.serienVon, fb.serienBis, ag.gebucht)" class="text-warn">noch offen: <span class="font-semibold tnum">{{ bereichText(serieOffen(fb.serienVon, fb.serienBis, ag.gebucht).von, serieOffen(fb.serienVon, fb.serienBis, ag.gebucht).bis, fb.serienStellen) }}</span></span>
               </p>
-              <p v-if="i > 0 && ag.typ === 'intern' && ag.gebucht < fb.menge" class="mt-2 text-xs text-mute">Wird hier gebucht, gelten die Arbeitsgänge davor automatisch als abgehakt.</p>
+              <div v-if="ag.typ === 'intern' && (zeitGemeldet(ag) || ag.gebucht >= fb.menge)" class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-surface px-3 py-2 text-xs">
+                <span class="inline-flex items-center gap-1 font-medium"><Timer :size="13" class="text-accent" /> Ist-Zeiten</span>
+                <template v-if="zeitGemeldet(ag)">
+                  <span>Rüsten <strong class="tnum">{{ minText(ag.istRuestMin) }}</strong></span>
+                  <span>Bearbeiten <strong class="tnum">{{ minText(ag.istBearbMin) }}</strong></span>
+                  <span class="text-mute">geplant {{ minText(sollMinuten(ag, Math.max(ag.gebucht, fb.menge))) }}</span>
+                  <span v-if="abweichung(ag) !== null" class="rounded-full px-2 py-0.5 font-medium tnum" :class="abweichung(ag) > 10 ? 'bg-accent-soft text-accent' : abweichung(ag) < -10 ? 'bg-surface2 text-ok' : 'bg-surface2 text-mute'">{{ abweichung(ag) > 0 ? '+' : '' }}{{ abweichung(ag) }} %</span>
+                  <span class="text-mute">{{ ag.istVon }} · {{ zeit(ag.istAm) }}</span>
+                </template>
+                <span v-else class="inline-flex items-center gap-1 text-warn"><AlertTriangle :size="12" /> Zeiten fehlen</span>
+                <button class="btn ml-auto !py-0.5 !text-xs" @click="f.zeitenMelden(fb.id, [ag.id])">{{ zeitGemeldet(ag) ? 'Ändern' : 'Nachtragen' }}</button>
+              </div>
+              <p v-if="i > 0 && ag.typ === 'intern' && ag.gebucht < fb.menge" class="mt-2 text-xs text-mute">Wird hier gebucht, gelten die Arbeitsgänge davor automatisch als abgehakt. Beim Abschließen werden die Zeiten abgefragt.</p>
               <p v-else-if="ag.typ === 'fremd'" class="mt-2 text-xs text-mute">Gebucht wird, was vom Lieferanten zurück ist.</p>
             </div>
           </article>

@@ -21,9 +21,9 @@ export function planAus(arbeitsgaenge, uid) {
   }));
 }
 
-export function leererArbeitsgang(typ, uid) {
+export function leererArbeitsgang(typ, uid, name = '') {
   return {
-    id: uid(), name: '', typ, maschine: '', satz: 0, ruestMin: 0, stueckMin: 0,
+    id: uid(), name, typ, maschine: '', satz: 0, ruestMin: 0, stueckMin: 0,
     lieferant: '', fremdProStk: 0, fremdEinmal: 0, anfrageId: '', serie: false,
   };
 }
@@ -80,7 +80,7 @@ export function felderVon(fb) {
     rohmaterial: { ...fb.rohmaterial },
     notizen: { ...fb.notizen },
     arbeitsgaenge: fb.arbeitsgaenge.map((a) => ({
-      id: a.id, name: a.name, maschine: a.maschine ?? '', satz: num(a.satz), ruestMin: num(a.ruestMin), stueckMin: num(a.stueckMin),
+      id: a.id, name: a.name, typ: a.typ, geplantAm: a.geplantAm || '', maschine: a.maschine ?? '', satz: num(a.satz), ruestMin: num(a.ruestMin), stueckMin: num(a.stueckMin),
       lieferant: a.lieferant ?? '', fremdProStk: num(a.fremdProStk), fremdEinmal: num(a.fremdEinmal), bestellung: a.bestellung ?? '',
     })),
   };
@@ -118,4 +118,97 @@ export function tageBis(termin, heute = new Date()) {
   const a = new Date(termin + 'T00:00:00');
   const b = new Date(heute.getFullYear(), heute.getMonth(), heute.getDate());
   return Math.round((a - b) / 86400000);
+}
+
+// ---- Arbeitsgänge, Maschinen und Ist-Zeiten
+
+// Maschinen, die eine Arbeitsgangart können (ohne Angabe an der Maschine: alle)
+export const maschinenFuer = (maschinen, art) => (maschinen ?? []).filter((m) => !m.arbeitsgaenge?.length || !art || m.arbeitsgaenge.includes(art));
+
+// Hat ein interner Arbeitsgang beim Fertigwerden schon Zeiten gemeldet?
+export const zeitGemeldet = (ag) => !!ag.istAm;
+
+// Interne Arbeitsgänge, die durch eine Buchung bzw. „Fertig“ abgeschlossen werden und noch keine Zeiten haben
+// (beim Abschließen sind Zeiten Pflicht). Frühere Arbeitsgänge werden beim Buchen mit abgehakt.
+export function zeitenNoetigBeiBuchung(fb, agId, menge) {
+  const i = fb.arbeitsgaenge.findIndex((a) => a.id === agId);
+  if (i < 0) return [];
+  const neu = num(fb.arbeitsgaenge[i].gebucht) + num(menge);
+  return fb.arbeitsgaenge.filter((a, k) => k <= i && a.typ === 'intern' && !zeitGemeldet(a) && num(a.gebucht) < fb.menge && Math.max(num(a.gebucht), neu) >= fb.menge);
+}
+export const zeitenNoetigBeiFertig = (fb) => fb.arbeitsgaenge.filter((a) => a.typ === 'intern' && !zeitGemeldet(a) && num(a.gebucht) < fb.menge);
+
+// Fertige interne Arbeitsgänge ohne Zeiten (z. B. aus der Zeit vor der Zeitmeldung oder mit abgehakt durch eine Fremdvergabe)
+export const zeitenFehlen = (fb) => fb.arbeitsgaenge.filter((a) => a.typ === 'intern' && num(a.gebucht) >= fb.menge && !zeitGemeldet(a));
+
+// Soll-Minuten eines Arbeitsgangs für die ganze Menge
+export const sollMinuten = (ag, menge) => (ag.typ === 'fremd' ? 0 : num(ag.ruestMin) + num(ag.stueckMin) * num(menge));
+export const istMinuten = (ag) => num(ag.istRuestMin) + num(ag.istBearbMin);
+
+// Alle Arbeitsgänge als flache Liste { fb, ag, index }
+export function alleArbeitsgaenge(fertigungsbauteile) {
+  const out = [];
+  for (const fb of fertigungsbauteile) fb.arbeitsgaenge.forEach((ag, index) => out.push({ fb, ag, index }));
+  return out;
+}
+
+// Datum als JJJJ-MM-TT (lokal)
+export const tagIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export function wocheVon(datum) {
+  const d = new Date(datum.getFullYear(), datum.getMonth(), datum.getDate());
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+export function tageAb(start, anzahl) {
+  return Array.from({ length: anzahl }, (_x, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; });
+}
+// Kalenderwoche nach ISO 8601
+export function kw(datum) {
+  const d = new Date(Date.UTC(datum.getFullYear(), datum.getMonth(), datum.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const jahr = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d - jahr) / 86400000 + 1) / 7);
+}
+
+// Auslastung je Maschine und Tag: noch offene Soll-Minuten der eingeplanten Arbeitsgänge gegen die verfügbaren Stunden.
+// { [maschine]: { [tag]: minuten } }; nicht eingeplante offene Arbeitsgänge stehen unter `ungeplant`.
+export function auslastung(fertigungsbauteile) {
+  const plan = {};
+  const ungeplant = {};
+  for (const { fb, ag } of alleArbeitsgaenge(fertigungsbauteile)) {
+    if (ag.typ === 'fremd' || num(ag.gebucht) >= fb.menge || fb.status === 'Fertig') continue;
+    const m = ag.maschine || '';
+    const min = restMinuten(ag, fb.menge);
+    if (ag.geplantAm) {
+      plan[m] ??= {};
+      plan[m][ag.geplantAm] = (plan[m][ag.geplantAm] ?? 0) + min;
+    } else {
+      ungeplant[m] = (ungeplant[m] ?? 0) + min;
+    }
+  }
+  return { plan, ungeplant };
+}
+
+// Soll/Ist der abgeschlossenen internen Arbeitsgänge mit gemeldeten Zeiten, gruppiert nach `nach` ('maschine' | 'art' | 'bauteil').
+// Je Gruppe: anzahl, soll/ist in Minuten (Rüsten und Bearbeiten getrennt), abweichung in Prozent (ist/soll − 1).
+export function sollIst(fertigungsbauteile, nach = 'maschine') {
+  const g = new Map();
+  for (const { fb, ag } of alleArbeitsgaenge(fertigungsbauteile)) {
+    if (ag.typ === 'fremd' || !zeitGemeldet(ag)) continue;
+    const key = nach === 'art' ? ag.name || 'ohne Name' : nach === 'bauteil' ? [fb.teil.teilenummer, fb.teil.name].filter(Boolean).join(' · ') || fb.id : ag.maschine || 'ohne Maschine';
+    if (!g.has(key)) g.set(key, { name: key, anzahl: 0, sollRuest: 0, sollBearb: 0, istRuest: 0, istBearb: 0, eintraege: [] });
+    const x = g.get(key);
+    const menge = Math.max(num(ag.gebucht), num(fb.menge));
+    x.anzahl += 1;
+    x.sollRuest += num(ag.ruestMin);
+    x.sollBearb += num(ag.stueckMin) * menge;
+    x.istRuest += num(ag.istRuestMin);
+    x.istBearb += num(ag.istBearbMin);
+    x.eintraege.push({ fb, ag, menge });
+  }
+  return [...g.values()].map((x) => {
+    const soll = x.sollRuest + x.sollBearb;
+    const ist = x.istRuest + x.istBearb;
+    return { ...x, soll, ist, abweichung: soll > 0 ? ist / soll - 1 : null };
+  }).sort((a, b) => a.name.localeCompare(b.name));
 }

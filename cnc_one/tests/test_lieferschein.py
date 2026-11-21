@@ -35,7 +35,8 @@ class TestLieferschein(IntegrationTestCase):
 			fbs = frappe.get_all("Fertigungsbauteil", filters={"auftrag": auf["id"]}, pluck="name")
 		fb = fertigung.liste()
 		fb = next(x for x in fb if x["id"] == fbs[0])
-		return fertigung.buchen(fb["id"], fb["arbeitsgaenge"][-1]["id"], menge)["fb"]
+		zeiten = [{"agId": a["id"], "ruestMin": 10, "bearbMin": 20} for a in fb["arbeitsgaenge"] if a["typ"] == "intern"]
+		return fertigung.buchen(fb["id"], fb["arbeitsgaenge"][-1]["id"], menge, zeiten)["fb"]
 
 	def liefern(self, auf, menge, **kw):
 		pos = auf["positionen"][0]

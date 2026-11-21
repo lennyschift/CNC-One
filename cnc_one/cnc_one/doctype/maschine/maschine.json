@@ -7,6 +7,9 @@
   "maschinenname",
   "satz",
   "aktiv",
+  "arbeitsgaenge",
+  "automation",
+  "stunden_tag",
   "bemerkung"
  ],
  "fields": [
@@ -32,6 +35,25 @@
    "label": "Aktiv",
    "default": "1",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "arbeitsgaenge",
+   "fieldtype": "Small Text",
+   "label": "Arbeitsgänge",
+   "description": "Arbeitsgangarten, die die Maschine kann, eine je Zeile; leer = alle internen"
+  },
+  {
+   "fieldname": "automation",
+   "fieldtype": "Check",
+   "label": "Mit Automation",
+   "description": "z. B. Palettenwechsler oder Roboter"
+  },
+  {
+   "fieldname": "stunden_tag",
+   "fieldtype": "Float",
+   "label": "Verfügbare Stunden je Arbeitstag",
+   "default": "8",
+   "description": "Für die Auslastung; mit Automation auch mehr als eine Schicht"
   },
   {
    "fieldname": "bemerkung",

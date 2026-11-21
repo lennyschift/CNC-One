@@ -105,6 +105,9 @@ DOCTYPES = [
         Data("maschinenname", "Maschine", reqd=1, unique=1, in_list_view=1),
         Money("satz", "Stundensatz (€/h)", reqd=1, in_list_view=1),
         Check("aktiv", "Aktiv", default="1", in_list_view=1),
+        Text("arbeitsgaenge", "Arbeitsgänge", description="Arbeitsgangarten, die die Maschine kann, eine je Zeile; leer = alle internen"),
+        Check("automation", "Mit Automation", description="z. B. Palettenwechsler oder Roboter"),
+        Num("stunden_tag", "Verfügbare Stunden je Arbeitstag", default="8", description="Für die Auslastung; mit Automation auch mehr als eine Schicht"),
         Text("bemerkung", "Bemerkung"),
     ]),
     dict(name="Material", autoname="field:materialname", title="materialname", rechte=stamm_rechte(), icon="layers", fields=[
@@ -127,7 +130,7 @@ DOCTYPES = [
     ]),
     dict(name="Arbeitsgangart", autoname="AA-.####", title="bezeichnung", rechte=stamm_rechte(), icon="list-tree", fields=[
         Data("bezeichnung", "Bezeichnung", reqd=1, in_list_view=1),
-        Select("typ", ["Intern", "Fremd"], "Art", default="Intern", reqd=1, in_list_view=1),
+        Select("typ", ["Intern", "Fremd"], "Standard", default="Intern", reqd=1, in_list_view=1, description="Intern oder extern (Fremdvergabe) als Vorgabe; im Arbeitsplan je Arbeitsgang änderbar"),
         Check("aktiv", "Aktiv", default="1", in_list_view=1),
         Check("serie", "Seriennummern-Arbeitsgang", read_only=1, description="Systemart: bringt die Seriennummer an, lässt sich nicht löschen oder umbenennen"),
     ]),
@@ -312,6 +315,11 @@ DOCTYPES += [
         Data("anfrage", "Anfrage"),
         Data("bestellung", "Bestellung"),
         Check("serie", "Bringt die Seriennummer an", read_only=1),
+        Date("geplant_am", "Geplant am", description="Tag, an dem der Arbeitsgang laufen soll (Planung)"),
+        Num("ist_ruest_min", "Ist-Rüstzeit (min)"),
+        Num("ist_bearb_min", "Ist-Bearbeitungszeit (min)", description="Gesamte Bearbeitungszeit für die gebuchte Menge"),
+        Data("ist_von", "Zeiten gemeldet von", read_only=1),
+        F("ist_am", "Datetime", "Zeiten gemeldet am", read_only=1),
     ]),
     dict(name="Fertigungssendung", istable=1, fields=[
         Data("ag_id", "Arbeitsgang", read_only=1, in_list_view=1),
@@ -404,6 +412,17 @@ DOCTYPES += [
         Table("preise", "Anfragepreis", "Preise des Lieferanten"),
         Section("sb_mail", "Mails"),
         Table("nachrichten", "Mail Nachricht", "Mails zur Anfrage"),
+    ]),
+    # Einstellungen je Benutzer für Mails (Signatur, Absendername); jeder pflegt nur seine eigene
+    dict(name="Benutzereinstellung", autoname="field:benutzer", rechte=stamm_rechte(), icon="user-cog", fields=[
+        Link("benutzer", "User", "Benutzer", reqd=1, unique=1, in_list_view=1),
+        Data("anzeigename", "Name in Mails", in_list_view=1, description="z. B. Max Mustermann; leer = Name des Benutzers"),
+        Data("funktion", "Funktion", description="z. B. Vertrieb, Arbeitsvorbereitung"),
+        Data("telefon", "Telefon (Durchwahl)"),
+        Data("mobil", "Mobil"),
+        Data("email", "E-Mail in der Signatur", description="leer = Adresse des Benutzers"),
+        Check("name_als_absender", "Eigenen Namen als Absender zeigen", default="1", description="Beim Kunden erscheint „Max Mustermann | Firma“"),
+        Text("signatur", "Eigene Signatur", description="Freier Text statt der erzeugten Signatur; leer = aus den Angaben oben"),
     ]),
     dict(name="Listenfilter", autoname="hash", rechte=stamm_rechte(), icon="list-filter", fields=[
         Link("benutzer", "User", "Benutzer", reqd=1, in_list_view=1, in_standard_filter=1),
@@ -652,6 +671,7 @@ DOCTYPES += [
         F("datum", "Datetime", "Eingegangen", in_list_view=1),
         F("letzte_nachricht", "Datetime", "Letzte Nachricht"),
         Check("neue_antwort", "Neue Nachricht des Kunden", description="Der Kunde hat im Verlauf geantwortet"),
+        Check("wichtig", "Wichtig", in_standard_filter=1, description="Rotes Ausrufezeichen zur Priorisierung"),
         Link("kunde", "Kunde", "Kunde", in_standard_filter=1),
         Data("kunde_name", "Kundenname", read_only=1),
         Link("kunde_vorschlag", "Kunde", "Kundenvorschlag (gleiche Domain)", read_only=1),

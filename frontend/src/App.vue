@@ -3,11 +3,12 @@ import { computed, ref } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { useRoute, useRouter } from 'vue-router';
 import { useEventListener } from '@vueuse/core';
-import { Search, Moon, Sun, Database, Truck, Warehouse, Receipt, BellRing, Plus, Copy, Trash2, RotateCcw, Layers, Calculator, FileText, ClipboardList, Factory, Send, Settings, LogOut } from '@lucide/vue';
+import { Search, Moon, Sun, Database, Truck, Warehouse, Receipt, BellRing, Plus, Copy, Trash2, RotateCcw, Layers, Calculator, FileText, ClipboardList, Factory, Send, Settings, LogOut, UserCog } from '@lucide/vue';
 import AppRail from './components/AppRail.vue';
 import CommandPalette from './components/CommandPalette.vue';
 import DropOverlay from './components/DropOverlay.vue';
 import Toasts from './components/Toasts.vue';
+import ZeitenDialog from './components/ZeitenDialog.vue';
 import { useUi } from './stores/ui.js';
 import { useAngebot } from './stores/angebot.js';
 import { benutzer } from './data/repo.js';
@@ -25,7 +26,10 @@ const router = useRouter();
 const ui = useUi();
 const a = useAngebot();
 
+// Abgelegte Dateien: auf der Liste der Eingangsrechnungen als Rechnungen, sonst als Bauteile in die Workbench
+const dropRechnung = computed(() => route.path === '/eingangsrechnungen');
 function onDateien(files) {
+  if (dropRechnung.value) { ui.abgelegt = { ziel: 'eingangsrechnung', files }; return; }
   if (route.meta.bereich !== 'workbench') router.push('/workbench');
   a.dateienHinzufuegen(files);
 }
@@ -93,7 +97,8 @@ useEventListener(window, 'keydown', (e) => {
             <div v-if="menue" class="card absolute right-0 z-30 mt-2 w-64 p-3 shadow-xl">
               <div class="px-2 pb-2"><div class="text-sm font-semibold">{{ nutzer?.name }}</div><div class="text-xs text-mute">{{ nutzer?.id }}</div></div>
               <div class="flex flex-wrap gap-1 border-y border-line px-2 py-2"><span v-for="r in cncRollen" :key="r" class="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] text-mute">{{ r }}</span></div>
-              <button class="mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-mute transition hover:bg-surface2 hover:text-ink" @click="abmelden"><LogOut :size="15" /> Abmelden</button>
+              <RouterLink to="/meine-einstellungen" class="mt-2 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-mute transition hover:bg-surface2 hover:text-ink" @click="menue = false"><UserCog :size="15" /> Meine Einstellungen (Signatur)</RouterLink>
+              <button class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-mute transition hover:bg-surface2 hover:text-ink" @click="abmelden"><LogOut :size="15" /> Abmelden</button>
             </div>
           </Transition>
         </div>
@@ -103,7 +108,8 @@ useEventListener(window, 'keydown', (e) => {
       </main>
     </div>
     <CommandPalette :offen="ui.paletteOffen" :befehle="befehle" @schliessen="ui.paletteOffen = false" />
-    <DropOverlay @dateien="onDateien" />
+    <DropOverlay :titel="dropRechnung ? 'Rechnungen hier ablegen' : 'Dateien hier ablegen'" :text="dropRechnung ? 'PDF (auch ZUGFeRD) oder XML (XRechnung) – mehrere auf einmal möglich' : 'STEP und PDF mit gleichem Namen werden zu einem Bauteil'" @dateien="onDateien" />
+    <ZeitenDialog />
     <Toasts />
   </div>
 </template>

@@ -3,7 +3,7 @@
 // Vollbild und „aktuelle Ansicht als Vorschaubild“. Werkzeuge: Kante oder Fläche anklicken (Länge, Radius, Durchmesser,
 // Bohrung oder Welle), Abstand messen mit Fangpunkten (Endpunkt, Kantenmitte, Kreismitte, Achse, Ebene), Rohteil als Quader
 // oder Rundmaterial mit Aufmaß und Gewicht, Schnitt entlang einer Achse und Röntgenansicht. Three.js wird nur bei Bedarf geladen.
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
@@ -14,13 +14,14 @@ import { ANSICHTEN, modellGruppe, abmessungen, kameraAusrichten, lichter, flaech
 import { cadKanten, kanteAmStrahl, fangpunkt, flaechenpunkt, messen } from '../lib/kanten.js';
 import { volumenUndFlaeche, rohteile, rundmaterial, quader, flaecheAnalysieren, flaecheZuDreieck, gewichtKg, ACHSEN, drehteilErkennen, drehrohteil, achseZuFlaeche } from '../lib/messen.js';
 import { zahl } from '../lib/format.js';
+import AufmassEingabe from './AufmassEingabe.vue';
 
 const props = defineProps({
   url: { type: String, required: true },
   name: { type: String, default: '' },
   dichte: { type: Number, default: 0 }, // kg/dm³ des gewählten Rohmaterials (0 = unbekannt)
   dichteGeschaetzt: { type: Boolean, default: false }, // Richtwert, am Rohmaterial ist keine Dichte gepflegt
-  aufmass: { type: Number, default: 0 }, // mm je Seite für das Rohteil
+  aufmass: { type: [Number, Object], default: 0 }, // mm je Seite oder Aufmaß-Objekt (lib/aufmass.js)
   nurAnsehen: { type: Boolean, default: false }, // z. B. in der Fertigung: nichts ans Bauteil übernehmen
   fensterKnopf: { type: Boolean, default: false }, // Knopf für das eigene Fenster (zweiter Bildschirm), meldet 'fenster'
 });
@@ -335,8 +336,10 @@ function fangText(f) {
 
 // ---- Rohteil
 // Aufmaß auch ohne v-model änderbar (nur zum Ansehen)
-const aufmassWert = ref(props.aufmass);
-watch(() => props.aufmass, (v) => { aufmassWert.value = v; });
+// shallowRef und Kopie: der Wert geht auch per postMessage ans eigene Fenster (keine Vue-Proxys)
+const kopie = (v) => (v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v ?? 0);
+const aufmassWert = shallowRef(kopie(props.aufmass));
+watch(() => props.aufmass, (v) => { aufmassWert.value = kopie(v); }, { deep: true });
 const rohteilListe = computed(() => (kennwerte.value ? rohteile(netzeAktuell, aufmassWert.value) : null));
 const rohteil = computed(() => {
   if (!rohteilListe.value) return null;
@@ -353,7 +356,7 @@ const drehRohteil = computed(() => {
   const d = drehDurchmesser.value === 'drehen' && g.aussenDurchmesser ? g.aussenDurchmesser : null;
   return drehrohteil(netzeAktuell, g.achse, g.punkt, { aufmass: aufmassWert.value, durchmesser: d });
 });
-const huelleDurchmesser = computed(() => (drehRohteil.value ? drehRohteil.value.huelle - 2 * aufmassWert.value : 0));
+const huelleDurchmesser = computed(() => drehRohteil.value?.huelleBauteil ?? 0);
 const huelleGroesser = computed(() => !!drehAchse.value?.aussenDurchmesser && huelleDurchmesser.value > drehAchse.value.aussenDurchmesser + 0.05);
 const istDrehen = computed(() => rohteilWahl.value === 'Drehen' || (rohteilWahl.value === '' && !!dreh.value?.istDrehteil));
 function drehAchseAus(analyse) {
@@ -427,10 +430,10 @@ function achseAusFlaeche() {
   if (flaechenInfo.value?.art !== 'Zylinder') return;
   drehAchseAus(flaechenInfo.value);
 }
-const aufmassText = computed({
-  get: () => String(aufmassWert.value ?? 0).replace('.', ','),
-  set: (v) => { aufmassWert.value = Math.max(0, Number(String(v).replace(',', '.')) || 0); emit('update:aufmass', aufmassWert.value); },
-});
+function aufmassSetzen(v) {
+  aufmassWert.value = kopie(v);
+  emit('update:aufmass', kopie(v));
+}
 
 // ---- Schnitt und Röntgen
 function darstellungAnwenden() {
@@ -478,6 +481,7 @@ onMounted(() => {
   lichter(szene);
   kamera = new THREE.PerspectiveCamera(35, 1, 0.1, 10000);
   steuerung = new OrbitControls(kamera, renderer.domElement);
+  steuerung.zoomToCursor = true; // Mausrad zoomt zur Stelle unter dem Zeiger, nicht zur Bildmitte
   steuerung.addEventListener('change', zeichnen);
   renderer.domElement.addEventListener('pointerdown', runter);
   renderer.domElement.addEventListener('pointerup', hoch);
@@ -636,7 +640,8 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
             <span v-if="huelleGroesser && drehDurchmesser === 'huelle'" class="w-full text-[11px] text-warn">Etwas steht über den Drehdurchmesser hinaus, z. B. eine Fräskontur.</span>
           </span>
           <span class="text-sm font-semibold tnum">{{ rohteilText(rohteil) }} mm</span>
-          <label class="flex items-center gap-1 text-mute">Aufmaß <input v-model.lazy="aufmassText" class="field !w-12 !px-1.5 !py-0.5 text-right text-xs" /> mm</label>
+          <AufmassEingabe class="w-full" :model-value="aufmassWert" :form="rohteil.art" :rohteil="rohteil" @update:model-value="aufmassSetzen" />
+          <span v-if="rohteil.kleiner" class="w-full text-[11px] text-warn">Die feste Rohteilgröße ist kleiner als das Bauteil.</span>
           <span class="text-mute tnum" :title="dichte && dichteGeschaetzt ? `Dichte geschätzt (${zahl(dichte, 2)} kg/dm³), bitte am Rohmaterial in den Stammdaten pflegen` : ''">
             Fertig {{ cm3(kennwerte.volumen) }}<template v-if="dichte"> · {{ kg(fertigGewicht) }}</template> · Roh {{ cm3(rohteil.volumen) }}<template v-if="dichte"> · <strong class="text-ink">{{ kg(rohGewicht) }}</strong><template v-if="dichteGeschaetzt">*</template></template>
           </span>

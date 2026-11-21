@@ -122,7 +122,11 @@ def lieferant_setzen(doc, d):
 
 
 def maschine_ui(d):
-	return {"id": d.name, "name": d.maschinenname, "satz": d.satz or 0, "bemerkung": d.bemerkung or "", "aktiv": bool(d.aktiv)}
+	return {
+		"id": d.name, "name": d.maschinenname, "satz": d.satz or 0, "bemerkung": d.bemerkung or "", "aktiv": bool(d.aktiv),
+		"arbeitsgaenge": [z.strip() for z in (d.arbeitsgaenge or "").splitlines() if z.strip()],
+		"automation": "ja" if d.automation else "nein", "stundenTag": d.stunden_tag or 8,
+	}
 
 
 def maschine_setzen(doc, d):
@@ -131,6 +135,12 @@ def maschine_setzen(doc, d):
 	doc.satz = d.get("satz") or 0
 	doc.bemerkung = _text(d.get("bemerkung"))
 	doc.aktiv = 1 if d.get("aktiv", True) else 0
+	if "arbeitsgaenge" in d:
+		doc.arbeitsgaenge = "\n".join(_text(x) for x in (d.get("arbeitsgaenge") or []) if _text(x))
+	if "automation" in d:
+		doc.automation = 1 if d.get("automation") in (True, 1, "ja") else 0
+	if "stundenTag" in d:
+		doc.stunden_tag = min(24, max(0, float(d.get("stundenTag") or 0))) or 8
 
 
 ISO_GRUPPEN = ("P", "M", "K", "N", "S", "H")

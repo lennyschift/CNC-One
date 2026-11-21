@@ -8,6 +8,7 @@ from email.utils import getaddresses
 import frappe
 from frappe import _
 
+from cnc_one.api.einstellung import absender_fuer
 from cnc_one.api.stamm import kunde_ui, nur_cnc
 from cnc_one.logic import mail
 
@@ -55,7 +56,7 @@ def anfrage_kurz(d):
 		"datum": _iso(d.datum), "letzteNachricht": _iso(d.letzte_nachricht or d.datum), "neueAntwort": bool(d.neue_antwort),
 		"kundeId": d.kunde or "", "kundeName": d.kunde_name or "", "angebotId": d.angebot or "",
 		"vorschau": text[:160], "anhangArten": arten, "anzahlNachrichten": len(d.nachrichten),
-		"kategorie": d.kategorie or "Anfrage", "lieferantId": d.lieferant or "", "auftragId": d.auftrag or "",
+		"kategorie": d.kategorie or "Anfrage", "lieferantId": d.lieferant or "", "auftragId": d.auftrag or "", "wichtig": bool(d.wichtig),
 		"absenderWarnung": bool(d.absender_warnung), "absenderPruefung": d.absender_pruefung or "",
 		"eingangsrechnungen": frappe.get_all("Eingangsrechnung", filters={"mail": d.name}, pluck="name") if d.name else [],
 	}
@@ -128,6 +129,15 @@ def gelesen(id):
 	d = _geladen(id)
 	if d.neue_antwort:
 		d.db_set("neue_antwort", 0, update_modified=False)
+	return anfrage_ui(d)
+
+
+@frappe.whitelist(methods=["POST"])
+def wichtig_setzen(id, wichtig=1):
+	"""Rotes Ausrufezeichen zur Priorisierung setzen oder entfernen (für alle sichtbar)."""
+	nur_cnc()
+	d = _geladen(id)
+	d.db_set("wichtig", 1 if int(wichtig) else 0, update_modified=False)
 	return anfrage_ui(d)
 
 
@@ -459,7 +469,7 @@ def antwort_vorschlag(angebot):
 	firma = firma_ui().get("firmenname", "")
 	werte = _Platzhalter(
 		anrede=_anrede(a.kunde, an), angebot=a.name, anfrage=f" {a.anfrage_nr}" if a.anfrage_nr else "",
-		absender=s.absender_name or firma, firma=firma,
+		absender=absender_fuer(firma, s.absender_name)[0], firma=firma,
 	)
 	text = (s.antwort_vorlage or STANDARD_VORLAGE).format_map(werte)
 	if letzte:
@@ -512,7 +522,7 @@ def angebot_senden(angebot, an, cc="", betreff="", text="", zitieren=1):
 		inhalt = fh.read()
 
 	msg = EmailMessage()
-	msg["From"] = formataddr((s.absender_name or firma_ui().get("firmenname", ""), s.benutzer or ""))
+	msg["From"] = formataddr((absender_fuer(firma_ui().get("firmenname", ""), s.absender_name)[1], s.benutzer or ""))
 	msg["To"] = ", ".join(an_liste)
 	if cc_liste:
 		msg["Cc"] = ", ".join(cc_liste)
@@ -549,7 +559,7 @@ def angebot_senden(angebot, an, cc="", betreff="", text="", zitieren=1):
 
 	if d:
 		d.append("nachrichten", {
-			"richtung": "Ausgang", "datum": now_datetime(), "von_email": (s.benutzer or "").lower(), "von_name": s.absender_name or "",
+			"richtung": "Ausgang", "datum": now_datetime(), "von_email": (s.benutzer or "").lower(), "von_name": absender_fuer(firma_ui().get("firmenname", ""), s.absender_name)[1],
 			"an": msg["To"], "cc": msg["Cc"] or "", "betreff": msg["Subject"], "message_id": msg["Message-ID"],
 			"in_reply_to": letzte.message_id if letzte else "", "referenzen": referenzen, "text": klartext,
 			"html": antwort_html(text, zitat, ganz=False),
@@ -598,7 +608,7 @@ def ab_vorschlag(auftrag):
 	firma = firma_ui().get("firmenname", "")
 	werte = _Platzhalter(
 		anrede=_anrede(d.kunde, (an or "").lower()), auftrag=d.name, bestellung=f" {d.kundenbestellnr}" if d.kundenbestellnr else "",
-		absender=s.absender_name or firma, firma=firma,
+		absender=absender_fuer(firma, s.absender_name)[0], firma=firma,
 	)
 	betreff = f"Auftragsbestätigung {d.name}" + (f" (Änderung {d.aenderung_nr})" if d.aenderung_nr else "") + (f" zu Ihrer Bestellung {d.kundenbestellnr}" if d.kundenbestellnr else "")
 	bereit = bool(s.smtp_server and s.benutzer and s.get_password("passwort", raise_exception=False))
@@ -642,7 +652,7 @@ def ab_senden(auftrag, an, cc="", betreff="", text=""):
 		inhalt = fh.read()
 
 	msg = EmailMessage()
-	msg["From"] = formataddr((s.absender_name or firma_ui().get("firmenname", ""), s.benutzer or ""))
+	msg["From"] = formataddr((absender_fuer(firma_ui().get("firmenname", ""), s.absender_name)[1], s.benutzer or ""))
 	msg["To"] = ", ".join(an_liste)
 	if cc_liste:
 		msg["Cc"] = ", ".join(cc_liste)

@@ -1,0 +1,121 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "benutzer",
+  "anzeigename",
+  "funktion",
+  "telefon",
+  "mobil",
+  "email",
+  "name_als_absender",
+  "signatur"
+ ],
+ "fields": [
+  {
+   "fieldname": "benutzer",
+   "fieldtype": "Link",
+   "label": "Benutzer",
+   "options": "User",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "anzeigename",
+   "fieldtype": "Data",
+   "label": "Name in Mails",
+   "in_list_view": 1,
+   "description": "z. B. Max Mustermann; leer = Name des Benutzers"
+  },
+  {
+   "fieldname": "funktion",
+   "fieldtype": "Data",
+   "label": "Funktion",
+   "description": "z. B. Vertrieb, Arbeitsvorbereitung"
+  },
+  {
+   "fieldname": "telefon",
+   "fieldtype": "Data",
+   "label": "Telefon (Durchwahl)"
+  },
+  {
+   "fieldname": "mobil",
+   "fieldtype": "Data",
+   "label": "Mobil"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "E-Mail in der Signatur",
+   "description": "leer = Adresse des Benutzers"
+  },
+  {
+   "fieldname": "name_als_absender",
+   "fieldtype": "Check",
+   "label": "Eigenen Namen als Absender zeigen",
+   "default": "1",
+   "description": "Beim Kunden erscheint „Max Mustermann | Firma“"
+  },
+  {
+   "fieldname": "signatur",
+   "fieldtype": "Small Text",
+   "label": "Eigene Signatur",
+   "description": "Freier Text statt der erzeugten Signatur; leer = aus den Angaben oben"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Benutzereinstellung",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "read": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "read": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "field:benutzer",
+ "naming_rule": "By fieldname",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "user-cog"
+}

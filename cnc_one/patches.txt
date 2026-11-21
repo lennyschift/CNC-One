@@ -11,3 +11,4 @@ cnc_one.patches.v0_1.protokoll_nachtragen
 cnc_one.patches.v0_1.anfrage_vorgang
 cnc_one.patches.v0_1.bestellung_toleranz
 cnc_one.patches.v0_1.posteingang_einordnen
+cnc_one.patches.v0_1.drehfraesen_anlegen

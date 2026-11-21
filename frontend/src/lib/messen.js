@@ -3,6 +3,8 @@
 // Volumen und Gewicht, Rohteil als Quader oder Rundmaterial (mit Aufmaß je Seite), Art und Maß einer angeklickten
 // CAD-Fläche (Ebene, Zylinder: Bohrung oder Welle mit Durchmesser) und Abstände.
 
+import { quaderZugaben, rundZugaben } from './aufmass.js';
+
 export const ACHSEN = { X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1] };
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -75,27 +77,44 @@ export function umkreis(punkte) {
 }
 
 // Rundmaterial um eine Achse: Durchmesser (kleinster umschließender Kreis quer zur Achse) und Länge entlang der Achse
+// aufmass: Zahl (je Seite) oder Aufmaß-Objekt (siehe aufmass.js: radial, Stirnseiten, feste Größe)
 export function rundmaterial(netze, achse, aufmass = 0) {
+  const z = rundZugaben(aufmass);
   const a = einheit(achse);
   const [u, v] = quer(a);
   const p = allePunkte(netze);
   let min = Infinity; let max = -Infinity;
   const flach = p.map((q) => { const s = dot(q, a); if (s < min) min = s; if (s > max) max = s; return [dot(q, u), dot(q, v)]; });
   const k = umkreis(flach);
-  const durchmesser = 2 * k.r + 2 * aufmass;
-  const l = max - min + 2 * aufmass;
-  const mitte = add(add(mul(u, k.x), mul(v, k.y)), mul(a, (min + max) / 2));
-  return { art: 'Rund', achse: a, durchmesser, laenge: l, mitte, volumen: Math.PI * (durchmesser / 2) ** 2 * l };
+  const lage = rundLage(2 * k.r, min, max, z);
+  const mitte = add(add(mul(u, k.x), mul(v, k.y)), mul(a, lage.s));
+  return { art: 'Rund', achse: a, durchmesser: lage.d, laenge: lage.l, mitte, kleiner: lage.kleiner, volumen: Math.PI * (lage.d / 2) ** 2 * lage.l };
 }
 
-// Quader entlang der CAD-Achsen
+// Durchmesser, Länge und Lage der Mitte auf der Achse (s) aus Bauteil-Durchmesser und -Ausdehnung [min, max] mit Zugaben;
+// bei fester Größe mittig, `kleiner` = das Bauteil passt nicht hinein
+function rundLage(dBauteil, min, max, z) {
+  if (z.fest) return { d: z.fest.d, l: z.fest.l, s: (min + max) / 2, kleiner: z.fest.d < dBauteil - 1e-6 || z.fest.l < max - min - 1e-6 };
+  return { d: dBauteil + 2 * z.radial, l: max - min + z.l1 + z.l2, s: (min - z.l1 + max + z.l2) / 2, kleiner: false };
+}
+
+// Quader entlang der CAD-Achsen; aufmass als Zahl oder Aufmaß-Objekt (je Richtung, Seiten/Oben/Unten, feste Größe)
 export function quader(netze, aufmass = 0) {
+  const z = quaderZugaben(aufmass);
   const p = allePunkte(netze);
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   for (const q of p) for (let i = 0; i < 3; i++) { if (q[i] < min[i]) min[i] = q[i]; if (q[i] > max[i]) max[i] = q[i]; }
-  const masse = [0, 1, 2].map((i) => max[i] - min[i] + 2 * aufmass);
-  return { art: 'Quader', x: masse[0], y: masse[1], z: masse[2], min: min.map((m) => m - aufmass), max: max.map((m) => m + aufmass), volumen: masse[0] * masse[1] * masse[2] };
+  let lo = min.map((m, i) => m - z.minus[i]);
+  let hi = max.map((m, i) => m + z.plus[i]);
+  let kleiner = false;
+  if (z.fest) {
+    lo = min.map((m, i) => (m + max[i]) / 2 - z.fest[i] / 2);
+    hi = min.map((m, i) => (m + max[i]) / 2 + z.fest[i] / 2);
+    kleiner = z.fest.some((w, i) => w < max[i] - min[i] - 1e-6);
+  }
+  const masse = [0, 1, 2].map((i) => hi[i] - lo[i]);
+  return { art: 'Quader', x: masse[0], y: masse[1], z: masse[2], min: lo, max: hi, kleiner, volumen: masse[0] * masse[1] * masse[2] };
 }
 
 // Mögliche Rohteile (Quader und Rundmaterial je Achse) mit dem kleinsten Volumen als Vorschlag
@@ -251,6 +270,7 @@ export function achseZuFlaeche(achsen, analyse) {
 // Rundmaterial zum Drehen: mittig auf der Drehachse. Hülle = alles, was absteht (auch Fräskonturen), muss ins Rohteil;
 // mit durchmesser (z. B. dem größten Drehdurchmesser) wird stattdessen dieser Wert genommen.
 export function drehrohteil(netze, achse, punktAufAchse, { aufmass = 0, durchmesser = null } = {}) {
+  const z = rundZugaben(aufmass);
   const a = einheit(achse);
   let rMax = 0; let min = Infinity; let max = -Infinity;
   for (const n of netze) {
@@ -264,7 +284,6 @@ export function drehrohteil(netze, achse, punktAufAchse, { aufmass = 0, durchmes
     }
   }
   const huelle = 2 * rMax;
-  const d = (durchmesser || huelle) + 2 * aufmass;
-  const l = max - min + 2 * aufmass;
-  return { art: 'Rund', drehteil: true, achse: a, punkt: punktAufAchse, durchmesser: d, huelle: huelle + 2 * aufmass, laenge: l, mitte: add(punktAufAchse, mul(a, (min + max) / 2)), volumen: Math.PI * (d / 2) ** 2 * l };
+  const lage = rundLage(durchmesser || huelle, min, max, z);
+  return { art: 'Rund', drehteil: true, achse: a, punkt: punktAufAchse, durchmesser: lage.d, huelle: huelle + 2 * z.radial, huelleBauteil: huelle, laenge: lage.l, kleiner: lage.kleiner, mitte: add(punktAufAchse, mul(a, lage.s)), volumen: Math.PI * (lage.d / 2) ** 2 * lage.l };
 }

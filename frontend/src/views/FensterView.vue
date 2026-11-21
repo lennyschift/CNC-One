@@ -1,7 +1,7 @@
 <script setup>
 // Eigenes Fenster für Zeichnung oder 3D-Modell (z. B. auf dem zweiten Bildschirm). Zeigt, was die Workbench schickt:
 // beim Wechsel des Bauteils dessen Zeichnung bzw. Modell. Ohne Seitenleiste und Kopf, nur der Betrachter.
-import { ref, computed, defineAsyncComponent, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, shallowRef, computed, defineAsyncComponent, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { FileText, Box, Loader } from '@lucide/vue';
 import { ARTEN, fensterStarten } from '../lib/fenster.js';
@@ -13,7 +13,7 @@ const route = useRoute();
 const art = computed(() => (route.params.art in ARTEN ? route.params.art : 'zeichnung'));
 // { teilId, titel, url, name, dichte, dichteGeschaetzt, aufmass, nurAnsicht } oder null; undefined = noch nichts gehört
 const inhalt = ref(undefined);
-const aufmass = ref(0);
+const aufmass = shallowRef(0); // Zahl oder Aufmaß-Objekt, ohne Vue-Proxy (geht per postMessage zurück)
 let verbindung = null;
 
 function starten() {

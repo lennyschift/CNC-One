@@ -81,7 +81,7 @@ describe('bearbeitbare Felder', () => {
   it('enthalten keinen Buchungsstand', () => {
     const f = felderVon(fb({ prioritaet: 'Hoch', termin: '2026-12-01', rohmaterial: { charge: 'A' }, notizen: { pruefmasse: 'ok' }, arbeitsgaenge: [ag({ gebucht: 7, status: 'Läuft' })] }));
     expect(f).toMatchObject({ prioritaet: 'Hoch', termin: '2026-12-01', rohmaterial: { charge: 'A' }, notizen: { pruefmasse: 'ok' } });
-    expect(f.arbeitsgaenge[0]).toEqual({ id: 'a', name: 'Fertigen', maschine: 'CTX400', satz: 0, ruestMin: 30, stueckMin: 2, lieferant: '', fremdProStk: 0, fremdEinmal: 0, bestellung: '' });
+    expect(f.arbeitsgaenge[0]).toEqual({ id: 'a', name: 'Fertigen', typ: 'intern', geplantAm: '', maschine: 'CTX400', satz: 0, ruestMin: 30, stueckMin: 2, lieferant: '', fremdProStk: 0, fremdEinmal: 0, bestellung: '' });
   });
   it('sind gleich, solange nichts geändert wird', () => {
     const x = fb({ rohmaterial: {}, notizen: {} });

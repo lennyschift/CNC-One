@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { useEventListener } from '@vueuse/core';
 import { UploadCloud } from '@lucide/vue';
 
+defineProps({ titel: { type: String, default: 'Dateien hier ablegen' }, text: { type: String, default: '' } });
 const emit = defineEmits(['dateien']);
 const aktiv = ref(false);
 let zaehler = 0;
@@ -38,8 +39,8 @@ useEventListener(window, 'drop', (e) => {
       <div class="m-8 grid h-[min(70vh,520px)] w-[min(90vw,760px)] place-items-center rounded-3xl border-2 border-dashed border-accent bg-surface/80">
         <div class="text-center">
           <UploadCloud :size="48" class="mx-auto text-accent" :stroke-width="1.5" />
-          <p class="mt-4 text-lg font-medium">Dateien hier ablegen</p>
-          <p class="mt-1 text-sm text-mute">STEP und PDF mit gleichem Namen werden zu einem Bauteil</p>
+          <p class="mt-4 text-lg font-medium">{{ titel }}</p>
+          <p v-if="text" class="mt-1 text-sm text-mute">{{ text }}</p>
         </div>
       </div>
     </div>

@@ -31,19 +31,19 @@ async function vorlageKopieren(v) {
     <!-- Arbeitsgangarten -->
     <section class="card p-5">
       <h2 class="mb-1 flex items-center gap-2 text-sm font-semibold"><ListTree :size="16" class="text-accent" /> Arbeitsgangarten</h2>
-      <p class="mb-4 text-xs text-mute">Die Namen, aus denen Arbeitsgänge und Fremdvergaben gewählt werden, zum Beispiel „Oberflächenbehandlung“.</p>
+      <p class="mb-4 text-xs text-mute">Die Arbeitsgänge, aus denen jeder Arbeitsplan gewählt wird (kein Freitext), z. B. Fräsen, Drehen, Drehfräsen, Härten. Je Art ist hinterlegt, ob sie standardmäßig intern oder extern läuft; im Arbeitsplan lässt sich das je Arbeitsgang umstellen.</p>
       <div v-auto-animate class="space-y-1.5">
         <div v-for="a in stamm.arten" :key="a.id" class="group flex items-center gap-2.5 rounded-xl bg-surface2 px-3 py-2 text-sm">
           <component :is="a.typ === 'fremd' ? Truck : Cog" :size="14" class="text-mute" />
           <input v-model="a.name" class="min-w-0 flex-1 bg-transparent outline-none" :disabled="a.serie" @change="stamm.artSpeichern(a)" />
           <span v-if="a.serie" class="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[10px] text-accent" title="Systemart: ein Arbeitsgang dieser Art bringt die Seriennummern an. Sie lässt sich nicht löschen oder umbenennen."><Hash :size="10" /> Seriennummern</span>
-          <select v-if="!a.serie" v-model="a.typ" class="rounded-md bg-surface px-1.5 py-0.5 text-xs text-mute outline-none" @change="stamm.artSpeichern(a)"><option value="intern">Intern</option><option value="fremd">Fremd</option></select>
+          <select v-if="!a.serie" v-model="a.typ" class="rounded-md bg-surface px-1.5 py-0.5 text-xs text-mute outline-none" title="Standard: intern oder extern (Fremdvergabe)" @change="stamm.artSpeichern(a)"><option value="intern">Standard intern</option><option value="fremd">Standard extern</option></select>
           <button v-if="!a.serie" class="grid h-6 w-6 place-items-center rounded-md text-mute opacity-0 transition hover:text-accent group-hover:opacity-100" title="Entfernen" @click="stamm.artLoeschen(a.id)"><Trash2 :size="13" /></button>
         </div>
       </div>
       <form class="mt-4 flex gap-2" @submit.prevent="artAnlegen">
         <input v-model="neuerName" class="field" placeholder="Neue Art, z. B. Strahlen" />
-        <select v-model="neuerTyp" class="field !w-28"><option value="intern">Intern</option><option value="fremd">Fremd</option></select>
+        <select v-model="neuerTyp" class="field !w-36" title="Standard für neue Arbeitsgänge dieser Art"><option value="intern">Standard intern</option><option value="fremd">Standard extern</option></select>
         <button class="btn btn-primary" type="submit"><Plus :size="15" /></button>
       </form>
     </section>

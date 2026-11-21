@@ -143,9 +143,61 @@ async function laden() {
   }
 }
 
-function zoomen(faktor) {
-  zoom.value = Math.min(6, Math.max(0.3, zoom.value * faktor));
+// Zoomen um einen Punkt (Mauszeiger; ohne Punkt die Mitte der Ansicht): Die Stelle unter dem Zeiger bleibt stehen.
+// Die Seiten werden sofort per CSS skaliert, das scharfe Rendern folgt kurz danach in derselben Größe.
+function zoomen(faktor, anker = null) {
+  const alt = zoom.value;
+  const neu = Math.min(6, Math.max(0.3, alt * faktor));
+  if (neu === alt) return;
+  const el = flaeche.value;
+  const huellen = seitenEl.value.filter(Boolean);
+  if (!el || !huellen.length) { zoom.value = neu; return; }
+  const k = neu / alt;
+  // Lage der Seiten rechnerisch (Rand p-4 = 16 px, Abstand mb-4 = 16 px, waagrecht mittig, solange die Seite passt),
+  // aus den gesetzten Größen: so stimmt es auch bei schnellem Drehen am Rad, bevor der Browser neu gerechnet hat.
+  const RAND = 16;
+  const groesse = (h) => [parseFloat(h.style.width) || h.offsetWidth, parseFloat(h.style.height) || h.offsetHeight];
+  const lage = (masse) => {
+    let oben = RAND;
+    return masse.map(([w, h]) => {
+      const l = { links: Math.max(RAND, (el.clientWidth - w) / 2), oben, w, h };
+      oben += h + RAND;
+      return l;
+    });
+  };
+  const vorher = lage(huellen.map(groesse));
+  const nachher = lage(huellen.map((h) => groesse(h).map((v) => Math.floor(v * k))));
+  const r = el.getBoundingClientRect();
+  const px = anker ? anker.x - r.left : el.clientWidth / 2;
+  const py = anker ? anker.y - r.top : el.clientHeight / 2;
+  const sx = scrollZiel.x ?? el.scrollLeft;
+  const sy = scrollZiel.y ?? el.scrollTop;
+  const cx = sx + px;
+  const cy = sy + py;
+  const i = Math.max(0, vorher.findIndex((s) => cy <= s.oben + s.h));
+  const fx = (cx - vorher[i].links) / vorher[i].w;
+  const fy = (cy - vorher[i].oben) / vorher[i].h;
+  huellen.forEach((h, j) => {
+    const w = `${nachher[j].w}px`;
+    const hh = `${nachher[j].h}px`;
+    h.style.width = w;
+    h.style.height = hh;
+    const c = h.querySelector('canvas');
+    if (c) { c.style.width = w; c.style.height = hh; }
+    h.style.setProperty('--total-scale-factor', String(parseFloat(h.style.getPropertyValue('--total-scale-factor') || '1') * k));
+  });
+  zoom.value = neu;
+  scrollZiel.x = Math.max(0, nachher[i].links + fx * nachher[i].w - px);
+  scrollZiel.y = Math.max(0, nachher[i].oben + fy * nachher[i].h - py);
+  const halten = () => { el.scrollLeft = scrollZiel.x; el.scrollTop = scrollZiel.y; };
+  halten();
+  requestAnimationFrame(halten);
+  clearTimeout(scrollZielTimer);
+  scrollZielTimer = setTimeout(() => { halten(); scrollZiel.x = null; scrollZiel.y = null; }, 60);
 }
+// Ziel der Scrollposition beim Zoomen, bis der Browser die neue Größe übernommen hat
+const scrollZiel = { x: null, y: null };
+let scrollZielTimer = 0;
 function drehen(grad) {
   drehung.value = (drehung.value + grad + 360) % 360;
   speichernPlanen();
@@ -276,7 +328,7 @@ function notizSpeichern() {
 useEventListener(flaeche, 'wheel', (e) => {
   if (!e.ctrlKey) return;
   e.preventDefault();
-  zoomen(e.deltaY < 0 ? 1.12 : 1 / 1.12);
+  zoomen(e.deltaY < 0 ? 1.12 : 1 / 1.12, { x: e.clientX, y: e.clientY });
 }, { passive: false });
 
 // Verschieben mit gedrückter Maus (Handmodus). Ein Klick ohne Verschieben öffnet die Zeichnung groß.
@@ -385,7 +437,7 @@ onBeforeUnmount(() => {
         </div>
         <div
           ref="flaeche"
-          class="relative min-h-0 flex-1 overflow-auto p-4"
+          class="relative min-h-0 flex-1 overflow-auto p-4 [contain:inline-size]"
           :class="[anlernen ? 'modus-anlernen cursor-crosshair select-none' : modus === 'hand' ? 'cursor-grab active:cursor-grabbing select-none' : werkzeug ? 'select-none' : '', anlernen ? '' : `modus-${werkzeug ? 'werkzeug' : modus}`]"
           @pointerdown="runter" @pointermove="bewegen" @pointerup="hoch" @pointercancel="hoch"
         >

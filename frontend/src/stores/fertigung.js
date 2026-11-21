@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { felderVon, produziert } from '../lib/fertigung.js';
+import { felderVon, produziert, zeitenNoetigBeiBuchung, zeitenNoetigBeiFertig } from '../lib/fertigung.js';
 import { call } from '../data/api.js';
 import { stammdatenRoh } from '../data/repo.js';
 import { useBelege } from './belege.js';
@@ -98,10 +98,31 @@ export const useFertigung = defineStore('fertigung', () => {
       : `${n} Fertigungsbauteil${n === 1 ? '' : 'e'} angelegt`, res.ohnePlan ? 'warn' : 'ok');
   }
 
+  // Zeiten beim Abschließen: der Dialog (ZeitenDialog in App.vue) fragt sie ab; null = abgebrochen.
+  const zeitenAnfrage = ref(null);
+  function zeitenAbfragen(fb, ags, titel) {
+    if (!ags.length) return Promise.resolve([]);
+    return new Promise((resolve) => { zeitenAnfrage.value = { fb, ags, titel, resolve }; });
+  }
+  function zeitenAntwort(zeiten) {
+    const a = zeitenAnfrage.value;
+    zeitenAnfrage.value = null;
+    a?.resolve(zeiten);
+  }
+  async function zeitenMelden(fbId, agIds) {
+    const fb = bauteil(fbId);
+    if (!fb) return;
+    const zeiten = await zeitenAbfragen(fb, fb.arbeitsgaenge.filter((a) => agIds.includes(a.id)), 'Zeiten melden');
+    if (zeiten?.length && await aendern(fbId, 'zeiten_melden', { zeiten })) ui.toast('Zeiten gespeichert', 'ok');
+  }
+
   async function buchen(fbId, agId, menge) {
     const m = Math.floor(Number(menge));
     if (!(m > 0)) return;
-    const res = await aendern(fbId, 'buchen', { ag_id: agId, menge: m });
+    const fb = bauteil(fbId);
+    const zeiten = fb ? await zeitenAbfragen(fb, zeitenNoetigBeiBuchung(fb, agId, m), 'Arbeitsgang abschließen') : [];
+    if (zeiten === null) return;
+    const res = await aendern(fbId, 'buchen', { ag_id: agId, menge: m, zeiten });
     if (!res) return;
     if (res.nachgeholt) ui.toast(`${res.nachgeholt} vorherige${res.nachgeholt === 1 ? 'r' : ''} Arbeitsgang${res.nachgeholt === 1 ? '' : 'e'} mit abgehakt`);
     const ag = res.fb.arbeitsgaenge.find((x) => x.id === agId);
@@ -109,7 +130,7 @@ export const useFertigung = defineStore('fertigung', () => {
   }
 
   const buchungLoeschen = (fbId, buchungId) => aendern(fbId, 'buchung_loeschen', { buchung: buchungId });
-  const arbeitsgangHinzu = (fbId, typ) => aendern(fbId, 'arbeitsgang_hinzu', { typ });
+  const arbeitsgangHinzu = (fbId, typ, name = '') => aendern(fbId, 'arbeitsgang_hinzu', { typ, name });
   const arbeitsgangWeg = (fbId, agId) => aendern(fbId, 'arbeitsgang_weg', { ag_id: agId });
   const arbeitsgangVerschieben = (fbId, agId, richtung) => aendern(fbId, 'arbeitsgang_verschieben', { ag_id: agId, richtung });
 
@@ -140,7 +161,9 @@ export const useFertigung = defineStore('fertigung', () => {
     const fb = bauteil(fbId);
     if (!fb || fb.status === status) return;
     const vorher = produziert(fb);
-    const res = await aendern(fbId, 'status_setzen', { status });
+    const zeiten = status === 'Fertig' ? await zeitenAbfragen(fb, zeitenNoetigBeiFertig(fb), 'Bauteil fertig melden') : [];
+    if (zeiten === null) return;
+    const res = await aendern(fbId, 'status_setzen', { status, zeiten });
     if (res && status === 'Fertig' && vorher < fb.menge) ui.toast('Restmenge in allen Arbeitsgängen gebucht');
   }
 
@@ -153,5 +176,6 @@ export const useFertigung = defineStore('fertigung', () => {
     neuLaden, liste, offen, bauteil, fuerAuftrag, ausAuftrag, buchen, buchungLoeschen, felderPlanen, flush,
     arbeitsgangHinzu, arbeitsgangWeg, arbeitsgangVerschieben, vorlageAnwenden, planAmBauteilSpeichern,
     sendungAnlegen, sendungWeg, sendungZurueck, sendungLoeschen, statusSetzen,
+    zeitenAnfrage, zeitenAntwort, zeitenMelden,
   };
 });

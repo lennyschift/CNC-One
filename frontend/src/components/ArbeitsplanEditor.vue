@@ -22,7 +22,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['anfrage']);
 
-const { stamm, anfragen, ui, maschinen, lieferanten, vorlagen, gespeichert, schluesselOk, ausBauteilLaden, bauteilSpeichern, serienArbeitsgang, hinzu, weg, schieben, vorlageAnwenden, maschineWechsel, arten, anfragenZu, preisUebernehmen, farbe, SPALTEN, umschalten, zeitNoetig, summe, fremdSumme } = useArbeitsplan(props);
+const { stamm, anfragen, ui, maschinen, lieferanten, vorlagen, gespeichert, schluesselOk, ausBauteilLaden, bauteilSpeichern, serienArbeitsgang, hinzu, typSetzen, maschinenFuerAg, unbekannteArt, weg, schieben, vorlageAnwenden, maschineWechsel, arten, anfragenZu, preisUebernehmen, farbe, SPALTEN, umschalten, zeitNoetig, summe, fremdSumme } = useArbeitsplan(props);
 </script>
 
 <template>
@@ -32,8 +32,10 @@ const { stamm, anfragen, ui, maschinen, lieferanten, vorlagen, gespeichert, schl
         <option value="">Vorlage anwenden …</option>
         <option v-for="v in vorlagen" :key="v.id" :value="v.id">{{ v.name }}{{ v.kundeId ? ' (Kunde)' : '' }}</option>
       </select>
-      <button class="btn" @click="hinzu('intern')"><Plus :size="15" /> Arbeitsgang</button>
-      <button class="btn" @click="hinzu('fremd')"><Truck :size="15" /> Fremdvergabe</button>
+      <select class="field !w-auto" aria-label="Arbeitsgang hinzufügen" @change="hinzu($event.target.value, $event.target)">
+        <option value="">+ Arbeitsgang hinzufügen …</option>
+        <option v-for="a in stamm.arten" :key="a.id" :value="a.name">{{ a.name }}{{ a.typ === 'fremd' ? ' (extern)' : '' }}</option>
+      </select>
       <div v-if="!ohneBauteil && !ohneSpeichern" class="ml-auto flex flex-wrap items-center gap-2">
         <button v-if="gespeichert && !arbeitsgaenge.length" class="btn" @click="ausBauteilLaden()"><DownloadCloud :size="15" /> Vom Bauteil laden</button>
         <button class="btn" :disabled="!schluesselOk" :class="!schluesselOk ? 'pointer-events-none opacity-40' : ''" :title="schluesselOk ? '' : 'Dafür braucht das Bauteil einen Kunden und eine Teilenummer'" @click="bauteilSpeichern"><Save :size="15" /> Am Bauteil speichern</button>
@@ -51,9 +53,15 @@ const { stamm, anfragen, ui, maschinen, lieferanten, vorlagen, gespeichert, schl
       <div v-for="(ag, i) in arbeitsgaenge" :key="ag.id" class="rounded-xl border border-line bg-surface2 p-3">
         <div class="flex items-center gap-2">
           <span class="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface text-xs font-semibold text-mute tnum">{{ i + 1 }}</span>
-          <span class="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-surface text-mute"><Truck v-if="ag.typ === 'fremd'" :size="13" /><Cog v-else :size="13" /></span>
-          <input v-model="ag.name" :list="'arten-' + ag.typ" class="field !py-1.5 font-medium" :placeholder="ag.typ === 'fremd' ? 'Name der Fremdvergabe, z. B. Oberflächenbehandlung' : 'Name, z. B. Drehen'" />
-          <datalist :id="'arten-' + ag.typ"><option v-for="a in arten(ag.typ)" :key="a.id" :value="a.name" /></datalist>
+                    <select v-model="ag.name" class="field !py-1.5 font-medium" :class="!ag.name || unbekannteArt(ag) ? '!border-warn' : ''" aria-label="Arbeitsgang">
+            <option value="" disabled>Arbeitsgang wählen …</option>
+            <option v-if="unbekannteArt(ag)" :value="ag.name">{{ ag.name }} (nicht in den Stammdaten)</option>
+            <option v-for="a in stamm.arten" :key="a.id" :value="a.name">{{ a.name }}</option>
+          </select>
+          <span class="flex shrink-0 rounded-lg border border-line bg-surface p-0.5 text-[11px]" role="radiogroup" aria-label="Intern oder extern">
+            <button type="button" class="umschalter" :class="ag.typ === 'intern' ? 'aktiv' : ''" @click="typSetzen(ag, 'intern')"><Cog :size="11" /> Intern</button>
+            <button type="button" class="umschalter" :class="ag.typ === 'fremd' ? 'aktiv' : ''" @click="typSetzen(ag, 'fremd')"><Truck :size="11" /> Extern</button>
+          </span>
           <div class="flex shrink-0">
             <button class="grid h-7 w-7 place-items-center rounded-lg text-mute hover:bg-surface hover:text-ink" title="Nach oben" @click="schieben(i, -1)"><ChevronUp :size="15" /></button>
             <button class="grid h-7 w-7 place-items-center rounded-lg text-mute hover:bg-surface hover:text-ink" title="Nach unten" @click="schieben(i, 1)"><ChevronDown :size="15" /></button>
@@ -65,7 +73,7 @@ const { stamm, anfragen, ui, maschinen, lieferanten, vorlagen, gespeichert, schl
         <div v-if="ag.typ === 'intern'" class="mt-2.5 grid gap-2.5 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div class="grid grid-cols-[minmax(0,1fr)_96px] gap-2">
             <label class="block"><span class="label mb-1 block">Maschine</span>
-              <select class="field" :value="ag.maschine" @change="maschineWechsel(ag, $event.target.value)"><option value="">– wählen –</option><option v-for="m in maschinen" :key="m.name" :value="m.name">{{ m.name }}</option></select>
+              <select class="field" :value="ag.maschine" @change="maschineWechsel(ag, $event.target.value)"><option value="">– optional –</option><option v-for="m in maschinenFuerAg(ag)" :key="m.name" :value="m.name">{{ m.name }}</option></select>
             </label>
             <NumField v-model="ag.satz" label="Satz" unit="€/h" :class="zeitNoetig(ag) ? '' : 'opacity-50'" />
           </div>
@@ -114,7 +122,7 @@ const { stamm, anfragen, ui, maschinen, lieferanten, vorlagen, gespeichert, schl
       <span>Je Stück <strong class="tnum">{{ eur(summe.stueck + fremdSumme.stueck) }}</strong><template v-if="fremdSumme.stueck"> <span class="text-xs text-mute">davon Fremd {{ eur(fremdSumme.stueck) }}</span></template></span>
     </div>
     <p v-if="!arbeitsgaenge.length" class="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-mute">
-      Noch keine Arbeitsgänge. Vorlage anwenden oder Arbeitsgänge hinzufügen. Das geht auch später in der Fertigung.
+      Noch keine Arbeitsgänge. Vorlage anwenden oder Arbeitsgang hinzufügen. Die Maschine ist hier optional, festgelegt wird sie spätestens in der Fertigung.
     </p>
   </div>
 </template>

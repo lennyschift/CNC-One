@@ -1,7 +1,7 @@
 <script setup>
 // Eingangsrechnungen (Rechnungen der Lieferanten): aus dem Posteingang (E-Rechnungen von selbst) oder hochgeladen.
 // Prüfen, als bezahlt markieren; Zahlung und DATEV folgen mit dem Steuerberater.
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Search, Upload, Receipt, FileCode2, FileText, AlertTriangle } from '@lucide/vue';
 import RechnungNav from '../components/RechnungNav.vue';
@@ -37,22 +37,49 @@ const heute = new Date().toISOString().slice(0, 10);
 const faellig = computed(() => offen.value.filter((r) => r.faelligAm && r.faelligAm <= heute));
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
 
-// Hochladen: PDF (ZUGFeRD oder Papier-/PDF-Rechnung) oder XML (XRechnung)
+// Hochladen (Knopf oder Drag and Drop, auch mehrere): PDF (ZUGFeRD oder Papier-/PDF-Rechnung) oder XML (XRechnung).
+// Eine Datei öffnet die neue Rechnung, mehrere bleiben in der Liste.
 const laedt = ref(false);
-async function dateiGewaehlt(f) {
-  if (!f) return;
+const fortschritt = ref('');
+const ERLAUBT = /\.(pdf|xml)$/i;
+async function dateienEinlesen(files) {
+  const liste_ = Array.from(files || []);
+  const passend = liste_.filter((f) => ERLAUBT.test(f.name));
+  if (passend.length < liste_.length) ui.toast(`${liste_.length - passend.length} Datei(en) übersprungen – nur PDF und XML`, 'warn');
+  if (!passend.length || laedt.value) return;
   laedt.value = true;
+  const neu = [];
   try {
-    const datei = await hochladen(f, { doctype: '', docname: '' });
-    const r = await call('cnc_one.api.eingangsrechnung.aus_datei', { file_url: datei.file_url });
-    ui.toast(r.rechnung.format === 'PDF' ? 'PDF-Rechnung angelegt, bitte die Angaben ergänzen' : `E-Rechnung ${r.rechnung.rechnungsnr} eingelesen`, 'ok');
-    router.push(`/eingangsrechnungen/${r.rechnung.id}`);
-  } catch (e) {
-    ui.toast(e.message, 'warn');
+    for (const [i, f] of passend.entries()) {
+      fortschritt.value = passend.length > 1 ? `${i + 1}/${passend.length}` : '';
+      try {
+        const datei = await hochladen(f, { doctype: '', docname: '' });
+        const r = await call('cnc_one.api.eingangsrechnung.aus_datei', { file_url: datei.file_url });
+        neu.push(r.rechnung);
+      } catch (e) {
+        ui.toast(`${f.name}: ${e.message}`, 'warn');
+      }
+    }
   } finally {
     laedt.value = false;
+    fortschritt.value = '';
+  }
+  if (neu.length === 1 && passend.length === 1) {
+    const r = neu[0];
+    ui.toast(r.format === 'PDF' ? 'PDF-Rechnung angelegt, bitte die Angaben ergänzen' : `E-Rechnung ${r.rechnungsnr} eingelesen`, 'ok');
+    router.push(`/eingangsrechnungen/${r.id}`);
+  } else if (neu.length) {
+    const e = neu.filter((r) => r.format !== 'PDF').length;
+    ui.toast(`${neu.length} Rechnungen angelegt (${e} E-Rechnung${e === 1 ? '' : 'en'} gelesen, ${neu.length - e} PDF zum Ergänzen)`, 'ok');
+    filter.value = 'Neu';
+    laden();
   }
 }
+watch(() => ui.abgelegt, (x) => {
+  if (x?.ziel !== 'eingangsrechnung') return;
+  ui.abgelegt = null;
+  dateienEinlesen(x.files);
+});
 </script>
 
 <template>
@@ -61,9 +88,9 @@ async function dateiGewaehlt(f) {
     <div class="mb-4 flex flex-wrap items-center gap-3">
       <div class="rounded-2xl bg-surface2 px-4 py-2.5"><div class="label">Offen (Neu und geprüft)</div><div class="text-xl font-semibold tnum">{{ eur(summe(offen)) }}</div><div class="text-[11px] text-mute">{{ offen.length }} Rechnung{{ offen.length === 1 ? '' : 'en' }}</div></div>
       <div v-if="faellig.length" class="rounded-2xl bg-accent-soft px-4 py-2.5 text-accent"><div class="label !text-accent">Fällig</div><div class="text-xl font-semibold tnum">{{ eur(summe(faellig)) }}</div><div class="text-[11px]">{{ faellig.length }} Rechnung{{ faellig.length === 1 ? '' : 'en' }}</div></div>
-      <label class="btn btn-primary ml-auto cursor-pointer" :class="laedt ? 'pointer-events-none opacity-60' : ''" title="PDF- oder XML-Rechnung hochladen (ZUGFeRD und XRechnung werden gelesen)">
-        <Upload :size="16" /> {{ laedt ? 'Wird gelesen …' : 'Rechnung hochladen' }}
-        <input type="file" accept=".pdf,.xml,application/pdf,application/xml,text/xml" class="hidden" @change="dateiGewaehlt($event.target.files[0]); $event.target.value = ''" />
+      <label class="btn btn-primary ml-auto cursor-pointer" :class="laedt ? 'pointer-events-none opacity-60' : ''" title="PDF- oder XML-Rechnungen hochladen oder einfach hierher ziehen (ZUGFeRD und XRechnung werden gelesen)">
+        <Upload :size="16" /> {{ laedt ? `Wird gelesen … ${fortschritt}` : 'Rechnungen hochladen' }}
+        <input type="file" multiple accept=".pdf,.xml,application/pdf,application/xml,text/xml" class="hidden" @change="dateienEinlesen($event.target.files); $event.target.value = ''" />
       </label>
     </div>
     <div class="mb-5 flex flex-wrap items-center gap-3">
@@ -83,7 +110,7 @@ async function dateiGewaehlt(f) {
       <div v-else-if="!zeilen.length" class="flex flex-col items-center px-6 py-14 text-center text-sm text-mute">
         <Receipt :size="34" :stroke-width="1.4" class="mb-3" />
         <span class="font-medium text-ink">Keine Eingangsrechnungen</span>
-        <span class="mt-1 max-w-md text-xs">E-Rechnungen (ZUGFeRD, XRechnung) aus dem Posteingang werden von selbst angelegt; PDF-Rechnungen mit „Rechnung aus …“ an der Mail oder hier hochladen.</span>
+        <span class="mt-1 max-w-md text-xs">E-Rechnungen (ZUGFeRD, XRechnung) aus dem Posteingang werden von selbst angelegt; PDF-Rechnungen mit „Rechnung aus …“ an der Mail, hier hochladen oder einfach auf diese Seite ziehen.</span>
       </div>
       <div v-auto-animate class="divide-y divide-line">
         <RouterLink v-for="r in zeilen" :key="r.id" :to="`/eingangsrechnungen/${r.id}`" class="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5 transition hover:bg-surface2">

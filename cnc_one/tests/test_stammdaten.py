@@ -62,7 +62,7 @@ class TestStammdaten(IntegrationTestCase):
 		self.assertEqual(stammdaten.speichern("material", {**w, "isoGruppe": "X"})["isoGruppe"], "")  # unbekannte Gruppe = automatisch
 		stammdaten.speichern("material", {**w, "isoGruppe": "H"})
 		aktuell = stammdaten.aktuell()
-		self.assertIn({"name": "ZZ Fräse", "satz": 99.5}, aktuell["maschinen"])
+		self.assertIn({"name": "ZZ Fräse", "satz": 99.5, "arbeitsgaenge": [], "automation": False, "stundenTag": 8}, aktuell["maschinen"])
 		self.assertIn({"name": "ZZ Stahl", "preisKg": 4.2, "dichte": 7.85, "schreibweisen": [], "isoGruppe": "H"}, aktuell["materialien"])
 
 	def test_name_ist_pflicht(self):

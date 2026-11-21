@@ -13,6 +13,7 @@ import frappe
 from frappe import _
 
 from cnc_one.api import bauteil as bauteil_api
+from cnc_one.api.einstellung import absender_fuer
 from cnc_one.api.stamm import nur_cnc
 from cnc_one.logic.daten import als_json, datum, iso
 
@@ -305,7 +306,7 @@ def mail_vorschlag(vorgang):
 	mit_bauteil = any(p.bauteil for p in erste.positionen)
 	was = "folgendes Material" if erste.art == "Material" else "folgende Leistungen" if erste.art == "Fremdvergabe" else "folgende Positionen"
 	text = ANFRAGE_VORLAGE.format(
-		was=was, nummer=vorgang, absender=s.absender_name or firma,
+		was=was, nummer=vorgang, absender=absender_fuer(firma, s.absender_name)[0],
 		hinweis=f"Hinweis: {erste.notiz}\n\n" if erste.notiz else "",
 		anhang=" Zeichnungen finden Sie im Anhang." if mit_bauteil else "",
 	)
@@ -367,7 +368,7 @@ def mail_senden(vorgang, an="", cc="", bcc="", betreff="", text="", zeichnungen=
 	s = mail.einstellungen()
 	zeilen = tabelle(docs[0])
 	msg = EmailMessage()
-	msg["From"] = formataddr((s.absender_name or firma_ui().get("firmenname", ""), s.benutzer or ""))
+	msg["From"] = formataddr((absender_fuer(firma_ui().get("firmenname", ""), s.absender_name)[1], s.benutzer or ""))
 	if an_l:
 		msg["To"] = ", ".join(an_l)
 	if cc_l:
@@ -389,7 +390,7 @@ def mail_senden(vorgang, an="", cc="", bcc="", betreff="", text="", zeichnungen=
 	jetzt = now_datetime()
 	for d in docs:
 		d.append("nachrichten", {
-			"richtung": "Ausgang", "datum": jetzt, "von_email": (s.benutzer or "").lower(), "von_name": s.absender_name or "",
+			"richtung": "Ausgang", "datum": jetzt, "von_email": (s.benutzer or "").lower(), "von_name": absender_fuer(firma_ui().get("firmenname", ""), s.absender_name)[1],
 			"an": msg["To"] or "", "cc": ", ".join(x for x in [msg["Cc"] or "", ("BCC: " + ", ".join(bcc_l)) if bcc_l else ""] if x),
 			"betreff": msg["Subject"], "message_id": msg["Message-ID"], "text": klartext, "html": mail_html(text, zeilen),
 			"anhaenge": json.dumps([{"name": n, "groesse": len(x)} for n, x in anhaenge], ensure_ascii=False),

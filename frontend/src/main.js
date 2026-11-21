@@ -17,6 +17,7 @@ import RechnungDetailView from './views/RechnungDetailView.vue';
 import MahnwesenView from './views/MahnwesenView.vue';
 import MahnungDetailView from './views/MahnungDetailView.vue';
 import EingangsrechnungListView from './views/EingangsrechnungListView.vue';
+import MeineEinstellungenView from './views/MeineEinstellungenView.vue';
 import EingangsrechnungDetailView from './views/EingangsrechnungDetailView.vue';
 import FirmaView from './views/FirmaView.vue';
 import LieferscheinListView from './views/LieferscheinListView.vue';
@@ -57,6 +58,7 @@ const router = createRouter({
     { path: '/lieferscheine/:id', component: LieferscheinDetailView, meta: { titel: 'Lieferschein', bereich: 'lieferscheine' } },
     { path: '/rechnungen', component: RechnungListView, meta: { titel: 'Rechnungen', bereich: 'rechnungen', unterbereich: 'rechnungen' } },
     { path: '/rechnungen/:id', component: RechnungDetailView, meta: { titel: 'Rechnung', bereich: 'rechnungen', unterbereich: 'rechnungen' } },
+    { path: '/meine-einstellungen', component: MeineEinstellungenView, meta: { titel: 'Meine Einstellungen' } },
     { path: '/eingangsrechnungen', component: EingangsrechnungListView, meta: { titel: 'Eingangsrechnungen', bereich: 'rechnungen', unterbereich: 'eingang' } },
     { path: '/eingangsrechnungen/:id', component: EingangsrechnungDetailView, meta: { titel: 'Eingangsrechnung', bereich: 'rechnungen', unterbereich: 'eingang' } },
     { path: '/mahnwesen', component: MahnwesenView, meta: { titel: 'Mahnwesen', bereich: 'rechnungen', unterbereich: 'mahnwesen' } },
