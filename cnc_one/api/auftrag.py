@@ -131,6 +131,11 @@ def neuer_auftrag(kunde, kundenbestellnr="", ang=None):
 	doc.kundenbestellnr = (kundenbestellnr or "").strip()
 	if ang:
 		doc.projekt, doc.kontakt_name, doc.kontakt_email = ang.projekt or "", ang.kontakt_name or "", ang.kontakt_email or ""
+		if not doc.projekt:
+			from cnc_one.api.mail import projekt_aus_betreff
+
+			betreff = frappe.db.get_value("Mail Anfrage", {"angebot": ang.name}, "betreff")
+			doc.projekt = projekt_aus_betreff(betreff) if betreff else ""
 	return doc
 
 
@@ -451,6 +456,18 @@ def aendern(id, grund="", positionen=None, neu=None):
 			zeile = d.aenderungen[-1]
 			zeile.db_set("details", zeile.details + "\n" + "\n".join(zusatz), update_modified=False)
 	return auftrag_ui(frappe.get_doc("Auftrag", d.name))
+
+
+@frappe.whitelist(methods=["POST"])
+def bestellnr_setzen(id, kundenbestellnr=""):
+	"""Bestellnummer des Kunden ändern, auch wenn der Auftrag schon läuft (z. B. nachgereichte Bestellung)."""
+	nur_cnc()
+	doc = frappe.get_doc("Auftrag", id)
+	doc.check_permission("write")
+	if doc.status == "Storniert":
+		frappe.throw(_("Ein stornierter Auftrag lässt sich nicht mehr ändern."))
+	doc.db_set("kundenbestellnr", (kundenbestellnr or "").strip()[:140])
+	return auftrag_ui(frappe.get_doc("Auftrag", id))
 
 
 @frappe.whitelist(methods=["POST"])

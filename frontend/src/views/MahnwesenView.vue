@@ -1,5 +1,6 @@
 <script setup>
 import FilterLeiste from '../components/FilterLeiste.vue';
+import ListenTabelle from '../components/ListenTabelle.vue';
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
@@ -30,6 +31,16 @@ const zeilen = ref([]);
 const beschriftungen = {'status': 'Status', 'stufe': 'Stufe', 'kundeName': 'Kunde', 'datum': 'Datum'};
 const vorgefiltert = computed(() => store.mahnungen.filter((m) => filter.value === 'Alle' || m.status === filter.value));
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
+const SPALTEN = [
+  { key: 'id', label: 'Nummer', breite: '130px' },
+  { key: 'stufe', label: 'Stufe' },
+  { key: 'kundeName', label: 'Kunde' },
+  { key: 'rechnungNummer', label: 'Rechnung' },
+  { key: 'datum', label: 'Datum' },
+  { key: 'betrag', label: 'Betrag', rechts: true, wert: (m) => m.offenerBetrag + m.gebuehr },
+  { key: 'fristBis', label: 'Zahlen bis' },
+  { key: 'status', label: 'Status' },
+];
 </script>
 
 <template>
@@ -64,14 +75,14 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
         <div class="flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1"><button v-for="f in filterListe" :key="f" class="rounded-lg px-3 py-1.5 text-sm transition" :class="filter === f ? 'bg-accent-soft font-medium text-accent' : 'text-mute hover:text-ink'" @click="filter = f">{{ f }}</button></div>
       </div>
       <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="mahnungen" :beschriftungen="beschriftungen" :standard-angeheftet="[]" />
-      <div v-auto-animate class="space-y-2">
-        <RouterLink v-for="m in zeilen" :key="m.id" :to="`/mahnungen/${m.id}`" class="card flex items-center gap-4 p-3.5 transition hover:-translate-y-px hover:border-accent/40" :class="m.status === 'Zurückgezogen' ? 'opacity-60' : ''">
-          <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface2 text-mute"><BellRing :size="18" /></span>
-          <div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-x-3"><span class="font-semibold tnum">{{ m.id }}</span><span class="text-sm">{{ m.stufe }}</span><StatusBadge :status="m.status" /></div><div class="truncate text-xs text-mute">{{ m.kundeName }} · zu {{ m.rechnungNummer }}</div></div>
-          <div class="text-right text-sm"><div class="tnum">{{ eur(m.offenerBetrag + m.gebuehr) }}</div><div class="text-xs text-mute">zahlen bis {{ de(m.fristBis) }}</div></div>
-        </RouterLink>
-        <p v-if="!zeilen.length" class="card px-6 py-10 text-center text-sm text-mute">Noch keine Mahnungen in diesem Filter.</p>
-      </div>
+      <ListenTabelle :spalten="SPALTEN" :zeilen="zeilen" :link="(m) => `/mahnungen/${m.id}`" min-breite="900px" leer-text="Noch keine Mahnungen in diesem Filter.">
+        <template #id="{ x }"><span class="font-semibold tnum" :class="x.status === 'Zurückgezogen' ? 'text-mute line-through' : ''">{{ x.id }}</span></template>
+        <template #rechnungNummer="{ x }"><span class="tnum">{{ x.rechnungNummer || '–' }}</span></template>
+        <template #datum="{ x }"><span class="tnum">{{ de(x.datum) || '–' }}</span></template>
+        <template #betrag="{ x }"><span class="font-semibold">{{ eur(x.offenerBetrag + x.gebuehr) }}</span></template>
+        <template #fristBis="{ x }"><span class="tnum">{{ de(x.fristBis) || '–' }}</span></template>
+        <template #status="{ x }"><StatusBadge :status="x.status" /></template>
+      </ListenTabelle>
     </section>
   </div>
 </template>

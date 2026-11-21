@@ -1,7 +1,7 @@
 <script setup>
 import FilterLeiste from '../components/FilterLeiste.vue';
+import ListenTabelle from '../components/ListenTabelle.vue';
 import { ref, computed, onMounted } from 'vue';
-import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Search, Receipt } from '@lucide/vue';
 import RechnungNav from '../components/RechnungNav.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -40,11 +40,24 @@ const vorgefiltert = computed(() => {
   const q = suche.value.trim().toLowerCase();
   return store.rechnungen.filter((r) => passt(r) && (!q || `${r.nummer} ${r.id} ${r.kundeName} ${r.auftragId} ${r.kundenbestellnr} ${projektVon(r)}`.toLowerCase().includes(q)));
 });
-const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
+const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
+const offenStatus = (r) => r.status === 'Offen' || r.status === 'Teilbezahlt';
+const SPALTEN = [
+  { key: 'nummer', label: 'Nummer', breite: '140px' },
+  { key: 'kundeName', label: 'Kunde' },
+  { key: 'projekt', label: 'Projekt', wert: projektVon },
+  { key: 'auftragId', label: 'Auftrag' },
+  { key: 'art', label: 'Art' },
+  { key: 'rechnungsdatum', label: 'Datum' },
+  { key: 'faelligAm', label: 'Fällig' },
+  { key: 'brutto', label: 'Brutto', rechts: true },
+  { key: 'offen', label: 'Offen', rechts: true, wert: (r) => (offenStatus(r) ? r.offen : 0) },
+  { key: 'status', label: 'Status' },
+];
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1200px]">
+  <div class="mx-auto max-w-[1500px]">
     <RechnungNav />
     <div class="mb-4 flex flex-wrap items-center gap-3">
       <div class="rounded-2xl bg-surface2 px-4 py-2.5"><div class="label">Offene Posten</div><div class="text-xl font-semibold tnum">{{ eur(summe(offene)) }}</div><div class="text-[11px] text-mute">{{ offene.length }} Rechnung{{ offene.length === 1 ? '' : 'en' }}</div></div>
@@ -62,29 +75,25 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
     </div>
 
     <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="rechnungen" :beschriftungen="beschriftungen" :standard-angeheftet="['kundeName']" />
-    <div v-auto-animate class="space-y-2.5">
-      <RouterLink v-for="r in zeilen" :key="r.id" :to="`/rechnungen/${r.id}`" class="card flex items-center gap-5 p-4 transition hover:-translate-y-px hover:border-accent/40" :class="r.status === 'Storniert' ? 'opacity-60' : ''">
-        <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-surface2 text-mute"><Receipt :size="20" /></span>
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span class="font-semibold tnum">{{ r.nummer || 'Entwurf' }}</span><StatusBadge :status="r.status" /><ProjektMarke :projekt="projektVon(r)" />
-            <span v-if="r.art === 'Teilrechnung'" class="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-mute">Teilrechnung</span>
-            <span v-if="r.tageUeberfaellig > 0" class="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">{{ r.tageUeberfaellig }} Tage überfällig</span>
-          </div>
-          <div class="mt-0.5 truncate text-sm text-mute">{{ r.kundeName }} · aus {{ r.auftragId }}<template v-if="r.kundenbestellnr"> · Bestellung {{ r.kundenbestellnr }}</template></div>
+    <ListenTabelle :spalten="SPALTEN" :zeilen="zeilen" :link="(r) => `/rechnungen/${r.id}`" min-breite="1100px">
+      <template #nummer="{ x }"><span class="font-semibold tnum" :class="x.status === 'Storniert' ? 'text-mute line-through' : ''">{{ x.nummer || 'Entwurf' }}</span></template>
+      <template #kundeName="{ x }"><div class="truncate">{{ x.kundeName }}</div><div v-if="x.kundenbestellnr" class="truncate text-xs text-mute">Bestellung {{ x.kundenbestellnr }}</div></template>
+      <template #projekt="{ x }"><ProjektMarke v-if="projektVon(x)" :projekt="projektVon(x)" /><span v-else class="text-mute">–</span></template>
+      <template #auftragId="{ x }"><span class="tnum">{{ x.auftragId || '–' }}</span></template>
+      <template #art="{ x }"><span class="text-xs">{{ x.art || 'Rechnung' }}</span></template>
+      <template #rechnungsdatum="{ x }"><span class="tnum">{{ de(x.rechnungsdatum) }}</span></template>
+      <template #faelligAm="{ x }"><span class="tnum" :class="x.tageUeberfaellig > 0 && offenStatus(x) ? 'font-semibold text-accent' : ''">{{ de(x.faelligAm) }}</span><div v-if="x.tageUeberfaellig > 0 && offenStatus(x)" class="text-[11px] text-accent">{{ x.tageUeberfaellig }} Tage überfällig</div></template>
+      <template #brutto="{ x }"><span class="font-semibold" :class="x.brutto < 0 ? 'text-accent' : ''">{{ eur(x.brutto) }}</span></template>
+      <template #offen="{ x }"><span :class="offenStatus(x) ? 'text-warn' : 'text-mute'">{{ offenStatus(x) ? eur(x.offen) : '–' }}</span></template>
+      <template #status="{ x }"><StatusBadge :status="x.status" /></template>
+      <template #leer>
+        <div class="grid place-items-center px-6 py-16 text-center">
+          <Receipt :size="36" class="text-mute" :stroke-width="1.4" />
+          <p class="mt-3 text-sm font-medium">{{ store.rechnungen.length ? 'Keine Rechnungen in diesem Filter' : 'Noch keine Rechnungen' }}</p>
+          <p class="mt-1 max-w-sm text-xs text-mute">Rechnungen entstehen immer im Auftrag über „Rechnung erstellen“, als Gesamtrechnung oder Teilrechnung aus Lieferscheinen.</p>
+          <RouterLink to="/auftraege" class="btn mt-4">Zu den Aufträgen</RouterLink>
         </div>
-        <div class="text-right">
-          <div class="font-semibold tnum" :class="r.brutto < 0 ? 'text-accent' : ''">{{ eur(r.brutto) }}</div>
-          <div class="text-xs text-mute">{{ r.status === 'Offen' || r.status === 'Teilbezahlt' ? `fällig ${de(r.faelligAm)}` : de(r.rechnungsdatum) }}</div>
-          <div v-if="r.status === 'Teilbezahlt'" class="text-[11px] text-warn tnum">offen {{ eur(r.offen) }}</div>
-        </div>
-      </RouterLink>
-      <div v-if="!zeilen.length" class="card grid place-items-center px-6 py-16 text-center">
-        <Receipt :size="36" class="text-mute" :stroke-width="1.4" />
-        <p class="mt-3 text-sm font-medium">{{ store.rechnungen.length ? 'Keine Rechnungen in diesem Filter' : 'Noch keine Rechnungen' }}</p>
-        <p class="mt-1 max-w-sm text-xs text-mute">Rechnungen entstehen immer im Auftrag über „Rechnung erstellen“, als Gesamtrechnung oder Teilrechnung aus Lieferscheinen.</p>
-        <RouterLink to="/auftraege" class="btn mt-4">Zu den Aufträgen</RouterLink>
-      </div>
-    </div>
+      </template>
+    </ListenTabelle>
   </div>
 </template>

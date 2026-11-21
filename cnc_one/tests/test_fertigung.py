@@ -291,6 +291,23 @@ class TestFertigung(IntegrationTestCase):
 		ui = stammdaten.maschine_ui(frappe.get_doc("Maschine", "ZZ C42 Auto"))
 		self.assertEqual((ui["arbeitsgaenge"], ui["automation"], ui["stundenTag"]), (["Fräsen", "Drehfräsen"], "ja", 20))
 
+	def test_fertigung_zeigt_keine_preise_und_behaelt_sie(self):
+		fb = self.start()
+		for ag in fb["arbeitsgaenge"]:
+			for k in ("satz", "ruestEuro", "stueckEuro", "fremdProStk", "fremdEinmal"):
+				self.assertNotIn(k, ag)
+		drehen = self.ag(fb, "Drehen")
+		fertigung.felder_speichern(fb["id"], {"arbeitsgaenge": [{**drehen, "maschine": "CTX400"}]})
+		d = frappe.get_doc("Fertigungsbauteil", fb["id"])
+		self.assertEqual(next(a.satz for a in d.arbeitsgaenge if a.bezeichnung == "Drehen"), 100)
+		self.assertEqual(next(a.fremd_pro_stk for a in d.arbeitsgaenge if a.bezeichnung == "Härten"), 1)
+
+	def test_bestellnummer_im_laufenden_auftrag_aendern(self):
+		fb = self.start()
+		r = auftrag.bestellnr_setzen(fb["auftragId"], "  B-4711 ")
+		self.assertEqual(r["kundenbestellnr"], "B-4711")
+		self.assertEqual(frappe.db.get_value("Auftrag", fb["auftragId"], "kundenbestellnr"), "B-4711")
+
 	def test_gast_hat_keinen_zugriff(self):
 		frappe.set_user("Guest")
 		with self.assertRaises(frappe.PermissionError):

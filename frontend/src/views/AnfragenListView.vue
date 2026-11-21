@@ -1,8 +1,8 @@
 <script setup>
 import FilterLeiste from '../components/FilterLeiste.vue';
+import ListenTabelle from '../components/ListenTabelle.vue';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Send, Search, FileText, Plus, Package } from '@lucide/vue';
 import FreieAnfrageDialog from '../components/FreieAnfrageDialog.vue';
 import { istFrei, freieZeile } from '../lib/anfrage.js';
@@ -52,6 +52,15 @@ const vorgefiltert = computed(() => {
 
 const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
 const kunde = (x) => x.kundeName || belege.angebot(x.angebotId)?.kopf.kundeName || '';
+const SPALTEN = [
+  { key: 'id', label: 'Nummer', breite: '130px' },
+  { key: 'inhalt', label: 'Inhalt', wert: (x) => titel(x) },
+  { key: 'lieferantName', label: 'Lieferant' },
+  { key: 'bezug', label: 'Bezug', wert: (x) => x.angebotId || x.art },
+  { key: 'kunde', label: 'Kunde', wert: kunde },
+  { key: 'erstellt', label: 'Angelegt' },
+  { key: 'status', label: 'Status' },
+];
 const titel = (x) => {
   if (istFrei(x)) return x.positionen.length === 1 ? freieZeile(x.positionen[0]) : `${x.positionen.length} Positionen: ${x.positionen.map((p) => p.teil.name).join(', ')}`;
   return x.positionen.length === 1 ? `${x.positionen[0].agName || 'Fremdvergabe'} · ${x.positionen[0].teil.name}` : `${x.positionen.length} Positionen: ${x.positionen.map((p) => p.teil.name).join(', ')}`;
@@ -59,7 +68,7 @@ const titel = (x) => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1200px]">
+  <div class="mx-auto max-w-[1500px]">
     <div class="mb-5 flex flex-wrap items-center gap-3">
       <div class="flex gap-1 rounded-xl border border-line bg-surface p-1">
         <button v-for="f in filterListe" :key="f" class="rounded-lg px-3 py-1.5 text-sm transition" :class="filter === f ? 'bg-accent-soft font-medium text-accent' : 'text-mute hover:text-ink'" @click="filter = f">{{ f }}</button>
@@ -78,32 +87,30 @@ const titel = (x) => {
     <FreieAnfrageDialog v-if="neuDialog" @schliessen="neuDialog = false" @angelegt="angelegt" />
 
     <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="anfragen" :beschriftungen="beschriftungen" :standard-angeheftet="['lieferantName']" />
-    <div v-auto-animate class="space-y-2.5">
-      <RouterLink v-for="x in zeilen" :key="x.id" :to="`/anfragen/${x.id}`" class="card flex items-center gap-5 p-4 transition hover:-translate-y-px hover:border-accent/40">
-        <div class="flex -space-x-3">
-          <PartImage v-for="p in x.positionen.slice(0, 3)" :key="p.key" :teil="p.teil" :groesse="46" class="ring-2 ring-surface" />
-          <div v-if="x.positionen.length > 3" class="grid h-[46px] w-[46px] place-items-center rounded-xl border border-line bg-surface2 text-xs font-medium text-mute ring-2 ring-surface">+{{ x.positionen.length - 3 }}</div>
+    <ListenTabelle :spalten="SPALTEN" :zeilen="zeilen" :link="(x) => `/anfragen/${x.id}`" min-breite="1000px">
+      <template #id="{ x }"><span class="font-semibold tnum">{{ x.id }}</span></template>
+      <template #inhalt="{ x }"><div class="flex items-center gap-3">
+              <div class="flex shrink-0 -space-x-2.5">
+                <PartImage v-for="(p, i) in x.positionen.slice(0, 3)" :key="i" :teil="p.teil" :groesse="34" class="ring-2 ring-surface" />
+                <div v-if="x.positionen.length > 3" class="grid h-[34px] w-[34px] place-items-center rounded-lg border border-line bg-surface2 text-[10px] font-medium text-mute ring-2 ring-surface">+{{ x.positionen.length - 3 }}</div>
+              </div>
+              <div class="min-w-0 max-w-[220px]"><div class="truncate font-medium">{{ titel(x) }}</div><div class="truncate text-xs text-mute">{{ x.positionen.length }} Position{{ x.positionen.length === 1 ? '' : 'en' }}</div></div>
+            </div></template>
+      <template #bezug="{ x }">
+        <span v-if="x.angebotId" class="inline-flex items-center gap-1 text-xs tnum"><FileText :size="12" class="text-mute" /> {{ x.angebotId }}</span>
+        <span v-else class="inline-flex items-center gap-1 text-xs"><Package :size="12" class="text-mute" /> {{ x.art }}</span>
+      </template>
+      <template #kunde="{ x }">{{ kunde(x) || '–' }}</template>
+      <template #erstellt="{ x }"><span class="tnum">{{ de(x.erstellt) }}</span></template>
+      <template #status="{ x }"><StatusBadge :status="x.status" /></template>
+      <template #leer>
+        <div class="grid place-items-center px-6 py-16 text-center">
+          <Send :size="36" class="text-mute" :stroke-width="1.4" />
+          <p class="mt-3 text-sm font-medium">{{ a.liste.length ? 'Keine Anfragen mit diesen Filtern' : 'Noch keine Lieferantenanfragen' }}</p>
+          <p class="mt-1 max-w-sm text-xs text-mute">Fremdvergaben fragst du in der Workbench an, Material und anderes hier über „Neue Anfrage“.</p>
+          <button class="btn btn-primary mt-4" @click="neuDialog = true"><Plus :size="16" /> Neue Anfrage</button>
         </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.status" />
-            <span v-if="x.angebotId" class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-mute"><FileText :size="11" /> {{ x.angebotId }}<template v-if="kunde(x)"> · {{ kunde(x) }}</template></span>
-            <span v-else class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-mute"><Package :size="11" /> {{ x.art }}</span>
-          </div>
-          <div class="mt-0.5 truncate text-sm text-mute">{{ x.lieferantName }} · {{ titel(x) }}</div>
-        </div>
-        <div class="text-right text-sm">
-          <div class="tnum">{{ x.positionen.length }} Position{{ x.positionen.length === 1 ? '' : 'en' }}</div>
-          <div class="text-xs text-mute">{{ de(x.erstellt) }}</div>
-        </div>
-      </RouterLink>
-
-      <div v-if="!zeilen.length" class="card grid place-items-center px-6 py-16 text-center">
-        <Send :size="36" class="text-mute" :stroke-width="1.4" />
-        <p class="mt-3 text-sm font-medium">{{ a.liste.length ? 'Keine Anfragen mit diesen Filtern' : 'Noch keine Lieferantenanfragen' }}</p>
-        <p class="mt-1 max-w-sm text-xs text-mute">Fremdvergaben fragst du in der Workbench an, Material und anderes hier über „Neue Anfrage“.</p>
-        <button class="btn btn-primary mt-4" @click="neuDialog = true"><Plus :size="16" /> Neue Anfrage</button>
-      </div>
-    </div>
+      </template>
+    </ListenTabelle>
   </div>
 </template>

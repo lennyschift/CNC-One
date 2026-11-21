@@ -187,6 +187,8 @@ class TestMailAnfragen(IntegrationTestCase):
 		self.assertTrue(r["neu"])
 		self.assertEqual((a["kopf"]["kundeId"], a["kopf"]["anfrageNr"], a["mailAnfrage"]["id"]), (self.kunde, "4711-B", d.name))
 		self.assertEqual((a["kopf"]["kontaktName"], a["kopf"]["kontaktEmail"]), ("Einkauf", "einkauf@zz-kunde.de"))  # Absender, Name wie beim Kunden
+		self.assertEqual(a["kopf"]["projekt"], "Anfrage Nr. 4711-B: ZZ Flansch")  # Projekt = Betreff der Anfrage
+		self.assertEqual(mail_api.projekt_aus_betreff("AW: WG: Fwd:  Anfrage Welle"), "Anfrage Welle")
 		self.assertEqual([(x["name"], x["art"]) for x in r["dateien"]], [("zz-a.pdf", "Zeichnung"), ("zz-a.step", "STEP")])
 		self.assertIn("Bitte um Angebot", r["text"])
 		for x in r["dateien"]:

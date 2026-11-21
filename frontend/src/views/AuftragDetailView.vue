@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory, Truck, Receipt, FileText, Calculator, Send, FileCheck2, FileUp, ShoppingCart, PencilLine, History, AlertTriangle } from '@lucide/vue';
+import { ArrowLeft, MapPin, UserRound, Hash, CalendarDays, Factory, Truck, Receipt, FileText, Calculator, Send, FileCheck2, FileUp, ShoppingCart, PencilLine, History, AlertTriangle, Pencil, Check, X } from '@lucide/vue';
 import AuftragAendernDialog from '../components/AuftragAendernDialog.vue';
 import BestellungDialog from '../components/BestellungDialog.vue';
 import { useRouter } from 'vue-router';
@@ -30,6 +30,14 @@ const f = useFertigung();
 const auftrag = computed(() => b.auftrag(route.params.id));
 onMounted(() => b.auftraegeNeuLaden());
 const lieferDialog = ref(false);
+// Bestellnummer des Kunden: auch bei laufendem Auftrag änderbar
+const bestellnrEdit = ref(false);
+const bestellnrWert = ref('');
+function bestellnrStart() { bestellnrWert.value = auftrag.value?.kundenbestellnr ?? ''; bestellnrEdit.value = true; }
+function bestellnrFertig() {
+  bestellnrEdit.value = false;
+  if (bestellnrWert.value.trim() !== (auftrag.value.kundenbestellnr ?? '')) b.bestellnrSetzen(auftrag.value.id, bestellnrWert.value.trim());
+}
 const rechnungDialog = ref(false);
 // Auftragsbestätigung: ansehen (frisch erzeugt) und per Mail senden
 const abDialog = ref(false);
@@ -89,7 +97,7 @@ const bestellungDialog = ref(false);
             <button v-if="auftrag.status !== 'Storniert'" class="btn" title="PDF der Bestellung einlesen: Bestellnummer, Positionen und Liefertermine übernehmen und die Preise abgleichen" @click="bestellungDialog = true"><FileUp :size="15" /> {{ auftrag.bestellungDatei ? 'Bestellung erneut abgleichen' : 'Bestellung (PDF) koppeln' }}</button>
           </div>
           <button v-if="!fbs.length" class="btn btn-primary mt-4" @click="f.ausAuftrag(auftrag.id)"><Factory :size="16" /> Fertigung starten</button>
-          <RouterLink v-else to="/fertigung" class="btn mt-4"><Factory :size="16" /> Zur Fertigung</RouterLink>
+          <RouterLink v-else :to="{ path: '/fertigung', query: { auftrag: auftrag.id } }" class="btn mt-4" title="Fertigung mit allen Positionen dieses Auftrags"><Factory :size="16" /> Zur Fertigung</RouterLink>
           <button v-if="angebotDazu" class="btn mt-4 ml-2" title="Kalkulation, Zeichnung und 3D-Modell des Angebots in der Workbench ansehen (ohne Änderungen)" @click="inWorkbench()"><Calculator :size="16" /> Kalkulation ansehen</button>
           <button v-if="auftrag.lieferung.status !== 'Geliefert'" class="btn mt-4 ml-2" @click="lieferDialog = true"><Truck :size="16" /> Lieferschein erstellen</button>
           <span class="ml-2 mt-4 inline-block align-middle"><StatusBadge :status="auftrag.lieferung.status" /></span>
@@ -105,7 +113,15 @@ const bestellungDialog = ref(false);
       <div class="mt-5 grid gap-3 text-sm md:grid-cols-4">
         <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><MapPin :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div class="font-medium">{{ auftrag.kundeName }}</div><div v-for="z in auftrag.kunde.adresse" :key="z" class="text-mute">{{ z }}</div></div></div>
         <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><UserRound :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div class="text-xs text-mute">Ansprechpartner</div><div>{{ auftrag.kontaktName || auftrag.kunde.kontakt?.name || '–' }}</div><div class="text-xs text-mute">{{ auftrag.kontaktName || auftrag.kontaktEmail ? auftrag.kontaktEmail : auftrag.kunde.kontakt?.email }}</div></div></div>
-        <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><Hash :size="16" class="mt-0.5 shrink-0 text-mute" /><div><div class="text-xs text-mute">Bestellnummer des Kunden</div><div>{{ auftrag.kundenbestellnr || '–' }}</div><div v-if="auftrag.bestelldatum" class="text-xs text-mute">vom {{ de(auftrag.bestelldatum) }}</div></div></div>
+        <div class="flex gap-2.5 rounded-xl bg-surface2 px-3.5 py-2.5"><Hash :size="16" class="mt-0.5 shrink-0 text-mute" />
+          <div class="min-w-0 flex-1"><div class="text-xs text-mute">Bestellnummer des Kunden</div>
+            <div v-if="bestellnrEdit" class="mt-0.5 flex items-center gap-1.5">
+              <input v-model="bestellnrWert" class="field !py-1 text-sm" placeholder="Bestellnummer" autofocus @keydown.enter="bestellnrFertig" @keydown.esc="bestellnrEdit = false" />
+              <button class="text-ok" title="Übernehmen" @click="bestellnrFertig"><Check :size="16" /></button>
+              <button class="text-mute hover:text-ink" title="Abbrechen" @click="bestellnrEdit = false"><X :size="16" /></button>
+            </div>
+            <div v-else class="flex items-center gap-2"><span class="min-w-0 flex-1 truncate">{{ auftrag.kundenbestellnr || '–' }}</span><button v-if="auftrag.status !== 'Storniert'" class="text-mute hover:text-ink" title="Bestellnummer ändern" @click="bestellnrStart"><Pencil :size="13" /></button></div>
+            <div v-if="auftrag.bestelldatum" class="text-xs text-mute">vom {{ de(auftrag.bestelldatum) }}</div></div></div>
         <ProjektFeld :projekt="auftrag.projekt" @speichern="b.projektSetzen('Auftrag', auftrag.id, $event)" />
       </div>
     </section>

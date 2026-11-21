@@ -1,8 +1,8 @@
 <script setup>
 import FilterLeiste from '../components/FilterLeiste.vue';
+import ListenTabelle from '../components/ListenTabelle.vue';
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Plus, FileText, Send, Search } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -38,11 +38,21 @@ async function neu() {
   await a.neu();
   router.push('/workbench');
 }
-const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
+const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
+const SPALTEN = [
+  { key: 'id', label: 'Nummer', breite: '130px' },
+  { key: 'bauteile', label: 'Bauteile', wert: (x) => x.positionen.length },
+  { key: 'kunde', label: 'Kunde', wert: (x) => x.kopf.kundeName },
+  { key: 'projekt', label: 'Projekt', wert: (x) => x.kopf.projekt },
+  { key: 'anfrageNr', label: 'Anfragenr.', wert: (x) => x.kopf.anfrageNr },
+  { key: 'netto', label: 'Netto', rechts: true },
+  { key: 'datum', label: 'Datum', wert: (x) => x.versandt ?? x.erstellt },
+  { key: 'status', label: 'Status', wert: (x) => x.anzeige },
+];
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1200px]">
+  <div class="mx-auto max-w-[1500px]">
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div class="flex gap-1 rounded-xl border border-line bg-surface p-1">
         <button v-for="f in filterListe" :key="f" class="rounded-lg px-3 py-1.5 text-sm transition" :class="filter === f ? 'bg-accent-soft font-medium text-accent' : 'text-mute hover:text-ink'" @click="filter = f">{{ f }}</button>
@@ -55,30 +65,29 @@ const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
     </div>
 
     <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="angebote" :beschriftungen="beschriftungen" :standard-angeheftet="['kopf.kundeName']" />
-    <div v-auto-animate class="space-y-2.5">
-      <RouterLink v-for="x in zeilen" :key="x.id" :to="`/angebote/${x.id}`" class="card flex items-center gap-5 p-4 transition hover:-translate-y-px hover:border-accent/40">
-        <div class="flex -space-x-3">
-          <PartImage v-for="p in x.positionen.slice(0, 3)" :key="p.key" :teil="p.teil" :groesse="46" class="ring-2 ring-surface" />
-          <div v-if="x.positionen.length > 3" class="grid h-[46px] w-[46px] place-items-center rounded-xl border border-line bg-surface2 text-xs font-medium text-mute ring-2 ring-surface">+{{ x.positionen.length - 3 }}</div>
+    <ListenTabelle :spalten="SPALTEN" :zeilen="zeilen" :link="(x) => `/angebote/${x.id}`" min-breite="1050px">
+      <template #id="{ x }"><span class="font-semibold tnum">{{ x.id }}</span>
+        <span v-if="anfragenZu(x).length" class="ml-1.5 inline-flex items-center gap-1 rounded-full bg-surface2 px-1.5 py-0.5 text-[10px]" :class="anfragenZu(x).every((z) => z.status !== 'Gesendet') ? 'text-ok' : 'text-warn'" title="Lieferantenanfragen zu diesem Angebot"><Send :size="10" />{{ anfragenZu(x).length }}</span>
+      </template>
+      <template #bauteile="{ x }"><div class="flex max-w-[330px] flex-wrap gap-1.5">
+              <span v-for="(p, i) in x.positionen.slice(0, 12)" :key="i" :title="[p.teil.name, p.teil.teilenummer].filter(Boolean).join(' · ') || 'Bauteil'"><PartImage :teil="p.teil" :groesse="40" /></span>
+              <span v-if="x.positionen.length > 12" class="grid h-10 w-10 place-items-center rounded-lg border border-line bg-surface2 text-[11px] font-medium text-mute">+{{ x.positionen.length - 12 }}</span>
+              <span v-if="!x.positionen.length" class="text-mute">–</span>
+            </div></template>
+      <template #kunde="{ x }"><div class="truncate">{{ x.kopf.kundeName || '–' }}</div><div v-if="ansprechpartner(x)" class="truncate text-xs text-mute">{{ ansprechpartner(x) }}</div></template>
+      <template #projekt="{ x }"><ProjektMarke v-if="x.kopf.projekt" :projekt="x.kopf.projekt" /><span v-else class="text-mute">–</span></template>
+      <template #anfrageNr="{ x }"><span class="tnum">{{ x.kopf.anfrageNr || '–' }}</span></template>
+      <template #netto="{ x }"><span class="font-semibold">{{ eur(x.netto) }}</span></template>
+      <template #datum="{ x }"><span class="tnum">{{ de(x.versandt ?? x.erstellt) }}</span></template>
+      <template #status="{ x }"><StatusBadge :status="x.anzeige" /></template>
+      <template #leer>
+        <div class="grid place-items-center px-6 py-16 text-center">
+          <FileText :size="36" class="text-mute" :stroke-width="1.4" />
+          <p class="mt-3 text-sm font-medium">{{ b.angebote.length ? 'Keine Angebote in diesem Filter' : 'Noch keine Angebote' }}</p>
+          <p class="mt-1 text-xs text-mute">In der Workbench ein Angebot zusammenstellen und speichern.</p>
+          <button class="btn btn-primary mt-4" @click="neu"><Plus :size="16" /> Neues Angebot</button>
         </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-3"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.anzeige" /><ProjektMarke :projekt="x.kopf.projekt" />
-            <span v-if="anfragenZu(x).length" class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[11px]" :class="anfragenZu(x).every((z) => z.status !== 'Gesendet') ? 'text-ok' : 'text-warn'" title="Lieferantenanfragen zu diesem Angebot"><Send :size="11" />{{ anfragenZu(x).length }}</span>
-          </div>
-          <div class="mt-0.5 truncate text-sm text-mute">{{ x.kopf.kundeName }}<template v-if="ansprechpartner(x)"> · {{ ansprechpartner(x) }}</template> · {{ x.positionen.length }} Position{{ x.positionen.length === 1 ? '' : 'en' }}<template v-if="x.kopf.anfrageNr"> · Anfrage {{ x.kopf.anfrageNr }}</template></div>
-        </div>
-        <div class="text-right">
-          <div class="font-semibold tnum">{{ eur(x.netto) }}</div>
-          <div class="text-xs text-mute">{{ de(x.versandt ?? x.erstellt) }}</div>
-        </div>
-      </RouterLink>
-
-      <div v-if="!zeilen.length" class="card grid place-items-center px-6 py-16 text-center">
-        <FileText :size="36" class="text-mute" :stroke-width="1.4" />
-        <p class="mt-3 text-sm font-medium">{{ b.angebote.length ? 'Keine Angebote in diesem Filter' : 'Noch keine Angebote' }}</p>
-        <p class="mt-1 text-xs text-mute">In der Workbench ein Angebot zusammenstellen und speichern.</p>
-        <button class="btn btn-primary mt-4" @click="neu"><Plus :size="16" /> Neues Angebot</button>
-      </div>
-    </div>
+      </template>
+    </ListenTabelle>
   </div>
 </template>

@@ -18,11 +18,15 @@ def _nur_fertigung():
 	frappe.only_for(FERTIGUNG_ROLLEN)
 
 
+# In der Fertigung sind keine Preise zu sehen: Sätze und Kosten bleiben am Server.
+PREISFELDER = ("satz", "ruestDirekt", "ruestEuro", "stueckDirekt", "stueckEuro", "fremdProStk", "fremdEinmal")
+
+
 def fb_ui(d):
-	"""Das Fertigungsbauteil in der Form, die die Oberfläche erwartet (Sendungen verschachtelt im Arbeitsgang)."""
+	"""Das Fertigungsbauteil in der Form, die die Oberfläche erwartet (Sendungen verschachtelt im Arbeitsgang), ohne Preise."""
 	ags = []
 	for a in d.arbeitsgaenge:
-		z = arbeitsgang_ui(a)
+		z = {k: v for k, v in arbeitsgang_ui(a).items() if k not in PREISFELDER}
 		z.update({
 			"bestellung": a.bestellung or "",
 			"status": a.status,
@@ -296,7 +300,8 @@ def status_setzen(id, status, zeiten=None):
 def felder_speichern(id, felder):
 	"""Speichert die frei bearbeitbaren Felder. Buchungsstand, Status und Sendungen ändert das nicht.
 
-	`felder`: { prioritaet, termin, rohmaterial: {...}, notizen: {...}, arbeitsgaenge: [{ id, name, maschine, satz, ruestMin, stueckMin, lieferant, fremdProStk, fremdEinmal, bestellung }] }
+	`felder`: { prioritaet, termin, rohmaterial: {...}, notizen: {...}, arbeitsgaenge: [{ id, name, typ, geplantAm, maschine, ruestMin, stueckMin, lieferant, bestellung }] }
+	Preise (satz, fremdProStk, fremdEinmal) werden nur übernommen, wenn sie mitkommen; die Oberfläche der Fertigung schickt keine.
 	"""
 	doc = _laden(id)
 	if isinstance(felder, str):
@@ -329,7 +334,9 @@ def felder_speichern(id, felder):
 		if "geplantAm" in neu:
 			ag.geplant_am = neu.get("geplantAm") or None
 		ag.maschine = neu.get("maschine") or None
-		ag.satz = neu.get("satz") or 0
+		# Preise kommen aus der Fertigung nicht mit; sie bleiben, wie sie aus dem Auftrag übernommen wurden
+		if "satz" in neu:
+			ag.satz = neu.get("satz") or 0
 		ag.ruest_min = neu.get("ruestMin") or 0
 		ag.stueck_min = neu.get("stueckMin") or 0
 		for ui, feld in (("ruestDirekt", "ruest_direkt"), ("stueckDirekt", "stueck_direkt")):
@@ -339,8 +346,10 @@ def felder_speichern(id, felder):
 			if ui in neu:
 				ag.set(feld, neu.get(ui) or 0)
 		ag.lieferant = neu.get("lieferant") or None
-		ag.fremd_pro_stk = neu.get("fremdProStk") or 0
-		ag.fremd_einmal = neu.get("fremdEinmal") or 0
+		if "fremdProStk" in neu:
+			ag.fremd_pro_stk = neu.get("fremdProStk") or 0
+		if "fremdEinmal" in neu:
+			ag.fremd_einmal = neu.get("fremdEinmal") or 0
 		ag.bestellung = neu.get("bestellung") or ""
 		ag.serie = 1 if ist_serienart(ag.bezeichnung, serienarten) else 0
 	doc.save()

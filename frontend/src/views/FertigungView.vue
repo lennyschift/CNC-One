@@ -3,7 +3,8 @@
 // per Drag and Drop auf Tag und Maschine), Auslastung je Maschine und Woche sowie die Auswertung der gemeldeten Zeiten.
 import { ref, computed, watch, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Search, Factory, Flame, Columns3, List, CalendarDays, Gauge, BarChart3 } from '@lucide/vue';
+import { Search, Factory, Flame, Columns3, List, CalendarDays, Gauge, BarChart3, ClipboardList, X } from '@lucide/vue';
+import { useRoute, useRouter } from 'vue-router';
 import FertigungKarte from '../components/FertigungKarte.vue';
 import FertigungListe from '../components/FertigungListe.vue';
 import FertigungKalender from '../components/FertigungKalender.vue';
@@ -41,6 +42,11 @@ watch(gruppe, (v) => merken('fertigung.gruppe', v));
 
 const suche = ref('');
 const nurEilig = ref(false);
+// Aus dem Auftrag kommend (?auftrag=…): alle Positionen dieses Auftrags, gespeicherte Filter gelten dann nicht
+const route = useRoute();
+const router = useRouter();
+const auftragFilter = computed(() => String(route.query.auftrag ?? ''));
+const auftragAus = () => router.replace({ path: '/fertigung' });
 // Anpassbare Filter und Sortierung (je Benutzer gespeichert); Standard: Liefertermin, früheste zuerst
 const zeilen = ref([]);
 const beschriftungen = {
@@ -53,9 +59,11 @@ const rang = { prioritaet: ['Eilig', 'Hoch', 'Normal'], status: ['In Fertigung',
 const vorgefiltert = computed(() => f.liste.map((x) => ({ ...x, projekt: b.auftrag(x.auftragId)?.projekt ?? '' })).filter((x) => {
   const q = suche.value.trim().toLowerCase();
   const text = `${x.teil.name} ${x.teil.teilenummer} ${x.auftragId} ${x.kundeName} ${x.id} ${b.auftrag(x.auftragId)?.projekt ?? ''}`.toLowerCase();
-  return (!q || text.includes(q)) && (!nurEilig.value || x.prioritaet !== 'Normal');
+  return (!q || text.includes(q)) && (!nurEilig.value || x.prioritaet !== 'Normal') && (!auftragFilter.value || x.auftragId === auftragFilter.value);
 }));
-const gefiltert = computed(() => zeilen.value.map((z) => f.liste.find((x) => x.id === z.id)).filter(Boolean));
+const gefiltert = computed(() => (auftragFilter.value
+  ? vorgefiltert.value.map((z) => f.liste.find((x) => x.id === z.id)).filter(Boolean).sort((a, b) => (a.auftragPosKey || '').localeCompare(b.auftragPosKey || '', 'de', { numeric: true }))
+  : zeilen.value.map((z) => f.liste.find((x) => x.id === z.id)).filter(Boolean)));
 
 // ---- Kanban: Spalten nach Status, Arbeitsgang oder Maschine (des aktuellen Arbeitsgangs)
 const aktuell = (fb) => fb.arbeitsgaenge.find((a) => a.gebucht < fb.menge) ?? null;
@@ -93,7 +101,6 @@ function drop(spalte) {
   if (!a || !m || a.typ !== 'intern' || a.maschine === m.name) return;
   if (!maschinenFuer([m], a.name).length) { ui.toast(`${m.name} kann „${a.name}“ laut Stammdaten nicht`, 'warn'); return; }
   a.maschine = m.name;
-  if (!a.satz) a.satz = m.satz;
   f.felderPlanen(fb.id);
   ui.toast(`${a.name} von ${fb.teil.name} auf ${m.name}`, 'ok');
 }
@@ -113,7 +120,12 @@ const akzent = { Offen: 'bg-mute', 'In Fertigung': 'bg-warn', Fertig: 'bg-ok' };
       <button class="btn" :class="nurEilig ? '!border-accent !bg-accent-soft !text-accent' : ''" @click="nurEilig = !nurEilig"><Flame :size="15" /> Nur eilige</button>
       <div class="ml-auto text-sm text-mute"><span class="font-medium text-ink tnum">{{ f.offen.length }}</span> offen · <span class="tnum">{{ gefiltert.length }}</span> von <span class="tnum">{{ f.liste.length }}</span></div>
     </div>
-    <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="fertigung" :beschriftungen="beschriftungen" :standard-angeheftet="['kundeName', 'arbeitsgaenge.maschine', 'termin']" sortierbar :standard-sortierung="{ pfad: 'termin', richtung: 'auf' }" :rang="rang" />
+    <div v-if="auftragFilter" class="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-accent-soft px-3.5 py-2 text-sm text-accent">
+      <ClipboardList :size="15" /> Alle Positionen von <RouterLink :to="`/auftraege/${auftragFilter}`" class="font-semibold underline-offset-2 hover:underline tnum">{{ auftragFilter }}</RouterLink>
+      <span class="text-xs opacity-80">· gespeicherte Filter sind dabei ausgeschaltet</span>
+      <button class="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs hover:bg-surface" @click="auftragAus"><X :size="13" /> Auftragsfilter entfernen</button>
+    </div>
+    <FilterLeiste v-show="!auftragFilter" v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="fertigung" :beschriftungen="beschriftungen" :standard-angeheftet="['kundeName', 'arbeitsgaenge.maschine', 'termin']" sortierbar :standard-sortierung="{ pfad: 'termin', richtung: 'auf' }" :rang="rang" />
 
     <div v-if="!f.liste.length" class="card grid place-items-center px-6 py-20 text-center">
       <Factory :size="38" class="text-mute" :stroke-width="1.4" />

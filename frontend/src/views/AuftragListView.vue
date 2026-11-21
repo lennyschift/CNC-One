@@ -1,7 +1,7 @@
 <script setup>
 import FilterLeiste from '../components/FilterLeiste.vue';
+import ListenTabelle from '../components/ListenTabelle.vue';
 import { onMounted, ref, computed } from 'vue';
-import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { ClipboardList, Search, FileUp } from '@lucide/vue';
 import { useRouter } from 'vue-router';
 import BestellungDialog from '../components/BestellungDialog.vue';
@@ -13,7 +13,20 @@ import { eur } from '../lib/format.js';
 
 const b = useBelege();
 onMounted(() => b.auftraegeNeuLaden());
-const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
+const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
+// frühester Liefertermin der noch nicht entfallenen Positionen
+const termin = (x) => x.positionen.filter((p) => !p.entfallen).map((p) => p.termin).filter(Boolean).sort()[0] ?? '';
+const SPALTEN = [
+  { key: 'id', label: 'Nummer', breite: '130px' },
+  { key: 'bauteile', label: 'Bauteile', wert: (x) => x.positionen.length },
+  { key: 'kunde', label: 'Kunde', wert: (x) => x.kundeName },
+  { key: 'projekt', label: 'Projekt' },
+  { key: 'kundenbestellnr', label: 'Bestellnr.' },
+  { key: 'termin', label: 'Liefertermin', wert: termin },
+  { key: 'netto', label: 'Netto', rechts: true },
+  { key: 'datum', label: 'Angelegt' },
+  { key: 'status', label: 'Status' },
+];
 const suche = ref('');
 // Auftrag aus der Bestellung des Kunden (PDF)
 const bestellung = ref(false);
@@ -29,7 +42,7 @@ const vorgefiltert = computed(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1200px]">
+  <div class="mx-auto max-w-[1500px]">
     <div class="mb-5 flex flex-wrap items-center gap-3">
       <label class="relative">
         <Search :size="15" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mute" />
@@ -39,29 +52,29 @@ const vorgefiltert = computed(() => {
       <button class="btn btn-primary" title="PDF der Bestellung einlesen, mit Angeboten und früheren Aufträgen abgleichen und als Auftrag anlegen" @click="bestellung = true"><FileUp :size="16" /> Auftrag aus Bestellung</button>
     </div>
     <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="auftraege" :beschriftungen="beschriftungen" :standard-angeheftet="['kundeName']" />
-    <div v-auto-animate class="space-y-2.5">
-      <RouterLink v-for="x in zeilen" :key="x.id" :to="`/auftraege/${x.id}`" class="card flex items-center gap-5 p-4 transition hover:-translate-y-px hover:border-accent/40">
-        <div class="flex -space-x-3">
-          <PartImage v-for="p in x.positionen.slice(0, 3)" :key="p.key" :teil="p.teil" :groesse="46" class="ring-2 ring-surface" />
-          <div v-if="x.positionen.length > 3" class="grid h-[46px] w-[46px] place-items-center rounded-xl border border-line bg-surface2 text-xs font-medium text-mute ring-2 ring-surface">+{{ x.positionen.length - 3 }}</div>
+    <ListenTabelle :spalten="SPALTEN" :zeilen="zeilen" :link="(x) => `/auftraege/${x.id}`" min-breite="1100px">
+      <template #id="{ x }"><div class="font-semibold tnum">{{ x.id }}</div><div class="truncate text-[11px] text-mute">{{ x.angebote?.length ? `aus ${x.angebote.join(', ')}` : 'aus Bestellung' }}</div></template>
+      <template #bauteile="{ x }"><div class="flex max-w-[330px] flex-wrap gap-1.5">
+              <span v-for="(p, i) in x.positionen.slice(0, 12)" :key="i" :title="[p.teil.name, p.teil.teilenummer].filter(Boolean).join(' · ') || 'Bauteil'"><PartImage :teil="p.teil" :groesse="40" /></span>
+              <span v-if="x.positionen.length > 12" class="grid h-10 w-10 place-items-center rounded-lg border border-line bg-surface2 text-[11px] font-medium text-mute">+{{ x.positionen.length - 12 }}</span>
+              <span v-if="!x.positionen.length" class="text-mute">–</span>
+            </div></template>
+      <template #kunde="{ x }"><div class="truncate">{{ x.kundeName || '–' }}</div><div v-if="x.kontaktName" class="truncate text-xs text-mute">{{ x.kontaktName }}</div></template>
+      <template #projekt="{ x }"><ProjektMarke v-if="x.projekt" :projekt="x.projekt" /><span v-else class="text-mute">–</span></template>
+      <template #kundenbestellnr="{ x }"><span class="tnum">{{ x.kundenbestellnr || '–' }}</span></template>
+      <template #termin="{ x }"><span class="tnum">{{ de(termin(x)) }}</span></template>
+      <template #netto="{ x }"><span class="font-semibold">{{ eur(x.netto) }}</span></template>
+      <template #datum="{ x }"><span class="tnum">{{ de(x.datum) }}</span></template>
+      <template #status="{ x }"><div class="flex flex-col items-start gap-1"><StatusBadge :status="x.status" /><StatusBadge v-if="x.lieferung.geliefert" :status="x.lieferung.status" /></div></template>
+      <template #leer>
+        <div class="grid place-items-center px-6 py-16 text-center">
+          <ClipboardList :size="36" class="text-mute" :stroke-width="1.4" />
+          <p class="mt-3 text-sm font-medium">{{ b.auftraege.length ? 'Keine Aufträge in diesem Filter' : 'Noch keine Aufträge' }}</p>
+          <p class="mt-1 text-xs text-mute">Aufträge entstehen aus einem gesendeten Angebot über „In Auftrag übernehmen“ oder aus der Bestellung des Kunden (PDF).</p>
+          <RouterLink to="/angebote" class="btn mt-4">Zu den Angeboten</RouterLink>
         </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-3"><span class="font-semibold tnum">{{ x.id }}</span><StatusBadge :status="x.status" /><StatusBadge v-if="x.lieferung.geliefert" :status="x.lieferung.status" /><ProjektMarke :projekt="x.projekt" /></div>
-          <div class="mt-0.5 truncate text-sm text-mute">{{ x.kundeName }}<template v-if="x.kontaktName"> · {{ x.kontaktName }}</template><template v-if="x.kundenbestellnr"> · Bestellung {{ x.kundenbestellnr }}</template><template v-if="x.angebote?.length"> · aus {{ x.angebote.join(', ') }}</template><template v-else> · aus Bestellung</template></div>
-        </div>
-        <div class="text-right">
-          <div class="font-semibold tnum">{{ eur(x.netto) }}</div>
-          <div class="text-xs text-mute">{{ de(x.datum) }}</div>
-        </div>
-      </RouterLink>
-
-      <div v-if="!b.auftraege.length" class="card grid place-items-center px-6 py-16 text-center">
-        <ClipboardList :size="36" class="text-mute" :stroke-width="1.4" />
-        <p class="mt-3 text-sm font-medium">Noch keine Aufträge</p>
-        <p class="mt-1 text-xs text-mute">Aufträge entstehen aus einem gesendeten Angebot über „In Auftrag übernehmen“ oder aus der Bestellung des Kunden (PDF).</p>
-        <RouterLink to="/angebote" class="btn mt-4">Zu den Angeboten</RouterLink>
-      </div>
-    </div>
+      </template>
+    </ListenTabelle>
     <BestellungDialog v-if="bestellung" @schliessen="bestellung = false" @fertig="bestellungFertig" />
   </div>
 </template>

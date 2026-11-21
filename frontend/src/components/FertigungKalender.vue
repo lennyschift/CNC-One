@@ -73,8 +73,6 @@ function ablegen(maschine, tag) {
   ag.geplantAm = tag || '';
   if (tag && (ag.maschine || '') !== maschine) {
     ag.maschine = maschine;
-    const m = props.maschinen.find((x) => x.name === maschine);
-    if (m?.satz && !ag.satz) ag.satz = m.satz;
   }
   f.felderPlanen(fb.id);
 }

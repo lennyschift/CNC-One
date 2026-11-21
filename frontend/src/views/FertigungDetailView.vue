@@ -67,8 +67,6 @@ function buchen(ag, menge) {
 }
 function maschineWechsel(ag, name) {
   ag.maschine = name;
-  const m = maschinen.value.find((x) => x.name === name);
-  if (m) ag.satz = m.satz;
 }
 function vorlageWahl(e) {
   if (e.target.value) f.vorlageAnwenden(fb.value.id, e.target.value);
@@ -167,12 +165,11 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
             </div>
 
             <!-- intern -->
-            <div v-if="ag.typ === 'intern'" class="mt-4 grid gap-3 sm:grid-cols-5">
+            <div v-if="ag.typ === 'intern'" class="mt-4 grid gap-3 sm:grid-cols-4">
               <label class="block"><span class="label mb-1 block">Maschine</span>
                 <select class="field" :class="!ag.maschine && ag.status !== 'Fertig' ? '!border-warn' : ''" :value="ag.maschine" @change="maschineWechsel(ag, $event.target.value)"><option value="">– wählen –</option><option v-for="m in maschinenFuerAg(ag)" :key="m.name" :value="m.name">{{ m.name }}</option></select>
               </label>
               <label class="block"><span class="label mb-1 block">Geplant am</span><input v-model="ag.geplantAm" type="date" class="field" /></label>
-              <NumField v-model="ag.satz" label="Satz" unit="€/h" />
               <NumField v-model="ag.ruestMin" label="Rüstzeit" unit="min" :step="5" />
               <NumField v-model="ag.stueckMin" label="Stückzeit" unit="min" :step="0.5" :hint="`geplant ${stunden(geplantMin(ag))} h`" />
             </div>

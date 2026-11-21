@@ -1,7 +1,7 @@
 <script setup>
 import FilterLeiste from '../components/FilterLeiste.vue';
+import ListenTabelle from '../components/ListenTabelle.vue';
 import { ref, computed, onMounted } from 'vue';
-import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Search, Package, Layers, ArrowDownToLine, ArrowUpFromLine, RotateCcw, SlidersHorizontal } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import StammDialog from '../components/StammDialog.vue';
@@ -45,6 +45,13 @@ async function korrigieren() {
 const artIcon = { Fertigung: ArrowDownToLine, Lieferschein: ArrowUpFromLine, 'Storno Lieferschein': RotateCcw, Korrektur: SlidersHorizontal };
 const zeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const rohmaterialAnzahl = (stammdatenRoh().materialien ?? []).length;
+const SPALTEN = [
+  { key: 'bauteil', label: 'Bauteil', wert: (x) => x.teil.name },
+  { key: 'teilenummer', label: 'Teilenummer', wert: (x) => x.teil.teilenummer },
+  { key: 'zeichnungsnr', label: 'Zeichnung', wert: (x) => x.teil.zeichnungsnr },
+  { key: 'kundeName', label: 'Kunde' },
+  { key: 'bestand', label: 'Bestand', rechts: true },
+];
 </script>
 
 <template>
@@ -68,24 +75,19 @@ const rohmaterialAnzahl = (stammdatenRoh().materialien ?? []).length;
       </div>
 
       <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="lager" :beschriftungen="beschriftungen" :standard-angeheftet="[]" />
-      <div v-auto-animate class="space-y-2">
-        <button v-for="x in zeilen" :key="x.bauteilId" class="card flex w-full items-center gap-4 p-3.5 text-left transition hover:-translate-y-px hover:border-accent/40" @click="oeffnen(x)">
-          <PartImage :teil="x.teil" :groesse="48" />
-          <div class="min-w-0 flex-1">
-            <div class="truncate font-medium">{{ x.teil.name || 'Ohne Bezeichnung' }}</div>
-            <div class="truncate text-xs text-mute">{{ x.teil.teilenummer }}<template v-if="x.teil.zeichnungsnr"> · Zeichnung {{ x.teil.zeichnungsnr }}</template> · {{ x.kundeName }}</div>
+      <ListenTabelle :spalten="SPALTEN" :zeilen="zeilen" zeilen-key="bauteilId" min-breite="800px" @oeffnen="oeffnen">
+        <template #bauteil="{ x }"><div class="flex items-center gap-3"><PartImage :teil="x.teil" :groesse="36" /><div class="min-w-0"><div class="truncate font-medium">{{ x.teil.name || 'Ohne Bezeichnung' }}</div><div v-if="x.teil.material" class="truncate text-xs text-mute">{{ x.teil.material }}</div></div></div></template>
+        <template #teilenummer="{ x }"><span class="tnum">{{ x.teil.teilenummer || '–' }}</span></template>
+        <template #zeichnungsnr="{ x }"><span class="tnum">{{ x.teil.zeichnungsnr || '–' }}</span></template>
+        <template #bestand="{ x }"><span class="text-base font-semibold" :class="x.bestand < 0 ? 'text-accent' : x.bestand === 0 ? 'text-mute' : ''">{{ x.bestand }} Stk</span><div v-if="x.bestand < 0" class="text-[11px] text-accent">Lieferschein vor Fertigung</div></template>
+        <template #leer>
+          <div class="grid place-items-center px-6 py-16 text-center">
+            <Package :size="36" class="text-mute" :stroke-width="1.4" />
+            <p class="mt-3 text-sm font-medium">{{ l.lager.length ? 'Keine Treffer' : 'Noch nichts im Fertigbauteil Lager' }}</p>
+            <p class="mt-1 max-w-md text-xs text-mute">Gefertigte Bauteile kommen automatisch hierher, auch Überproduktion. Ein Lieferschein bucht sie wieder ab; wird er vor der Fertigung angelegt, steht der Bestand im Minus, bis die Fertigung einbucht.</p>
           </div>
-          <div class="text-right">
-            <div class="text-xl font-semibold tnum" :class="x.bestand < 0 ? 'text-accent' : x.bestand === 0 ? 'text-mute' : ''">{{ x.bestand }} <span class="text-xs font-normal text-mute">Stk</span></div>
-            <div v-if="x.bestand < 0" class="text-[11px] text-accent">Lieferschein vor Fertigung</div>
-          </div>
-        </button>
-        <div v-if="!zeilen.length" class="card grid place-items-center px-6 py-16 text-center">
-          <Package :size="36" class="text-mute" :stroke-width="1.4" />
-          <p class="mt-3 text-sm font-medium">{{ l.lager.length ? 'Keine Treffer' : 'Noch nichts im Fertigbauteil Lager' }}</p>
-          <p class="mt-1 max-w-md text-xs text-mute">Gefertigte Bauteile kommen automatisch hierher, auch Überproduktion. Ein Lieferschein bucht sie wieder ab; wird er vor der Fertigung angelegt, steht der Bestand im Minus, bis die Fertigung einbucht.</p>
-        </div>
-      </div>
+        </template>
+      </ListenTabelle>
     </template>
 
     <div v-else class="card grid place-items-center px-6 py-16 text-center">

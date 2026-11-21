@@ -216,6 +216,17 @@ def kunde_zuordnen(id, kunde="", neuer_kunde="", kontakt=None):
 	return anfrage_ui(d)
 
 
+def projekt_aus_betreff(betreff):
+	"""Projektname aus dem Betreff einer Anfrage: ohne Antwort-/Weiterleitungs-Vorsätze (AW:, RE:, WG:, FW:, Fwd:), höchstens 140 Zeichen."""
+	t = (betreff or "").strip()
+	while True:
+		neu = re.sub(r"^\s*(aw|re|antw|wg|fw|fwd|wtr)\s*:\s*", "", t, flags=re.I)
+		if neu == t:
+			break
+		t = neu
+	return t.strip()[:140]
+
+
 def anfrage_nummer(betreff):
 	"""Anfrage-Nr. des Kunden aus dem Betreff, z. B. "Anfrage Nr. 4711-B" oder "RFQ 2026-118" (muss eine Ziffer enthalten)."""
 	t = re.search(r"(?:anfrage|rfq|inquiry|request)\s*(?:-?nr\.?|-?nummer|no\.?|#)?\s*[:#]?\s*([A-Z0-9][\w\-/.]*\d[\w\-/.]*)", betreff or "", re.I)
@@ -260,6 +271,7 @@ def angebot_anlegen(id):
 	kontakt_name = " ".join(x for x in (k.anrede, k.vorname, k.nachname) if x) if k else (d.von_name or "")
 	a = frappe.get_doc({
 		"doctype": "Angebot", "kunde": d.kunde, "anfrage_nr": anfrage_nummer(d.betreff), "kontakt_name": kontakt_name, "kontakt_email": von,
+		"projekt": projekt_aus_betreff(d.betreff),
 	})
 	a.insert()
 	dateien = _dateien_ans_angebot(d, a.name)

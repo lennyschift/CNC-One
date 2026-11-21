@@ -114,10 +114,18 @@ export const useBelege = defineStore('belege', () => {
       ui.toast(e.message, 'warn');
     }
   }
+  async function bestellnrSetzen(id, nr) {
+    try {
+      auftragEinsetzen(await call('cnc_one.api.auftrag.bestellnr_setzen', { id, kundenbestellnr: nr }));
+      ui.toast(nr ? `Bestellnummer „${nr}“ gespeichert` : 'Bestellnummer entfernt', 'ok');
+    } catch (e) {
+      ui.toast(e.message, 'warn');
+    }
+  }
   function auftragStatusSetzen(id, status) {
     const a = auftrag(id);
     if (a && status) a.status = status;
   }
 
-  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, einsetzen, angebotSpeichern, angebotSenden, angebotAblehnen, angebotUeberarbeiten, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen, projektSetzen, auftraegeNeuLaden };
+  return { angebote, auftraege, bestelltFuer, statusVon, angebot, auftrag, einsetzen, angebotSpeichern, angebotSenden, angebotAblehnen, angebotUeberarbeiten, angebotLoeschen, auftragAnlegen, auftragEinsetzen, auftragStatusSetzen, projektSetzen, bestellnrSetzen, auftraegeNeuLaden };
 });

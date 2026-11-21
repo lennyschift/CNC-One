@@ -80,8 +80,8 @@ export function felderVon(fb) {
     rohmaterial: { ...fb.rohmaterial },
     notizen: { ...fb.notizen },
     arbeitsgaenge: fb.arbeitsgaenge.map((a) => ({
-      id: a.id, name: a.name, typ: a.typ, geplantAm: a.geplantAm || '', maschine: a.maschine ?? '', satz: num(a.satz), ruestMin: num(a.ruestMin), stueckMin: num(a.stueckMin),
-      lieferant: a.lieferant ?? '', fremdProStk: num(a.fremdProStk), fremdEinmal: num(a.fremdEinmal), bestellung: a.bestellung ?? '',
+      id: a.id, name: a.name, typ: a.typ, geplantAm: a.geplantAm || '', maschine: a.maschine ?? '', ruestMin: num(a.ruestMin), stueckMin: num(a.stueckMin),
+      lieferant: a.lieferant ?? '', bestellung: a.bestellung ?? '',
     })),
   };
 }

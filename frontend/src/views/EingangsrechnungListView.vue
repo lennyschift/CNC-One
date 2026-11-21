@@ -2,11 +2,11 @@
 // Eingangsrechnungen (Rechnungen der Lieferanten): aus dem Posteingang (E-Rechnungen von selbst) oder hochgeladen.
 // Prüfen, als bezahlt markieren; Zahlung und DATEV folgen mit dem Steuerberater.
 import { ref, computed, onMounted, watch } from 'vue';
-import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Search, Upload, Receipt, FileCode2, FileText, AlertTriangle } from '@lucide/vue';
 import RechnungNav from '../components/RechnungNav.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import FilterLeiste from '../components/FilterLeiste.vue';
+import ListenTabelle from '../components/ListenTabelle.vue';
 import { call, hochladen } from '../data/api.js';
 import { eur } from '../lib/format.js';
 import { useUi } from '../stores/ui.js';
@@ -36,6 +36,16 @@ const summe = (l) => l.reduce((n, r) => n + (r.brutto || 0), 0);
 const heute = new Date().toISOString().slice(0, 10);
 const faellig = computed(() => offen.value.filter((r) => r.faelligAm && r.faelligAm <= heute));
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
+const SPALTEN = [
+  { key: 'lieferantName', label: 'Rechnungssteller' },
+  { key: 'rechnungsnr', label: 'Rechnungsnummer' },
+  { key: 'rechnungsdatum', label: 'Datum' },
+  { key: 'bestellreferenz', label: 'Bestellung' },
+  { key: 'format', label: 'Format' },
+  { key: 'faelligAm', label: 'Fällig' },
+  { key: 'brutto', label: 'Brutto', rechts: true },
+  { key: 'status', label: 'Status' },
+];
 
 // Hochladen (Knopf oder Drag and Drop, auch mehrere): PDF (ZUGFeRD oder Papier-/PDF-Rechnung) oder XML (XRechnung).
 // Eine Datei öffnet die neue Rechnung, mehrere bleiben in der Liste.
@@ -83,7 +93,7 @@ watch(() => ui.abgelegt, (x) => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1200px]">
+  <div class="mx-auto max-w-[1500px]">
     <RechnungNav />
     <div class="mb-4 flex flex-wrap items-center gap-3">
       <div class="rounded-2xl bg-surface2 px-4 py-2.5"><div class="label">Offen (Neu und geprüft)</div><div class="text-xl font-semibold tnum">{{ eur(summe(offen)) }}</div><div class="text-[11px] text-mute">{{ offen.length }} Rechnung{{ offen.length === 1 ? '' : 'en' }}</div></div>
@@ -105,26 +115,23 @@ watch(() => ui.abgelegt, (x) => {
     </div>
     <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="eingangsrechnungen" :beschriftungen="beschriftungen" :standard-angeheftet="['lieferantName']" />
 
-    <section class="card overflow-hidden">
-      <div v-if="!geladen" class="p-6 text-sm text-mute">Wird geladen …</div>
-      <div v-else-if="!zeilen.length" class="flex flex-col items-center px-6 py-14 text-center text-sm text-mute">
-        <Receipt :size="34" :stroke-width="1.4" class="mb-3" />
-        <span class="font-medium text-ink">Keine Eingangsrechnungen</span>
-        <span class="mt-1 max-w-md text-xs">E-Rechnungen (ZUGFeRD, XRechnung) aus dem Posteingang werden von selbst angelegt; PDF-Rechnungen mit „Rechnung aus …“ an der Mail, hier hochladen oder einfach auf diese Seite ziehen.</span>
-      </div>
-      <div v-auto-animate class="divide-y divide-line">
-        <RouterLink v-for="r in zeilen" :key="r.id" :to="`/eingangsrechnungen/${r.id}`" class="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3.5 transition hover:bg-surface2">
-          <component :is="r.format === 'PDF' || r.format === 'Papier' ? FileText : FileCode2" :size="18" class="shrink-0" :class="r.format === 'PDF' ? 'text-mute' : 'text-accent'" :title="r.format" />
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2"><span class="truncate font-medium">{{ r.lieferantName || 'Rechnungssteller fehlt' }}</span><span v-if="!r.lieferantId" class="text-xs text-warn">kein Lieferant</span></div>
-            <div class="text-xs text-mute tnum">{{ r.rechnungsnr || 'ohne Nummer' }} · {{ de(r.rechnungsdatum) }}<template v-if="r.bestellreferenz"> · Bestellung {{ r.bestellreferenz }}</template> · {{ r.id }}</div>
-          </div>
-          <AlertTriangle v-if="r.hinweise.length" :size="15" class="text-warn" :title="r.hinweise.join('\n')" />
-          <div class="text-right text-xs text-mute">fällig<br><span :class="r.faelligAm && r.faelligAm <= heute && ['Neu', 'Geprüft'].includes(r.status) ? 'font-semibold text-accent' : ''">{{ de(r.faelligAm) }}</span></div>
-          <div class="w-28 text-right font-semibold tnum">{{ eur(r.brutto) }}</div>
-          <StatusBadge :status="r.status" />
-        </RouterLink>
-      </div>
-    </section>
+    <div v-if="!geladen" class="card p-6 text-sm text-mute">Wird geladen …</div>
+    <ListenTabelle v-else :spalten="SPALTEN" :zeilen="zeilen" :link="(r) => `/eingangsrechnungen/${r.id}`" min-breite="1000px">
+      <template #lieferantName="{ x }"><div class="flex items-center gap-2"><span class="truncate font-medium">{{ x.lieferantName || 'Rechnungssteller fehlt' }}</span><span v-if="!x.lieferantId" class="text-xs text-warn">kein Lieferant</span><AlertTriangle v-if="x.hinweise.length" :size="14" class="shrink-0 text-warn" :title="x.hinweise.join('\n')" /></div><div class="text-[11px] text-mute tnum">{{ x.id }}</div></template>
+      <template #rechnungsnr="{ x }"><span class="tnum">{{ x.rechnungsnr || 'ohne Nummer' }}</span></template>
+      <template #rechnungsdatum="{ x }"><span class="tnum">{{ de(x.rechnungsdatum) }}</span></template>
+      <template #bestellreferenz="{ x }"><span class="tnum">{{ x.bestellreferenz || '–' }}</span></template>
+      <template #format="{ x }"><span class="inline-flex items-center gap-1 text-xs" :class="x.format === 'PDF' || x.format === 'Papier' ? 'text-mute' : 'text-accent'"><component :is="x.format === 'PDF' || x.format === 'Papier' ? FileText : FileCode2" :size="14" />{{ x.format }}</span></template>
+      <template #faelligAm="{ x }"><span class="tnum" :class="x.faelligAm && x.faelligAm <= heute && ['Neu', 'Geprüft'].includes(x.status) ? 'font-semibold text-accent' : ''">{{ de(x.faelligAm) }}</span></template>
+      <template #brutto="{ x }"><span class="font-semibold">{{ eur(x.brutto) }}</span></template>
+      <template #status="{ x }"><StatusBadge :status="x.status" /></template>
+      <template #leer>
+        <div class="flex flex-col items-center px-6 py-14 text-center text-sm text-mute">
+          <Receipt :size="34" :stroke-width="1.4" class="mb-3" />
+          <span class="font-medium text-ink">Keine Eingangsrechnungen</span>
+          <span class="mt-1 max-w-md text-xs">E-Rechnungen (ZUGFeRD, XRechnung) aus dem Posteingang werden von selbst angelegt; PDF-Rechnungen mit „Rechnung aus …“ an der Mail, hier hochladen oder einfach auf diese Seite ziehen.</span>
+        </div>
+      </template>
+    </ListenTabelle>
   </div>
 </template>

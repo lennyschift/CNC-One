@@ -1,7 +1,7 @@
 <script setup>
 import FilterLeiste from '../components/FilterLeiste.vue';
+import ListenTabelle from '../components/ListenTabelle.vue';
 import { ref, computed, onMounted } from 'vue';
-import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { Plus, Search, Workflow, Hash, FileText, Box, History } from '@lucide/vue';
 import Toggle from '../components/Toggle.vue';
 import NumField from '../components/NumField.vue';
@@ -25,6 +25,15 @@ onMounted(async () => {
 });
 
 const kundenName = (id) => kunden.value.find((k) => k.id === id)?.name ?? id;
+const SPALTEN = [
+  { key: 'name', label: 'Bezeichnung' },
+  { key: 'teilenummer', label: 'Teilenummer' },
+  { key: 'zeichnungsnr', label: 'Zeichnung' },
+  { key: 'material', label: 'Werkstoff' },
+  { key: 'kunde', label: 'Kunde', wert: (x) => kundenName(x.kundeId) },
+  { key: 'serie', label: 'Seriennr.', wert: (x) => (x.seriennummern ? 1 : 0) },
+  { key: 'plan', label: 'Arbeitsplan', wert: (x) => x.arbeitsgaenge.length },
+];
 const suche = ref('');
 const kundeFilter = ref('');
 const liste = computed(() => store.listen.bauteil ?? []);
@@ -68,18 +77,16 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
     </div>
 
     <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="bauteile" :beschriftungen="beschriftungen" :standard-angeheftet="['material']" />
-    <div v-auto-animate class="space-y-2">
-      <button v-for="x in zeilen" :key="x.id" class="card flex w-full items-center gap-4 p-3.5 text-left transition hover:-translate-y-px hover:border-accent/40" @click="oeffnen(x)">
-        <PartImage :teil="x" :groesse="48" />
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-2"><span class="font-medium">{{ x.name || 'Ohne Bezeichnung' }}</span><span v-if="x.status === 'Gesperrt'" class="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] text-accent">gesperrt</span><span v-if="x.seriennummern" class="inline-flex items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[10px] text-mute"><Hash :size="10" /> Serie{{ x.letzteSeriennummer ? ` bis ${formatNr(x.letzteSeriennummer, x.serienStellen)}` : '' }}</span></div>
-          <div class="truncate text-xs text-mute">{{ x.teilenummer }}<template v-if="x.zeichnungsnr"> · Zeichnung {{ x.zeichnungsnr }}</template><template v-if="x.revision"> · Rev. {{ x.revision }}</template><template v-if="x.material"> · {{ x.material }}</template></div>
-          <div class="truncate text-xs text-mute">{{ kundenName(x.kundeId) }}</div>
-        </div>
-        <span class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface2 px-2.5 py-1 text-xs text-mute"><Workflow :size="13" /> {{ x.arbeitsgaenge.length ? `${x.arbeitsgaenge.length} Arbeitsgänge` : 'kein Arbeitsplan' }}</span>
-      </button>
-      <p v-if="!zeilen.length" class="card px-6 py-12 text-center text-sm text-mute">{{ store.listen.bauteil === null ? 'Lädt …' : liste.length ? 'Keine Treffer.' : 'Noch keine Bauteile. Sie entstehen auch automatisch, wenn ein Angebot ein Bauteil mit Teilenummer enthält.' }}</p>
-    </div>
+    <ListenTabelle :spalten="SPALTEN" :zeilen="zeilen" min-breite="1000px" @oeffnen="oeffnen">
+      <template #name="{ x }"><div class="flex items-center gap-3"><PartImage :teil="x" :groesse="36" /><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><span class="truncate font-medium">{{ x.name || 'Ohne Bezeichnung' }}</span><span v-if="x.status === 'Gesperrt'" class="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] text-accent">gesperrt</span></div></div></div></template>
+      <template #teilenummer="{ x }"><span class="tnum">{{ x.teilenummer || '–' }}</span></template>
+      <template #zeichnungsnr="{ x }"><span class="tnum">{{ x.zeichnungsnr || '–' }}</span><span v-if="x.revision" class="ml-1 text-xs text-mute">Rev. {{ x.revision }}</span></template>
+      <template #material="{ x }">{{ x.material || '–' }}</template>
+      <template #kunde="{ x }">{{ kundenName(x.kundeId) }}</template>
+      <template #serie="{ x }"><span v-if="x.seriennummern" class="inline-flex items-center gap-1 text-xs"><Hash :size="11" class="text-mute" />{{ x.letzteSeriennummer ? `bis ${formatNr(x.letzteSeriennummer, x.serienStellen)}` : 'ja' }}</span><span v-else class="text-mute">–</span></template>
+      <template #plan="{ x }"><span class="flex max-w-[220px] items-center gap-1 truncate text-xs" :title="x.arbeitsgaenge.map((a) => a.name).join(' → ')" :class="x.arbeitsgaenge.length ? '' : 'text-mute'"><Workflow :size="12" class="text-mute" />{{ x.arbeitsgaenge.length ? x.arbeitsgaenge.map((a) => a.name).filter(Boolean).join(' → ') : 'kein Arbeitsplan' }}</span></template>
+      <template #leer><p class="px-6 py-12 text-center text-sm text-mute">{{ store.listen.bauteil === null ? 'Lädt …' : liste.length ? 'Keine Treffer.' : 'Noch keine Bauteile. Sie entstehen auch automatisch, wenn ein Angebot ein Bauteil mit Teilenummer enthält.' }}</p></template>
+    </ListenTabelle>
 
     <StammDialog v-if="b" :titel="neu ? 'Neues Bauteil' : (b.name || b.teilenummer)" :untertitel="neu ? '' : `${b.id} · ${kundenName(b.kundeId)}`" breite="900px" :neu="neu" :schreibgeschuetzt="!darf" :speichert="speichert" :gueltig="!!b.kundeId && !!b.teilenummer.trim()" @schliessen="b = null" @speichern="speichern" @loeschen="loeschen">
       <div class="flex gap-4">
