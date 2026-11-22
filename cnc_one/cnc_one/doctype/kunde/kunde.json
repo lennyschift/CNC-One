@@ -15,6 +15,9 @@
   "leitweg_id",
   "lieferantennummer",
   "zahlungsziel_tage",
+  "sb_material",
+  "material_zeugnis",
+  "material_pruefungen",
   "sb_adressen",
   "adressen",
   "kontakte",
@@ -85,6 +88,24 @@
    "fieldtype": "Int",
    "label": "Zahlungsziel (Tage)",
    "description": "0 = Standard aus den Firmendaten"
+  },
+  {
+   "fieldname": "sb_material",
+   "fieldtype": "Section Break",
+   "label": "Material-Vorgaben"
+  },
+  {
+   "fieldname": "material_zeugnis",
+   "fieldtype": "Select",
+   "label": "Fordert Werkszeugnis",
+   "options": "\n2.2\n3.1\n3.2",
+   "description": "Wird bei jedem Bauteil dieses Kunden als Mindestanforderung gesetzt"
+  },
+  {
+   "fieldname": "material_pruefungen",
+   "fieldtype": "Small Text",
+   "label": "Fordert immer",
+   "description": "Materialanforderungen, eine je Zeile, z. B. Ultraschallgeprüft"
   },
   {
    "fieldname": "sb_adressen",

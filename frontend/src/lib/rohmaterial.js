@@ -1,12 +1,15 @@
 // Rohmaterial eines Bauteils: Form und Maße des Rohteils, daraus Volumen und Gewicht. Reine Funktionen ohne UI.
-// teil.roh = { form, durchmesser, innen, schluesselweite, breite, hoehe, laenge, gewichtAuto, zeugnis, ausLager, lagerHinweis }
+// teil.roh = { form, durchmesser, innen, schluesselweite, breite, hoehe, laenge, saege, gewichtAuto, zeugnis, ausLager, lagerHinweis,
+//   zustand, ausfuehrung, abmessungId, abmessung, anforderungen: { zeugnis, pruefungen }, charge } (Auswahl siehe lib/werkstoffbaum.js)
 // Maße in mm, Gewicht in kg, Dichte in kg/dm³ (= g/cm³). Das Aufmaß steckt schon in den Maßen (so wird bestellt).
 
 export const FORMEN = [
   { id: 'Rund', label: 'Rund', felder: ['durchmesser', 'laenge'] },
+  { id: 'Vierkant', label: 'Vierkant', felder: ['breite', 'laenge'] },
   { id: 'Flach', label: 'Flach / Block', felder: ['breite', 'hoehe', 'laenge'] },
-  { id: 'Rohr', label: 'Rohr', felder: ['durchmesser', 'innen', 'laenge'] },
   { id: 'Sechskant', label: 'Sechskant', felder: ['schluesselweite', 'laenge'] },
+  { id: 'Rohr', label: 'Rohr', felder: ['durchmesser', 'innen', 'laenge'] },
+  { id: 'Platte', label: 'Platte', felder: ['hoehe', 'breite', 'laenge'] },
 ];
 
 export const FELD_LABEL = { durchmesser: 'Ø außen', innen: 'Ø innen', schluesselweite: 'SW', breite: 'Breite', hoehe: 'Höhe', laenge: 'Länge' };
@@ -24,9 +27,12 @@ export function leeresRoh() {
 // Volumen in mm³ (0, wenn Maße fehlen)
 export function rohVolumen(roh) {
   if (!roh) return 0;
-  const l = n(roh.laenge);
+  const s = n(roh.saege); // Sägezugabe je Schnitt (bei der Platte je Maß)
+  const l = n(roh.laenge) + (n(roh.laenge) ? s : 0);
   switch (roh.form) {
     case 'Rund': return (Math.PI / 4) * n(roh.durchmesser) ** 2 * l;
+    case 'Vierkant': return n(roh.breite) ** 2 * l;
+    case 'Platte': return n(roh.hoehe) * (n(roh.breite) + (n(roh.breite) ? s : 0)) * l;
     case 'Rohr': {
       const da = n(roh.durchmesser);
       const di = Math.min(n(roh.innen), da);
@@ -53,6 +59,8 @@ export function rohText(roh) {
     case 'Rund': return `Rund Ø${zahl(roh.durchmesser)} × ${zahl(roh.laenge)}`;
     case 'Rohr': return `Rohr Ø${zahl(roh.durchmesser)}${n(roh.innen) ? ` × Ø${zahl(roh.innen)}` : ''} × ${zahl(roh.laenge)}`;
     case 'Sechskant': return `Sechskant SW${zahl(roh.schluesselweite)} × ${zahl(roh.laenge)}`;
+    case 'Vierkant': return `Vierkant □${zahl(roh.breite)} × ${zahl(roh.laenge)}`;
+    case 'Platte': return `Platte ${zahl(roh.hoehe)} × ${zahl(roh.breite)} × ${zahl(roh.laenge)}`;
     case 'Flach': return `Flach ${zahl(roh.breite)} × ${zahl(roh.hoehe)} × ${zahl(roh.laenge)}`;
     default: return '';
   }

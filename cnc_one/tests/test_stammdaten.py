@@ -63,7 +63,7 @@ class TestStammdaten(IntegrationTestCase):
 		stammdaten.speichern("material", {**w, "isoGruppe": "H"})
 		aktuell = stammdaten.aktuell()
 		self.assertIn({"name": "ZZ Fräse", "satz": 99.5, "arbeitsgaenge": [], "automation": False, "stundenTag": 8}, aktuell["maschinen"])
-		self.assertIn({"name": "ZZ Stahl", "preisKg": 4.2, "dichte": 7.85, "schreibweisen": [], "isoGruppe": "H"}, aktuell["materialien"])
+		self.assertIn({"name": "ZZ Stahl", "preisKg": 4.2, "dichte": 7.85, "schreibweisen": [], "isoGruppe": "H", "kurz": "", "zustaende": [], "formen": []}, aktuell["materialien"])
 
 	def test_name_ist_pflicht(self):
 		with self.assertRaises(frappe.ValidationError):

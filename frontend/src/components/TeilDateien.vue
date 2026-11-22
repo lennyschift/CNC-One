@@ -11,6 +11,8 @@ import { repo } from '../data/repo.js';
 import { zahl } from '../lib/format.js';
 import { dichteSchaetzen } from '../lib/erkennung.js';
 import { ausModell, vorschlagAnwenden, rohText } from '../lib/rohmaterial.js';
+import { vorschlagAbmessung, rohAusAbmessung } from '../lib/werkstoffbaum.js';
+import { useWerkstoff } from '../stores/werkstoff.js';
 
 const ModelViewer = defineAsyncComponent(() => import('./ModelViewer.vue'));
 const DrawingViewer = defineAsyncComponent(() => import('./DrawingViewer.vue'));
@@ -23,6 +25,7 @@ const ui = useUi();
 const materialien = ref([]);
 onMounted(async () => { materialien.value = await repo.materialien.liste(); });
 // Dichte des gewählten Rohmaterials; ist keine gepflegt, ein Richtwert aus dem Werkstoff (als geschätzt gekennzeichnet)
+const werkstoff = useWerkstoff();
 const gepflegteDichte = computed(() => materialien.value.find((m) => m.name === props.teil.material)?.dichte ?? 0);
 const dichte = computed(() => gepflegteDichte.value || dichteSchaetzen(props.teil.material));
 const dichteGeschaetzt = computed(() => !gepflegteDichte.value && !!dichte.value);
@@ -42,7 +45,9 @@ function rohteilUebernehmen(r) {
   if (angebot.nurAnsicht) { ui.toast('Gesendetes Angebot: nur ansehen', 'warn'); return; }
   const v = ausModell(r);
   props.teil.rohVorschlag = v;
-  props.teil.roh = vorschlagAnwenden(props.teil.roh, v);
+  // nächste Abmessung aus der Reihe (Stammdaten), sonst die genauen Maße
+  const std = vorschlagAbmessung(werkstoff.baum, werkstoff.werkstoff(props.teil.material), v);
+  props.teil.roh = std ? rohAusAbmessung({ ...(props.teil.roh ?? {}), gewichtAuto: props.teil.roh?.gewichtAuto ?? true, laenge: std.laenge, breite: std.breite || props.teil.roh?.breite || 0 }, std.abm) : vorschlagAnwenden(props.teil.roh, v);
   // ohne gepflegte Dichte rechnet das Rohmaterial kein Gewicht: dann das Gewicht aus dem Modell nehmen
   if (!dichte.value && r.gewicht) props.teil.gewichtKg = r.gewicht;
   ui.toast(`Rohteil ${rohText(props.teil.roh)} mm übernommen`, 'ok');

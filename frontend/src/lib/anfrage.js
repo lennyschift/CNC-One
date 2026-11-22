@@ -6,7 +6,7 @@ import { num } from './calc.js';
 export const EINHEITEN = ['Stk', 'm', 'kg', 'Stangen', 'Platten', 'Zuschnitte'];
 
 // Freie Anfrage: ohne Angebot, die Positionen sind selbst eingetragen
-export const istFrei = (a) => !a.angebotId && (a.positionen ?? []).every((p) => String(p.key ?? '').startsWith('frei:'));
+export const istFrei = (a) => (a.positionen ?? []).length > 0 && (a.positionen ?? []).every((p) => /^(frei|mat):/.test(String(p.key ?? '')));
 // „Rundstahl · 42CrMo4 · Ø 50 x 3000 mm“
 export const freieZeile = (p) => [p.teil?.name, p.teil?.material, p.abmessung].filter(Boolean).join(' · ');
 
@@ -74,6 +74,7 @@ function freierText(a, firma) {
     zeilen.push(`${i + 1}. ${p.teil.name}`);
     if (p.teil.material) zeilen.push(`   Werkstoff: ${p.teil.material}`);
     if (p.abmessung) zeilen.push(`   Abmessung: ${p.abmessung}`);
+    if (p.anforderungen) zeilen.push(`   Anforderungen: ${p.anforderungen}`);
     zeilen.push(`   Menge: ${p.mengen.map((m) => `${m} ${p.einheit || 'Stk'}`).join(' / ')}`);
     zeilen.push('');
   });
@@ -106,6 +107,7 @@ export function mailText(a, firma = 'Hohenstein GmbH') {
     zeilen.push(`${einzel ? '' : '   '}Bauteil: ${teilZeile(p.teil)}`);
     if (p.teil.zeichnungsnr) zeilen.push(`${einzel ? '' : '   '}Zeichnung: ${p.teil.zeichnungsnr}`);
     if (p.teil.material) zeilen.push(`${einzel ? '' : '   '}Rohmaterial: ${p.teil.material}`);
+    if (p.anforderungen) zeilen.push(`${einzel ? '' : '   '}Anforderungen an das Material: ${p.anforderungen}`);
     zeilen.push(`${einzel ? '' : '   '}Angefragte Stückzahlen: ${p.mengen.join(', ')}`);
     if (!einzel) zeilen.push('');
   });

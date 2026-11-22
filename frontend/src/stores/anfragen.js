@@ -5,9 +5,15 @@ import { imVorgang } from '../lib/vergleich.js';
 import { call } from '../data/api.js';
 import { stammdatenRoh } from '../data/repo.js';
 import { useUi } from './ui.js';
+import { artikelText } from '../lib/werkstoffbaum.js';
 
 const kopie = (o) => JSON.parse(JSON.stringify(o));
-const kopf = (t) => ({ name: t.name, teilenummer: t.teilenummer, zeichnungsnr: t.zeichnungsnr, material: t.material });
+// Rohmaterial mit Zustand, Abmessung und Ausführung (z. B. „EN AW-7075 T7351 · Rund Ø40 · gezogen h11“), damit der Lieferant es kennt
+const kopf = (t) => ({ name: t.name, teilenummer: t.teilenummer, zeichnungsnr: t.zeichnungsnr, material: artikelText(t.material, t.roh) || t.material || '' });
+const anforderungenText = (t) => {
+  const a = t?.roh?.anforderungen ?? { zeugnis: t?.roh?.zeugnis || '', pruefungen: [] };
+  return [a.zeugnis && `Zeugnis ${a.zeugnis}`, ...(a.pruefungen ?? [])].filter(Boolean).join(', ');
+};
 
 // Lieferantenanfragen (Fremdvergabe aus der Workbench oder frei, z. B. Material) liegen in Frappe. Eine Anfrage geht an einen Lieferanten und enthält mehrere Positionen.
 export const useAnfragen = defineStore('anfragen', () => {
@@ -38,7 +44,7 @@ export const useAnfragen = defineStore('anfragen', () => {
       angebot: angebotId,
       lieferanten: lieferanten.map((l) => l.name),
       notiz: notiz || '',
-      positionen: positionen.map((p) => ({ teilId: p.teil.id ?? '', teil: kopf(p.teil), agId: p.agId, agName: p.agName, mengen: [...p.mengen] })),
+      positionen: positionen.map((p) => ({ teilId: p.teil.id ?? '', teil: kopf(p.teil), agId: p.agId, agName: p.agName, anforderungen: anforderungenText(p.teil), mengen: [...p.mengen] })),
     }));
     if (!neu) return null;
     for (const x of neu) einsetzen(x);
@@ -47,9 +53,9 @@ export const useAnfragen = defineStore('anfragen', () => {
   }
 
   // Freie Anfrage ohne Angebot (z. B. Material): positionen = [{ teil: { name, material }, abmessung, einheit, mengen }]
-  async function freiAnlegen({ lieferanten, positionen, notiz, art }) {
+  async function freiAnlegen({ lieferanten, positionen, notiz, art, angebotId = '' }) {
     const neu = await sicher(() => call('cnc_one.api.anfrage.anlegen', {
-      angebot: '', art, notiz: notiz || '', lieferanten: lieferanten.map((l) => l.name), positionen: kopie(positionen),
+      angebot: angebotId, art, notiz: notiz || '', lieferanten: lieferanten.map((l) => l.name), positionen: kopie(positionen),
     }));
     if (!neu) return null;
     for (const x of neu) einsetzen(x);

@@ -1,6 +1,7 @@
 // Three.js-Hilfen für Bauteilmodelle: Netze aus dem STEP-Leser in eine Szene bringen, Ansichten, Maße und Vorschaubild.
 // STEP-Modelle sind Z-oben (CAD); die Gruppe wird so gedreht, dass Z nach oben zeigt, in Three.js ist das Y.
 import * as THREE from 'three';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 export const STANDARDFARBE = '#b9c3cd';
 
@@ -159,4 +160,52 @@ export function vorschauPng(netze, groesse = 480) {
       resolve(blob);
     }, 'image/png');
   });
+}
+
+// Richtungspfeile am Rohteil, damit klar ist, wohin ein Aufmaß wirkt. Quader: je Fläche ein Pfeil nach außen (X rot, Y grün,
+// Z blau wie im CAD) mit „X+“, „X−“ …; Rund: Stirn A/B an den Enden der Achse und ein Pfeil für den Durchmesser.
+export const ACHS_FARBEN = { X: '#dc2626', Y: '#16a34a', Z: '#2563eb', A: '#d97706', R: '#7c3aed' };
+export function richtungsPfeile(r) {
+  const gruppe = new THREE.Group();
+  const teile = [];
+  const pfeil = (von, richtung, laenge, farbe, text) => {
+    const dir = new THREE.Vector3(...richtung).normalize();
+    const p = new THREE.ArrowHelper(dir, new THREE.Vector3(...von), laenge, new THREE.Color(farbe).getHex(), laenge * 0.28, laenge * 0.16);
+    for (const m of [p.line.material, p.cone.material]) { m.depthTest = false; m.transparent = true; }
+    p.renderOrder = 10;
+    gruppe.add(p);
+    teile.push(p);
+    const div = document.createElement('div');
+    div.className = 'achs-beschriftung';
+    div.style.background = farbe;
+    div.textContent = text;
+    const l = new CSS2DObject(div);
+    l.position.copy(new THREE.Vector3(...von).addScaledVector(dir, laenge * 1.22));
+    gruppe.add(l);
+  };
+  if (r.art === 'Quader') {
+    const mitte = [0, 1, 2].map((i) => (r.min[i] + r.max[i]) / 2);
+    const laenge = Math.max(4, Math.max(r.x, r.y, r.z) * 0.22);
+    ['X', 'Y', 'Z'].forEach((achse, i) => {
+      for (const s of [-1, 1]) {
+        const von = [...mitte];
+        von[i] = s > 0 ? r.max[i] : r.min[i];
+        const dir = [0, 0, 0];
+        dir[i] = s;
+        pfeil(von, dir, laenge, ACHS_FARBEN[achse], `${achse}${s > 0 ? '+' : '−'}`);
+      }
+    });
+  } else {
+    const a = new THREE.Vector3(...r.achse).normalize();
+    const m = new THREE.Vector3(...r.mitte);
+    const laenge = Math.max(4, Math.max(r.durchmesser, r.laenge) * 0.22);
+    pfeil(m.clone().addScaledVector(a, -r.laenge / 2).toArray(), a.clone().negate().toArray(), laenge, ACHS_FARBEN.A, 'Stirn A');
+    pfeil(m.clone().addScaledVector(a, r.laenge / 2).toArray(), a.toArray(), laenge, ACHS_FARBEN.A, 'Stirn B');
+    const hilf = Math.abs(a.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+    const u = new THREE.Vector3().crossVectors(a, hilf).normalize();
+    const quer = new THREE.Vector3().crossVectors(u, a).normalize(); // möglichst „nach oben“
+    pfeil(m.clone().addScaledVector(quer, r.durchmesser / 2).toArray(), quer.toArray(), laenge * 0.8, ACHS_FARBEN.R, '⌀ je Seite');
+  }
+  gruppe.userData.entsorgen = () => teile.forEach((p) => p.dispose());
+  return gruppe;
 }

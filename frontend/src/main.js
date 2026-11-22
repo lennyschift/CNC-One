@@ -78,7 +78,7 @@ const router = createRouter({
     { path: '/stammdaten/anfragevorlagen', component: AnfragevorlagenView, meta: { titel: 'Stammdaten: Anfragevorlagen', bereich: 'stammdaten' } },
     { path: '/stammdaten/lieferanten', component: LieferantenView, meta: { titel: 'Stammdaten: Lieferanten', bereich: 'stammdaten' } },
     { path: '/stammdaten/maschinen', component: MaschinenView, meta: { titel: 'Stammdaten: Maschinen', bereich: 'stammdaten' } },
-    { path: '/stammdaten/materialien', component: MaterialienView, meta: { titel: 'Stammdaten: Materialien', bereich: 'stammdaten' } },
+    { path: '/stammdaten/materialien', component: MaterialienView, meta: { titel: 'Stammdaten: Rohmaterial', bereich: 'stammdaten' } },
     { path: '/stammdaten/arbeitsgaenge', component: ArbeitsgaengeView, meta: { titel: 'Stammdaten: Arbeitsgänge und Vorlagen', bereich: 'stammdaten' } },
   ],
 });

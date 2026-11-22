@@ -4,7 +4,7 @@
 import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { watchDebounced } from '@vueuse/core';
-import { Search, FolderOpen, FileText, Box, Receipt, FileCode2, Mail, File, ScrollText, RefreshCw, Download, Tag, Link2, Truck, Bell, ShoppingBag, Lock, Archive, History, PackageOpen } from '@lucide/vue';
+import { Search, FolderOpen, FileText, Box, Receipt, FileCode2, Mail, File, ScrollText, RefreshCw, Download, Tag, Link2, Truck, Bell, ShoppingBag, Lock, Archive, History, PackageOpen, FileBadge } from '@lucide/vue';
 import CustomerCombobox from '../components/CustomerCombobox.vue';
 import { call } from '../data/api.js';
 import { useUi } from '../stores/ui.js';
@@ -17,8 +17,8 @@ const route = useRoute();
 const router = useRouter();
 const ui = useUi();
 
-const ARTEN = ['Zeichnung', '3D-Modell', 'Angebot', 'Rechnung', 'E-Rechnung (XML)', 'Lieferschein', 'Mahnung', 'Bestellung', 'Mail-Anhang', 'Sonstiges'];
-const ICON = { Zeichnung: FileText, '3D-Modell': Box, Angebot: ScrollText, Rechnung: Receipt, 'E-Rechnung (XML)': FileCode2, Lieferschein: Truck, Mahnung: Bell, Bestellung: ShoppingBag, 'Mail-Anhang': Mail, Sonstiges: File };
+const ARTEN = ['Zeichnung', '3D-Modell', 'Angebot', 'Rechnung', 'E-Rechnung (XML)', 'Lieferschein', 'Mahnung', 'Bestellung', 'Werkszeugnis', 'Mail-Anhang', 'Sonstiges'];
+const ICON = { Zeichnung: FileText, '3D-Modell': Box, Angebot: ScrollText, Rechnung: Receipt, 'E-Rechnung (XML)': FileCode2, Lieferschein: Truck, Mahnung: Bell, Bestellung: ShoppingBag, Werkszeugnis: FileBadge, 'Mail-Anhang': Mail, Sonstiges: File };
 const BELEG = {
   Bauteil: { label: 'Bauteil', weg: () => '/stammdaten/bauteile' },
   Angebot: { label: 'Angebot', weg: (id) => `/angebote/${id}` },

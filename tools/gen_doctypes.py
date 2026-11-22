@@ -62,6 +62,9 @@ def stamm_rechte(schreiben=("CNC Admin",)):
     return out
 
 
+ROH_FORMEN = ["Rund", "Vierkant", "Flach", "Sechskant", "Rohr", "Platte"]
+
+
 # ---------------------------------------------------------------- Beschreibung der Doctypes
 DOCTYPES = [
     # ---- Child-Tabellen
@@ -117,6 +120,51 @@ DOCTYPES = [
         Select("iso_gruppe", ["", "P", "M", "K", "N", "S", "H"], "ISO-Gruppe (Zerspanung)", description="P Stahl, M rostfreier Stahl, K Guss, N NE-Metalle, S Superlegierungen/Titan, H harte Werkstoffe; leer = aus dem Namen abgeleitet"),
         Check("aktiv", "Aktiv", default="1", in_list_view=1),
         Text("schreibweisen", "Schreibweisen auf Zeichnungen", description="Eine je Zeile, z. B. X5CrNi18-10 für 1.4301; wird beim Anlernen in der Workbench ergänzt"),
+        Data("kurzname", "Kurzname", description="z. B. AlZn5,5MgCu oder X5CrNi18-10"),
+        Text("zustaende", "Zustände", description="Lieferzustände dieses Werkstoffs (Werkstoffzustand), einer je Zeile, z. B. T651"),
+        Text("formen", "Formen", description="Lieferformen, eine je Zeile (Rund, Vierkant, Flach, Sechskant, Rohr, Platte); leer = alle"),
+    ]),
+    dict(name="Werkstoffzustand", autoname="field:code", title="code", rechte=stamm_rechte(("CNC Vertrieb",)), icon="flask-conical", fields=[
+        Data("code", "Zustand", reqd=1, unique=1, in_list_view=1, description="z. B. T651, +QT, +AT"),
+        Data("beschreibung", "Beschreibung", in_list_view=1),
+        Check("aktiv", "Aktiv", default="1", in_list_view=1),
+    ]),
+    dict(name="Rohmaterial Ausfuehrung", autoname="hash", title="bezeichnung", rechte=stamm_rechte(("CNC Vertrieb",)), icon="layers", fields=[
+        Data("bezeichnung", "Ausführung", reqd=1, in_list_view=1, description="z. B. gezogen h9, gepresst, gewalzt feingefräst"),
+        Select("form", ROH_FORMEN, "Form", reqd=1, in_list_view=1, in_standard_filter=1),
+        Data("iso_gruppen", "Nur für ISO-Gruppen", in_list_view=1, description="z. B. N oder P M; leer = alle"),
+        Check("aktiv", "Aktiv", default="1", in_list_view=1),
+    ]),
+    dict(name="Rohmaterial Abmessung", autoname="hash", title="bezeichnung", rechte=stamm_rechte(("CNC Vertrieb",)), icon="ruler", fields=[
+        Select("form", ROH_FORMEN, "Form", reqd=1, in_list_view=1, in_standard_filter=1),
+        Num("mass1", "Maß 1 (mm)", reqd=1, description="Rund/Rohr: Ø außen, Vierkant: Kante, Flach: Breite, Sechskant: SW, Platte: Dicke"),
+        Num("mass2", "Maß 2 (mm)", description="Flach: Höhe, Rohr: Wandstärke"),
+        Data("bezeichnung", "Abmessung", read_only=1, in_list_view=1),
+        Check("aktiv", "Aktiv", default="1", in_list_view=1),
+    ]),
+    dict(name="Materialanforderung", autoname="field:bezeichnung", title="bezeichnung", rechte=stamm_rechte(("CNC Vertrieb",)), icon="shield-check", fields=[
+        Data("bezeichnung", "Anforderung", reqd=1, unique=1, in_list_view=1, description="z. B. Ultraschallgeprüft, RoHS/REACH"),
+        Check("aktiv", "Aktiv", default="1", in_list_view=1),
+    ]),
+    dict(name="Rohmaterialcharge", autoname="RC-.YY.-.####", title="chargennr", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung")), icon="warehouse", extra={"search_fields": "chargennr,material,lieferant"}, fields=[
+        Data("chargennr", "Charge / Schmelze des Lieferanten", in_list_view=1),
+        Link("material", "Material", "Werkstoff", reqd=1, in_list_view=1, in_standard_filter=1),
+        Data("zustand", "Zustand", in_list_view=1),
+        Select("form", ROH_FORMEN, "Form", reqd=1, in_list_view=1),
+        Link("abmessung", "Rohmaterial Abmessung", "Abmessung", reqd=1),
+        Data("abmessung_text", "Abmessung (Text)", read_only=1, in_list_view=1),
+        Data("ausfuehrung", "Ausführung"),
+        Link("lieferant", "Lieferant", "Lieferant", in_standard_filter=1),
+        Date("eingang", "Wareneingang", in_list_view=1),
+        Num("laenge", "Länge (mm)", description="Stangen: Länge je Stange; Platte: Länge"),
+        Num("breite", "Breite (mm)", description="nur Platte"),
+        Int("stueck", "Stangen / Stück", default="1"),
+        Select("zeugnis", ["", "2.2", "3.1", "3.2"], "Werkszeugnis (EN 10204)", in_list_view=1),
+        Text("pruefungen", "Bestätigte Anforderungen", description="Materialanforderung, eine je Zeile"),
+        F("zeugnis_datei", "Attach", "Zeugnis (PDF)"),
+        Data("lagerplatz", "Lagerplatz"),
+        Select("status", ["Vorrätig", "Aufgebraucht"], "Status", default="Vorrätig", in_list_view=1, in_standard_filter=1),
+        Text("bemerkung", "Bemerkung"),
     ]),
     dict(name="Lieferant", autoname="field:lieferantenname", title="lieferantenname", rechte=stamm_rechte(("CNC Vertrieb",)), icon="truck", fields=[
         Data("lieferantenname", "Lieferant", reqd=1, unique=1, in_list_view=1),
@@ -146,6 +194,9 @@ DOCTYPES = [
         Data("leitweg_id", "Leitweg-ID / Käuferreferenz"),
         Data("lieferantennummer", "Lieferantennummer beim Kunden"),
         Int("zahlungsziel_tage", "Zahlungsziel (Tage)", description="0 = Standard aus den Firmendaten"),
+        Section("sb_material", "Material-Vorgaben"),
+        Select("material_zeugnis", ["", "2.2", "3.1", "3.2"], "Fordert Werkszeugnis", description="Wird bei jedem Bauteil dieses Kunden als Mindestanforderung gesetzt"),
+        Text("material_pruefungen", "Fordert immer", description="Materialanforderungen, eine je Zeile, z. B. Ultraschallgeprüft"),
         Section("sb_adressen", "Adressen und Kontakte"),
         Table("adressen", "Kunde Adresse", "Adressen"),
         Table("kontakte", "Kunde Kontakt", "Kontakte"),
@@ -382,6 +433,7 @@ DOCTYPES += [
         Data("ag_id", "Arbeitsgang", read_only=1),
         Data("ag_name", "Arbeitsgang", in_list_view=1),
         Data("abmessung", "Abmessung", description="z. B. Ø 50 x 3000 mm (freie Anfrage)"),
+        Data("anforderungen", "Anforderungen", description="z. B. Zeugnis 3.1, Ultraschallgeprüft"),
         Data("einheit", "Einheit", default="Stk"),
         Json("mengen", "Angefragte Mengen"),
     ]),
@@ -729,7 +781,7 @@ DOCTYPES += [
 
 
 # ---- Dokumentenmanagement: ein Eintrag je Dokument (Inhalt), gleiche Datei an mehreren Belegen = ein Dokument
-DOKUMENT_ARTEN = ["Zeichnung", "3D-Modell", "Angebot", "Rechnung", "E-Rechnung (XML)", "Lieferschein", "Mahnung", "Bestellung", "Mail-Anhang", "Sonstiges"]
+DOKUMENT_ARTEN = ["Zeichnung", "3D-Modell", "Angebot", "Rechnung", "E-Rechnung (XML)", "Lieferschein", "Mahnung", "Bestellung", "Werkszeugnis", "Mail-Anhang", "Sonstiges"]
 
 DOCTYPES += [
     dict(name="Archiv Frist", istable=1, fields=[

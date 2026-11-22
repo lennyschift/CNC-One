@@ -274,6 +274,15 @@ def serienbereich(ap, teil, p, menge, vergeben):
 	return neu[0], neu[1], stellen
 
 
+def teil_fuer_position(auftrag, pos):
+	"""Kalkulation des Bauteils (Workbench) zur Auftragsposition aus dem Angebot, z. B. für das Rohmaterial; sonst {}."""
+	angebot = pos.angebot or auftrag.angebot
+	if not angebot or not frappe.db.exists("Angebot", angebot):
+		return {}
+	ap = next((z for z in frappe.get_doc("Angebot", angebot).positionen if z.position_key == pos.angebot_position_key), None)
+	return als_json(ap.kalkulation) if ap else {}
+
+
 def plan_fuer_position(auftrag, pos):
 	"""Arbeitsplan einer Auftragsposition: im Auftrag gepflegt, sonst am Bauteil gespeichert, sonst aus dem Angebot, sonst leer."""
 	eigener = als_json(pos.arbeitsplan) if pos.arbeitsplan else []

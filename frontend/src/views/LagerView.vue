@@ -4,10 +4,10 @@ import ListenTabelle from '../components/ListenTabelle.vue';
 import { ref, computed, onMounted } from 'vue';
 import { Search, Package, Layers, ArrowDownToLine, ArrowUpFromLine, RotateCcw, SlidersHorizontal } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
+import RohmaterialLager from '../components/RohmaterialLager.vue';
 import StammDialog from '../components/StammDialog.vue';
 import NumField from '../components/NumField.vue';
 import { useLieferung } from '../stores/lieferung.js';
-import { stammdatenRoh } from '../data/repo.js';
 
 const l = useLieferung();
 const gruppe = ref('fertig');
@@ -44,7 +44,6 @@ async function korrigieren() {
 }
 const artIcon = { Fertigung: ArrowDownToLine, Lieferschein: ArrowUpFromLine, 'Storno Lieferschein': RotateCcw, Korrektur: SlidersHorizontal };
 const zeit = (iso) => new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-const rohmaterialAnzahl = (stammdatenRoh().materialien ?? []).length;
 const SPALTEN = [
   { key: 'bauteil', label: 'Bauteil', wert: (x) => x.teil.name },
   { key: 'teilenummer', label: 'Teilenummer', wert: (x) => x.teil.teilenummer },
@@ -90,12 +89,7 @@ const SPALTEN = [
       </ListenTabelle>
     </template>
 
-    <div v-else class="card grid place-items-center px-6 py-16 text-center">
-      <Layers :size="36" class="text-mute" :stroke-width="1.4" />
-      <p class="mt-3 text-sm font-medium">Rohmaterial Lager</p>
-      <p class="mt-1 max-w-md text-xs text-mute">Hier liegt später der Bestand an Rohmaterial. Die Bestandsführung folgt; die {{ rohmaterialAnzahl }} Rohmaterialien mit Preis pflegst du unter Stammdaten.</p>
-      <RouterLink to="/stammdaten/materialien" class="btn mt-4">Zu den Rohmaterialien</RouterLink>
-    </div>
+    <RohmaterialLager v-else />
 
     <StammDialog v-if="gewaehlt" :titel="gewaehlt.teil.name || gewaehlt.teil.teilenummer" :untertitel="`Fertigbauteil Lager · Bestand ${gewaehlt.bestand} Stk`" breite="680px" neu speichern-text="Korrektur buchen" :speichert="speichert" :gueltig="!!Math.round(korrektur.menge) && !!korrektur.grund.trim()" @schliessen="gewaehlt = null" @speichern="korrigieren">
       <section>

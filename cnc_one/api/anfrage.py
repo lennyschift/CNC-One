@@ -62,6 +62,7 @@ def anfrage_ui(d):
 				"agId": p.ag_id or "",
 				"agName": p.ag_name or "",
 				"abmessung": p.abmessung or "",
+				"anforderungen": p.anforderungen or "",
 				"einheit": p.einheit or "Stk",
 				"mengen": als_json(p.mengen) if p.mengen else [],
 			}
@@ -91,7 +92,8 @@ def anlegen(angebot="", lieferanten=None, positionen=None, notiz="", art=""):
 	"""Legt je Lieferant eine Anfrage mit allen Positionen an und liefert die neuen Anfragen.
 
 	Mit `angebot` (aus der Workbench): `positionen` = [{ teilId, teil: {name, teilenummer, zeichnungsnr, material}, agId, agName, mengen }].
-	Ohne `angebot` (freie Anfrage, z. B. Material): [{ teil: {name, material}, agName, abmessung, einheit, mengen }].
+	Ohne `angebot` (freie Anfrage, z. B. Material): [{ teil: {name, material}, agName, abmessung, anforderungen, einheit, mengen }].
+	Material zu einem Angebot (art = Material, aus der Workbench): wie die freie Anfrage, aber mit Bezug zum Angebot.
 	"""
 	nur_cnc()
 	if isinstance(lieferanten, str):
@@ -114,13 +116,14 @@ def anlegen(angebot="", lieferanten=None, positionen=None, notiz="", art=""):
 		mengen = _mengen(p.get("mengen"))
 		if not mengen:
 			frappe.throw(_("Jede Position braucht mindestens eine Menge."))
-		if not ang and not (teil.get("name") or "").strip():
+		material = art == "Material"
+		if (not ang or material) and not (teil.get("name") or "").strip():
 			frappe.throw(_("Position {0} braucht eine Bezeichnung.").format(i))
 		einheit = (p.get("einheit") or "Stk").strip()[:20] or "Stk"
 		zeilen.append({
-			"position_key": f"{p.get('teilId') or ''}:{p.get('agId') or ''}" if ang else f"frei:{i}",
+			"position_key": f"mat:{i}" if ang and material else f"{p.get('teilId') or ''}:{p.get('agId') or ''}" if ang else f"frei:{i}",
 			"teil_id": p.get("teilId") or "",
-			"bauteil": bauteil_api.finden(ang.kunde, teil.get("teilenummer")) if ang else None,
+			"bauteil": bauteil_api.finden(ang.kunde, teil.get("teilenummer")) if ang and not material else None,
 			"teilenummer": (teil.get("teilenummer") or "").strip(),
 			"bezeichnung": (teil.get("name") or "").strip(),
 			"zeichnungsnr": (teil.get("zeichnungsnr") or "").strip(),
@@ -128,6 +131,7 @@ def anlegen(angebot="", lieferanten=None, positionen=None, notiz="", art=""):
 			"ag_id": p.get("agId") or "",
 			"ag_name": (p.get("agName") or "").strip(),
 			"abmessung": (p.get("abmessung") or "").strip(),
+			"anforderungen": (p.get("anforderungen") or "").strip()[:140],
 			"einheit": einheit,
 			"mengen": json.dumps(mengen),
 		})

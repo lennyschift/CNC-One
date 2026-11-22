@@ -9,7 +9,10 @@
   "dichte",
   "iso_gruppe",
   "aktiv",
-  "schreibweisen"
+  "schreibweisen",
+  "kurzname",
+  "zustaende",
+  "formen"
  ],
  "fields": [
   {
@@ -51,6 +54,24 @@
    "fieldtype": "Small Text",
    "label": "Schreibweisen auf Zeichnungen",
    "description": "Eine je Zeile, z. B. X5CrNi18-10 für 1.4301; wird beim Anlernen in der Workbench ergänzt"
+  },
+  {
+   "fieldname": "kurzname",
+   "fieldtype": "Data",
+   "label": "Kurzname",
+   "description": "z. B. AlZn5,5MgCu oder X5CrNi18-10"
+  },
+  {
+   "fieldname": "zustaende",
+   "fieldtype": "Small Text",
+   "label": "Zustände",
+   "description": "Lieferzustände dieses Werkstoffs (Werkstoffzustand), einer je Zeile, z. B. T651"
+  },
+  {
+   "fieldname": "formen",
+   "fieldtype": "Small Text",
+   "label": "Formen",
+   "description": "Lieferformen, eine je Zeile (Rund, Vierkant, Flach, Sechskant, Rohr, Platte); leer = alle"
   }
  ],
  "links": [],

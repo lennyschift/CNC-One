@@ -1,0 +1,205 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "chargennr",
+  "material",
+  "zustand",
+  "form",
+  "abmessung",
+  "abmessung_text",
+  "ausfuehrung",
+  "lieferant",
+  "eingang",
+  "laenge",
+  "breite",
+  "stueck",
+  "zeugnis",
+  "pruefungen",
+  "zeugnis_datei",
+  "lagerplatz",
+  "status",
+  "bemerkung"
+ ],
+ "fields": [
+  {
+   "fieldname": "chargennr",
+   "fieldtype": "Data",
+   "label": "Charge / Schmelze des Lieferanten",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "material",
+   "fieldtype": "Link",
+   "label": "Werkstoff",
+   "options": "Material",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "zustand",
+   "fieldtype": "Data",
+   "label": "Zustand",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "form",
+   "fieldtype": "Select",
+   "label": "Form",
+   "options": "Rund\nVierkant\nFlach\nSechskant\nRohr\nPlatte",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "abmessung",
+   "fieldtype": "Link",
+   "label": "Abmessung",
+   "options": "Rohmaterial Abmessung",
+   "reqd": 1
+  },
+  {
+   "fieldname": "abmessung_text",
+   "fieldtype": "Data",
+   "label": "Abmessung (Text)",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "ausfuehrung",
+   "fieldtype": "Data",
+   "label": "Ausführung"
+  },
+  {
+   "fieldname": "lieferant",
+   "fieldtype": "Link",
+   "label": "Lieferant",
+   "options": "Lieferant",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "eingang",
+   "fieldtype": "Date",
+   "label": "Wareneingang",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "laenge",
+   "fieldtype": "Float",
+   "label": "Länge (mm)",
+   "description": "Stangen: Länge je Stange; Platte: Länge"
+  },
+  {
+   "fieldname": "breite",
+   "fieldtype": "Float",
+   "label": "Breite (mm)",
+   "description": "nur Platte"
+  },
+  {
+   "fieldname": "stueck",
+   "fieldtype": "Int",
+   "label": "Stangen / Stück",
+   "default": "1"
+  },
+  {
+   "fieldname": "zeugnis",
+   "fieldtype": "Select",
+   "label": "Werkszeugnis (EN 10204)",
+   "options": "\n2.2\n3.1\n3.2",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "pruefungen",
+   "fieldtype": "Small Text",
+   "label": "Bestätigte Anforderungen",
+   "description": "Materialanforderung, eine je Zeile"
+  },
+  {
+   "fieldname": "zeugnis_datei",
+   "fieldtype": "Attach",
+   "label": "Zeugnis (PDF)"
+  },
+  {
+   "fieldname": "lagerplatz",
+   "fieldtype": "Data",
+   "label": "Lagerplatz"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Vorrätig\nAufgebraucht",
+   "default": "Vorrätig",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Rohmaterialcharge",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "RC-.YY.-.####",
+ "naming_rule": "Expression (old style)",
+ "title_field": "chargennr",
+ "show_title_field_in_link": 1,
+ "search_fields": "chargennr,material,lieferant",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "warehouse"
+}

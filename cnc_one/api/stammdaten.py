@@ -59,6 +59,8 @@ def kunde_voll_ui(d):
 		"leitwegId": d.leitweg_id or "",
 		"lieferantennr": d.lieferantennummer or "",
 		"zahlungszielTage": d.zahlungsziel_tage or 0,
+		"materialZeugnis": d.material_zeugnis or "",
+		"materialPruefungen": [z.strip() for z in (d.material_pruefungen or "").splitlines() if z.strip()],
 		"adressen": [
 			{"typ": a.typ or "Rechnung und Lieferung", "strasse": a.strasse or "", "plz": a.plz or "", "ort": a.ort or "", "land": a.land or "", "standard": bool(a.standard)}
 			for a in d.adressen
@@ -84,6 +86,10 @@ def kunde_setzen(doc, d):
 	doc.leitweg_id = _text(d.get("leitwegId"))
 	doc.lieferantennummer = _text(d.get("lieferantennr"))
 	doc.zahlungsziel_tage = max(0, int(d.get("zahlungszielTage") or 0))
+	if "materialZeugnis" in d:
+		doc.material_zeugnis = d.get("materialZeugnis") if d.get("materialZeugnis") in ("2.2", "3.1", "3.2") else ""
+	if "materialPruefungen" in d:
+		doc.material_pruefungen = "\n".join(p for p in (d.get("materialPruefungen") or []) if frappe.db.exists("Materialanforderung", p))
 	doc.set("adressen", [])
 	adressen = [a for a in d.get("adressen") or [] if any(_text(a.get(k)) for k in ("strasse", "plz", "ort"))]
 	for i, a in enumerate(adressen):
@@ -147,7 +153,11 @@ ISO_GRUPPEN = ("P", "M", "K", "N", "S", "H")
 
 
 def material_ui(d):
-	return {"id": d.name, "name": d.materialname, "preisKg": d.preis_kg or 0, "dichte": d.dichte or 0, "aktiv": bool(d.aktiv), "schreibweisen": d.schreibweisen or "", "isoGruppe": d.iso_gruppe or ""}
+	return {
+		"id": d.name, "name": d.materialname, "preisKg": d.preis_kg or 0, "dichte": d.dichte or 0, "aktiv": bool(d.aktiv), "schreibweisen": d.schreibweisen or "",
+		"isoGruppe": d.iso_gruppe or "", "kurz": d.kurzname or "",
+		"zustaende": [z.strip() for z in (d.zustaende or "").splitlines() if z.strip()], "formen": [z.strip() for z in (d.formen or "").splitlines() if z.strip()],
+	}
 
 
 def material_setzen(doc, d):
@@ -160,6 +170,12 @@ def material_setzen(doc, d):
 		doc.iso_gruppe = d.get("isoGruppe") if d.get("isoGruppe") in ISO_GRUPPEN else ""
 	if "schreibweisen" in d:
 		doc.schreibweisen = "\n".join(z.strip() for z in (d.get("schreibweisen") or "").splitlines() if z.strip())
+	if "kurz" in d:
+		doc.kurzname = _text(d.get("kurz"))
+	if "zustaende" in d:
+		doc.zustaende = "\n".join(z for z in (_text(x) for x in d.get("zustaende") or []) if z and frappe.db.exists("Werkstoffzustand", z))
+	if "formen" in d:
+		doc.formen = "\n".join(f for f in ("Rund", "Vierkant", "Flach", "Sechskant", "Rohr", "Platte") if f in (d.get("formen") or []))
 
 
 # ----------------------------------------------------------------- Bauteil

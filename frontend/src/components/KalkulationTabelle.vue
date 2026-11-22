@@ -67,6 +67,18 @@ const KOSTEN = [
 const imStueckpreis = (k) => !fest.value && !!props.teil.inStueckpreis?.[k];
 const wert = (v) => (Math.abs(v) < 0.005 ? '–' : eur(v));
 const einzelnGesamt = computed(() => t.value.einzeln.some((v) => v > 0));
+// Material für die ganze Stückzahl: Kosten (mit Pauschale), Gewicht und Stangenlänge bzw. Plattenfläche
+const materialGesamt = (menge) => materialProStueck(props.teil) * menge + (Number(props.teil.pauschalMaterial) || 0);
+function bedarfText(menge) {
+  const r = props.teil.roh ?? {};
+  const kg = (Number(props.teil.gewichtKg) || 0) * menge;
+  const s = Number(r.saege) || 0;
+  const l = Number(r.laenge) || 0;
+  let mass = '';
+  if (l && r.form === 'Platte') mass = `${zahl(((l + s) * ((Number(r.breite) || 0) + s) * menge) / 1e6, 2)} m²`;
+  else if (l) mass = `${zahl(((l + s) * menge) / 1000, 2)} m`;
+  return [kg ? `${zahl(kg, kg < 10 ? 2 : 1)} kg` : '', mass].filter(Boolean).join(' · ');
+}
 </script>
 
 <template>
@@ -86,8 +98,7 @@ const einzelnGesamt = computed(() => t.value.einzeln.some((v) => v > 0));
         <!-- Spaltenköpfe: Mengen -->
         <div class="zeile kopf">
           <div class="pl-1">Kostenposition</div>
-          <div>Rüsten / einmalig</div>
-          <div>Je Stück</div>
+          <div /><div />
           <div v-for="(s, k) in t.spalten" :key="'k' + k" class="spalte" :class="k === t.haupt && staffel ? 'haupt' : ''">
             <div class="flex items-center gap-1">
               <NumField v-if="staffel" v-model="stufen[s.i].menge" unit="Stk" :decimals="0" :min="1" class="klein min-w-0 flex-1" />
@@ -105,16 +116,24 @@ const einzelnGesamt = computed(() => t.value.einzeln.some((v) => v > 0));
           <!-- Material -->
           <div class="abschnitt"><Layers :size="13" /> Material<span v-if="fest" class="ml-2 font-normal normal-case tracking-normal">· zählt beim festen Stückpreis nicht</span></div>
           <div class="zeile">
-            <div class="pl-1"><RohmaterialKarte zeile :teil="teil" :materialien="materialien" :nur-ansicht="nurAnsicht" /></div>
+            <div class="pl-1"><RohmaterialKarte zeile :teil="teil" :materialien="materialien" :nur-ansicht="nurAnsicht" :kunde-id="kundeId" /></div>
             <div>
+              <div class="oben">Pauschale einmalig</div>
               <NumField v-model="teil.pauschalMaterial" unit="€" class="klein" />
-              <div class="unter">Pauschale{{ teil.pauschalMaterial > 0 ? (staffel || !teil.pauschalAlsZeile ? ' · im Stückpreis' : ' · eigene Zeile') : '' }}</div>
+              <div class="unter">{{ teil.pauschalMaterial > 0 ? (staffel || !teil.pauschalAlsZeile ? 'im Stückpreis' : 'eigene Zeile') : '&nbsp;' }}</div>
             </div>
             <div class="betrag-eingabe">
-              <span class="tnum font-medium">{{ eur(materialProStueck(teil)) }}</span>
-              <div class="unter tnum">{{ zahl(teil.gewichtKg || 0, 3) }} kg × {{ zahl(teil.materialPreisKg || 0, 2) }} €</div>
+              <div class="oben">Material je Stück</div>
+              <span class="tnum text-base font-semibold">{{ eur(materialProStueck(teil)) }}</span>
+              <div class="unter tnum">{{ zahl(teil.gewichtKg || 0, 3) }} kg × {{ zahl(teil.materialPreisKg || 0, 2) }} €/kg</div>
             </div>
-            <div v-for="(v, k) in t.zeilen.material.je" :key="k" class="wert" :class="k === t.haupt && staffel ? 'haupt' : ''">{{ wert(v) }}</div>
+            <div v-for="(v, k) in t.zeilen.material.je" :key="k" class="wert material" :class="k === t.haupt && staffel ? 'haupt' : ''">
+              <span class="text-[10px] text-mute">je Stück</span>
+              <span>{{ wert(v) }}</span>
+              <span class="mt-1 text-[10px] text-mute">gesamt {{ t.spalten[k].menge }} Stk</span>
+              <span class="font-semibold">{{ eur(materialGesamt(t.spalten[k].menge)) }}</span>
+              <span class="text-[10px] text-mute">{{ bedarfText(t.spalten[k].menge) }}</span>
+            </div>
             <div />
           </div>
 
@@ -133,6 +152,11 @@ const einzelnGesamt = computed(() => t.value.einzeln.some((v) => v > 0));
               <button v-if="gespeichert && !teil.arbeitsgaenge.length" type="button" class="mini" @click="ausBauteilLaden()"><DownloadCloud :size="12" /> Vom Bauteil</button>
               <button type="button" class="mini" :disabled="!schluesselOk" :class="!schluesselOk ? 'pointer-events-none opacity-40' : ''" :title="schluesselOk ? 'Arbeitsplan am Bauteil speichern (für spätere Angebote und Aufträge)' : 'Dafür braucht das Bauteil einen Kunden und eine Teilenummer'" @click="bauteilSpeichern"><Save :size="12" /> Am Bauteil speichern</button>
             </span>
+          </div>
+
+          <div class="zeile kopf unterkopf">
+            <div /><div>Rüsten / einmalig</div><div>Je Stück</div>
+            <div v-for="k in t.spalten.length" :key="'u' + k" /><div />
           </div>
 
           <!-- Ohne Arbeitsplan: eine Maschine -->
@@ -329,6 +353,9 @@ const einzelnGesamt = computed(() => t.value.einzeln.some((v) => v > 0));
 .abschnitt { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.5rem; padding: 0.55rem 0.25rem 0.35rem; font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); border-top: 1px solid var(--line); }
 .unter { margin-top: 0.2rem; font-size: 0.68rem; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .betrag-eingabe { padding-left: 0.2rem; }
+.oben { margin-bottom: 0.2rem; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); }
+.zeile > .wert.material { flex-direction: column; align-items: flex-end; justify-content: center; line-height: 1.25; padding-top: 0.4rem; padding-bottom: 0.4rem; }
+.unterkopf { border-top: 0; padding: 0.1rem 0 0.15rem; }
 .nr { display: grid; place-items: center; height: 1.35rem; width: 1.35rem; flex-shrink: 0; border-radius: 999px; background: var(--surface-2); font-size: 0.7rem; font-weight: 600; color: var(--mute); }
 .name { min-width: 0; flex: 1; border-radius: 0.5rem; background: transparent; padding: 0.15rem 0.35rem; font-size: 0.875rem; font-weight: 500; outline: none; border: 1px solid transparent; }
 .name:hover { border-color: var(--line); }

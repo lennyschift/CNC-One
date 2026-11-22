@@ -22,6 +22,7 @@ const props = defineProps({
   felder: { type: Array, required: true },
   // Spalten der Liste: Schlüssel der Felder
   spalten: { type: Array, required: true },
+  nav: { type: Boolean, default: true }, // Reiter der Stammdaten oben (aus, wenn die Seite eigene Reiter hat)
 });
 
 const store = useStammdaten();
@@ -68,8 +69,8 @@ const kopf = (key) => (key === 'name' ? 'Name' : props.felder.find((g) => g.key 
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1100px]">
-    <StammNav />
+  <div :class="nav ? 'mx-auto max-w-[1100px]' : ''">
+    <StammNav v-if="nav" />
     <div class="mb-4 flex flex-wrap items-center gap-3">
       <div class="mr-auto"><p class="text-sm text-mute">{{ beschreibung }}</p></div>
       <label class="relative">

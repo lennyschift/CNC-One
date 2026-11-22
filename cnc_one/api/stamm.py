@@ -112,6 +112,12 @@ def arbeitsgang_zeile(a):
 	}
 
 
+def _werkstoffbaum():
+	from cnc_one.api.werkstoff import baum
+
+	return baum()
+
+
 def kunde_ui(d):
 	adresse = next((a for a in d.adressen if a.standard), None) or (d.adressen[0] if d.adressen else None)
 	kontakt = next((k for k in d.kontakte if k.ist_rechnungskontakt), None) or (d.kontakte[0] if d.kontakte else None)
@@ -126,6 +132,8 @@ def kunde_ui(d):
 			"name": " ".join(x for x in (kontakt.anrede, kontakt.vorname, kontakt.nachname) if x),
 			"email": kontakt.email or "",
 		} if kontakt else None,
+		# Material-Vorgaben des Kunden (Mindestanforderungen an jedes Rohmaterial)
+		"materialVorgabe": {"zeugnis": d.material_zeugnis or "", "pruefungen": [z.strip() for z in (d.material_pruefungen or "").splitlines() if z.strip()]},
 		# alle Kontakte, zur Wahl des Ansprechpartners (Einkäufer) je Angebot
 		"kontakte": [
 			{"name": " ".join(x for x in (k.anrede, k.vorname, k.nachname) if x), "email": (k.email or "").lower()}
@@ -192,9 +200,13 @@ def stammdaten():
 			for r in frappe.get_list("Maschine", filters={"aktiv": 1}, fields=["name", "satz", "arbeitsgaenge", "automation", "stunden_tag"], order_by="name asc", limit_page_length=0)
 		],
 		"materialien": [
-			{"name": r.name, "preisKg": r.preis_kg or 0, "dichte": r.dichte or 0, "schreibweisen": schreibweisen(r.schreibweisen), "isoGruppe": r.iso_gruppe or ""}
-			for r in frappe.get_list("Material", filters={"aktiv": 1}, fields=["name", "preis_kg", "dichte", "schreibweisen", "iso_gruppe"], order_by="name asc", limit_page_length=0)
+			{
+				"name": r.name, "preisKg": r.preis_kg or 0, "dichte": r.dichte or 0, "schreibweisen": schreibweisen(r.schreibweisen), "isoGruppe": r.iso_gruppe or "",
+				"kurz": r.kurzname or "", "zustaende": schreibweisen(r.zustaende), "formen": schreibweisen(r.formen),
+			}
+			for r in frappe.get_list("Material", filters={"aktiv": 1}, fields=["name", "preis_kg", "dichte", "schreibweisen", "iso_gruppe", "kurzname", "zustaende", "formen"], order_by="name asc", limit_page_length=0)
 		],
+		"werkstoffbaum": _werkstoffbaum(),
 		"arten": [art_ui(frappe.get_doc("Arbeitsgangart", n)) for n in _namen("Arbeitsgangart", {"aktiv": 1})],
 		"vorlagen": [vorlage_ui(frappe.get_doc("Arbeitsplan Vorlage", n)) for n in _namen("Arbeitsplan Vorlage")],
 	}

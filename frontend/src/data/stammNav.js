@@ -7,7 +7,7 @@ export const STAMM_PUNKTE = [
   { id: 'lieferanten', label: 'Lieferanten', icon: Truck, to: '/stammdaten/lieferanten', text: 'Für Fremdvergabe und Lieferantenanfragen', zaehler: 'lieferanten' },
   { id: 'anfragevorlagen', label: 'Anfragevorlagen', icon: ListChecks, to: '/stammdaten/anfragevorlagen', text: 'Welche Lieferanten bei welchem Werkstoff angefragt werden', zaehler: null },
   { id: 'maschinen', label: 'Maschinen', icon: Cog, to: '/stammdaten/maschinen', text: 'Maschinen mit Stundensatz für die Kalkulation', zaehler: 'maschinen' },
-  { id: 'materialien', label: 'Rohmaterial', icon: Layers, to: '/stammdaten/materialien', text: 'Rohmaterial mit Preis je Kilogramm', zaehler: 'materialien' },
+  { id: 'materialien', label: 'Rohmaterial', icon: Layers, to: '/stammdaten/materialien', text: 'Werkstoffe nach ISO-Gruppe mit Zuständen, Formen, Ausführungen, Abmessungen und Anforderungen', zaehler: 'materialien' },
   { id: 'firma', label: 'Firma', icon: Building2, to: '/stammdaten/firma', text: 'Anschrift, Steuer und Bankverbindungen für Belege', zaehler: null },
   { id: 'druckvorlagen', label: 'Druckvorlagen', icon: FileCode2, to: '/stammdaten/druckvorlagen', text: 'PDF-Vorlagen der Belege ändern, mit Vorschau', zaehler: null },
   { id: 'archiv', label: 'Archiv', icon: Archive, to: '/stammdaten/archiv', text: 'Aufbewahrungsfristen der Dokumente', zaehler: null },

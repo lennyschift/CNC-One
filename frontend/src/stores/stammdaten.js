@@ -4,6 +4,7 @@ import { call } from '../data/api.js';
 import { benutzer, stammdatenAktualisieren } from '../data/repo.js';
 import { useStamm } from './stamm.js';
 import { useUi } from './ui.js';
+import { useWerkstoff } from './werkstoff.js';
 
 // Wer welche Art pflegen darf. Die Rechte prüft der Server, hier werden nur die Knöpfe ausgeblendet.
 const SCHREIBEN = {
@@ -45,6 +46,7 @@ export const useStammdaten = defineStore('stammdaten', () => {
     if (i >= 0) l[i] = rec;
     else l.push(rec);
     await sicher(stammdatenAktualisieren);
+    useWerkstoff().materialienAktualisieren();
     if (art === 'bauteil') {
       if (vorher) stamm.planEintragen(planKey(vorher).kunde, planKey(vorher).nr, []);
       stamm.planEintragen(rec.kundeId, rec.teilenummer, rec.arbeitsgaenge);
@@ -58,6 +60,7 @@ export const useStammdaten = defineStore('stammdaten', () => {
     if (!(await sicher(() => call('cnc_one.api.stammdaten.loeschen', { art, id })))) return false;
     listen[art] = (listen[art] ?? []).filter((x) => x.id !== id);
     await sicher(stammdatenAktualisieren);
+    useWerkstoff().materialienAktualisieren();
     if (alt) stamm.planEintragen(alt.kundeId, alt.teilenummer, []);
     ui.toast('Gelöscht');
     return true;

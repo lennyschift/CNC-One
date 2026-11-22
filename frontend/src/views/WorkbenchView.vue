@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle, Inbox, Lock, ClipboardList, LogOut } from '@lucide/vue';
+import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle, Inbox, Lock, ClipboardList, LogOut, Layers } from '@lucide/vue';
 import { useBelege } from '../stores/belege.js';
 import AnfrageDialog from '../components/AnfrageDialog.vue';
+import MaterialAnfrageDialog from '../components/MaterialAnfrageDialog.vue';
 import BauteilWahlDialog from '../components/BauteilWahlDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
 import { useAnfragen } from '../stores/anfragen.js';
@@ -44,6 +45,14 @@ async function anfrageOeffnen(ag) {
   if (!a.angebotId) { ui.toast('Das Angebot konnte nicht gespeichert werden', 'warn'); return; }
   anfrageAg.value = ag?.id ?? '';
   anfrageOffen.value = true;
+}
+// Material aller Positionen anfragen (mit Lagerabgleich); braucht ebenfalls das gespeicherte Angebot
+const materialOffen = ref(false);
+const anzahlMaterial = computed(() => new Set(a.teile.filter((t) => t.material).map((t) => [t.material, t.roh?.zustand, t.roh?.abmessungId, t.roh?.ausfuehrung].join('|'))).size);
+async function materialOeffnen() {
+  await a.speichern();
+  if (!a.angebotId) { ui.toast('Das Angebot konnte nicht gespeichert werden', 'warn'); return; }
+  materialOffen.value = true;
 }
 async function neuesAngebot() {
   await a.neu();
@@ -130,6 +139,7 @@ async function ansichtVerlassen() {
             <div v-for="(t, i) in a.teile" :key="t.id" class="h-full transition-all duration-500" :style="{ width: (a.netto > 0 ? (a.ergebnisse[t.id].gesamt / a.netto) * 100 : 0) + '%', background: 'var(--accent)', opacity: 1 - (i % 4) * 0.22 }" :title="t.name" />
           </div>
           <button v-if="anzahlFremd && !a.nurAnsicht" class="btn mt-4 w-full justify-center !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" @click="anfrageOeffnen()"><Send :size="15" /> Lieferantenanfrage ({{ anzahlFremd }} Fremdvergabe{{ anzahlFremd === 1 ? '' : 'n' }}<template v-if="anzahlAnfragen">, {{ anzahlAnfragen }} gesendet</template>)</button>
+          <button v-if="anzahlMaterial && !a.nurAnsicht" class="btn mt-2 w-full justify-center !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" title="Rohmaterial aller Positionen mit Lagerabgleich anfragen" @click="materialOeffnen"><Layers :size="15" /> Material anfragen ({{ anzahlMaterial }} Artikel)</button>
           <div v-if="!a.nurAnsicht" class="mt-2 flex gap-2">
             <button class="btn btn-primary flex-1 justify-center" @click="ansehen"><Eye :size="16" /> Angebot ansehen</button>
             <button class="btn !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" title="Neues, leeres Angebot beginnen" @click="neuesAngebot"><FilePlus2 :size="16" /></button>
@@ -159,5 +169,6 @@ async function ansichtVerlassen() {
 
     <BauteilWahlDialog v-if="ui.bauteilWahlOffen" @schliessen="ui.bauteilWahlOffen = false" />
     <AnfrageDialog v-if="anfrageOffen" :teile="a.teile" :vorgewaehlt="anfrageAg" :bezug="bezug" @schliessen="anfrageOffen = false" />
+    <MaterialAnfrageDialog v-if="materialOffen" :teile="a.teile" :angebot-id="a.angebotId" @schliessen="materialOffen = false" />
   </div>
 </template>

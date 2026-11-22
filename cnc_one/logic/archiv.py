@@ -22,6 +22,7 @@ STANDARD = {
 	"Lieferschein": (6, "Geschäftsbrief"),
 	"Mahnung": (6, "Geschäftsbrief"),
 	"Bestellung": (6, "Geschäftsbrief"),
+	"Werkszeugnis": (10, "Nachweis zum Rohmaterial (Rückverfolgung, Produkthaftung)"),
 	"Mail-Anhang": (6, "Geschäftsbrief (Anfrage, aus der ein Angebot wurde)"),
 	"Zeichnung": (10, "Fertigungsunterlage einer bestellten Revision (Produkthaftung)"),
 	"3D-Modell": (10, "Fertigungsunterlage einer bestellten Revision (Produkthaftung)"),

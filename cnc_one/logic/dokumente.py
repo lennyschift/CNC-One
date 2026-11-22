@@ -16,10 +16,10 @@ from frappe.utils import get_datetime, getdate, now_datetime
 # Belege, an denen Dokumente hängen können, und woher der Kunde kommt
 BELEGE = {
 	"Bauteil": "kunde", "Angebot": "kunde", "Auftrag": "kunde", "Rechnung": "kunde", "Lieferschein": "kunde",
-	"Mail Anfrage": "kunde", "Mahnung": "kunde", "Kunde": None, "Eingangsrechnung": None,
+	"Mail Anfrage": "kunde", "Mahnung": "kunde", "Kunde": None, "Eingangsrechnung": None, "Rohmaterialcharge": None,
 }
 # Je mehr Aussage, desto weiter vorne: ein Dokument an mehreren Belegen bekommt die genaueste Art
-RANG = ["Rechnung", "E-Rechnung (XML)", "Angebot", "Lieferschein", "Mahnung", "Bestellung", "Zeichnung", "3D-Modell", "Mail-Anhang", "Sonstiges"]
+RANG = ["Rechnung", "E-Rechnung (XML)", "Angebot", "Lieferschein", "Mahnung", "Bestellung", "Werkszeugnis", "Zeichnung", "3D-Modell", "Mail-Anhang", "Sonstiges"]
 MODELL = ("stp", "step", "igs", "iges")
 BILD = ("png", "jpg", "jpeg", "gif", "webp", "bmp")
 MAX_TEXT = 100_000
@@ -38,6 +38,8 @@ def art_von(f):
 		return "E-Rechnung (XML)" if endung == "xml" else "Rechnung"
 	if dt in ("Lieferschein", "Mahnung"):
 		return dt
+	if dt == "Rohmaterialcharge":
+		return "Werkszeugnis"
 	if dt == "Angebot" and (f.file_name or "").startswith("Angebot "):
 		return "Angebot"
 	if endung in MODELL:

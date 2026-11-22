@@ -10,7 +10,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { useEventListener, useResizeObserver } from '@vueuse/core';
 import { Maximize2, Minimize2, Scan, ImagePlus, Loader, AlertTriangle, Spline, Download, Ruler, Box, Scissors, ScanEye, MousePointerClick, X, Check, MonitorUp, RotateCw, Crosshair, ArrowDownToLine } from '@lucide/vue';
 import { stepNetze } from '../lib/step.js';
-import { ANSICHTEN, modellGruppe, abmessungen, kameraAusrichten, lichter, flaecheHervorheben, rohteilLinien } from '../lib/modell3d.js';
+import { ANSICHTEN, modellGruppe, abmessungen, kameraAusrichten, lichter, flaecheHervorheben, rohteilLinien, richtungsPfeile } from '../lib/modell3d.js';
 import { cadKanten, kanteAmStrahl, fangpunkt, flaechenpunkt, messen } from '../lib/kanten.js';
 import { volumenUndFlaeche, rohteile, rundmaterial, quader, flaecheAnalysieren, flaecheZuDreieck, gewichtKg, ACHSEN, drehteilErkennen, drehrohteil, achseZuFlaeche } from '../lib/messen.js';
 import { zahl } from '../lib/format.js';
@@ -42,6 +42,7 @@ const kantenInfo = ref(null); // angeklickte CAD-Kante (Gerade, Kreis, Bogen, Ku
 const messung = ref([]); // bis zu zwei Fangpunkte { punkt, art, kante?, analyse?, normale?, achse? }
 const rohteilAn = ref(!props.nurAnsehen); // in der Workbench gleich an, ausblenden per Knopf
 const rohteilWahl = ref(''); // '' = Vorschlag | 'Quader' | 'X' | 'Y' | 'Z' | 'Drehen'
+const richtungenAn = ref(true); // Richtungspfeile am Rohteil
 // Drehfrästeil: erkannte Hauptdrehachse oder eine per Klick auf einen Durchmesser gewählte Referenzachse
 const dreh = ref(null); // { istDrehteil, anteil, haupt, achsen }
 const drehAchse = ref(null); // gewählte Achse (Gruppe gleichachsiger Zylinder)
@@ -422,6 +423,13 @@ function rohteilZeichnen() {
       rohteilObjekt.userData.entsorgen = () => { alt?.(); geo.dispose(); mat.dispose(); };
       rohteilObjekt.add(linie);
     }
+    // Richtungspfeile (X±/Y±/Z± bzw. Stirn A/B und Durchmesser), damit klar ist, wohin das Aufmaß wirkt
+    if (richtungenAn.value) {
+      const pfeile = richtungsPfeile(rohteil.value);
+      const vorher = rohteilObjekt.userData.entsorgen;
+      rohteilObjekt.userData.entsorgen = () => { vorher?.(); pfeile.userData.entsorgen(); };
+      rohteilObjekt.add(pfeile);
+    }
     modell.gruppe.add(rohteilObjekt);
   }
   zeichnen();
@@ -506,7 +514,7 @@ onBeforeUnmount(() => {
 watch(() => props.url, laden);
 watch(kantenAn, (an) => { if (modell) { modell.kanten.visible = an; zeichnen(); } });
 watch(vollbild, () => nextTick(groesseAnpassen));
-watch([rohteilAn, rohteil], rohteilZeichnen);
+watch([rohteilAn, rohteil, richtungenAn], rohteilZeichnen);
 watch([schnitt, roentgen], darstellungAnwenden, { deep: true });
 watch(werkzeug, () => { messung.value = []; flaechenInfo.value = null; kantenInfo.value = null; hoverZeichnen(null, null); messungZeichnen(); hervorhebungZeichnen(); });
 useEventListener(window, 'keydown', (e) => {
@@ -640,7 +648,9 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
             <span v-if="huelleGroesser && drehDurchmesser === 'huelle'" class="w-full text-[11px] text-warn">Etwas steht über den Drehdurchmesser hinaus, z. B. eine Fräskontur.</span>
           </span>
           <span class="text-sm font-semibold tnum">{{ rohteilText(rohteil) }} mm</span>
-          <AufmassEingabe class="w-full" :model-value="aufmassWert" :form="rohteil.art" :rohteil="rohteil" @update:model-value="aufmassSetzen" />
+          <AufmassEingabe class="w-full" :model-value="aufmassWert" :form="rohteil.art" :rohteil="rohteil" @update:model-value="aufmassSetzen">
+            <button type="button" class="knopf !h-6 !text-[11px]" :class="richtungenAn ? 'aktiv' : ''" title="Richtungspfeile am Rohteil zeigen (X rot, Y grün, Z blau)" @click="richtungenAn = !richtungenAn">Richtungen</button>
+          </AufmassEingabe>
           <span v-if="rohteil.kleiner" class="w-full text-[11px] text-warn">Die feste Rohteilgröße ist kleiner als das Bauteil.</span>
           <span class="text-mute tnum" :title="dichte && dichteGeschaetzt ? `Dichte geschätzt (${zahl(dichte, 2)} kg/dm³), bitte am Rohmaterial in den Stammdaten pflegen` : ''">
             Fertig {{ cm3(kennwerte.volumen) }}<template v-if="dichte"> · {{ kg(fertigGewicht) }}</template> · Roh {{ cm3(rohteil.volumen) }}<template v-if="dichte"> · <strong class="text-ink">{{ kg(rohGewicht) }}</strong><template v-if="dichteGeschaetzt">*</template></template>
@@ -675,6 +685,7 @@ const cm3 = (v) => `${zahl(v / 1000, 1)} cm³`;
 .knopf:hover { background: var(--surface-2); color: var(--ink); }
 .knopf.aktiv { background: var(--accent-soft); color: var(--accent); }
 .drehmarke { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, var(--surface)); }
+:deep(.achs-beschriftung) { padding: 0.05rem 0.35rem; border-radius: 0.35rem; color: #fff; font-size: 0.68rem; font-weight: 700; white-space: nowrap; box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); }
 :deep(.mess-beschriftung) { padding: 0.1rem 0.4rem; border-radius: 0.4rem; background: #2563eb; color: #fff; font-size: 0.72rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 :deep(.mess-beschriftung.fang) { background: #f59e0b; color: #1f2933; margin: -1.4rem 0 0 1.6rem; }
 </style>

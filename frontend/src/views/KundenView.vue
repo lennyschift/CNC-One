@@ -2,7 +2,9 @@
 import FilterLeiste from '../components/FilterLeiste.vue';
 import { ref, computed, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, Search, Building2, Trash2, MapPin, UserRound, Phone, X } from '@lucide/vue';
+import { Plus, Search, Building2, Trash2, MapPin, UserRound, Phone, X, ShieldCheck } from '@lucide/vue';
+import { ZEUGNISSE } from '../lib/werkstoffbaum.js';
+import { useWerkstoff } from '../stores/werkstoff.js';
 import StammNav from '../components/StammNav.vue';
 import StammDialog from '../components/StammDialog.vue';
 import Toggle from '../components/Toggle.vue';
@@ -10,6 +12,8 @@ import AngelerntAnzeige from '../components/AngelerntAnzeige.vue';
 import { useStammdaten } from '../stores/stammdaten.js';
 
 const store = useStammdaten();
+const ws = useWerkstoff();
+const pruefungUmschalten = (k, p) => { const l = k.materialPruefungen ?? []; k.materialPruefungen = l.includes(p) ? l.filter((x) => x !== p) : [...l, p]; };
 onMounted(() => store.laden('kunde'));
 
 const suche = ref('');
@@ -28,7 +32,7 @@ const vorgefiltert = computed(() => {
 const leerAdresse = () => ({ typ: 'Rechnung und Lieferung', strasse: '', plz: '', ort: '', land: '', standard: false });
 const TELEFON_ARTEN = ['Arbeit', 'Mobil', 'Zentrale', 'Fax', 'Privat', 'Sonstige'];
 const leerKontakt = () => ({ anrede: '', vorname: '', nachname: '', email: '', telefon: '', telefonnummern: [{ art: 'Arbeit', nummer: '' }], rechnungskontakt: false });
-const leer = () => ({ id: '', name: '', kuerzel: '', aktiv: true, ustId: '', steuernummer: '', zahlungsbedingung: '', leitwegId: '', lieferantennr: '', zahlungszielTage: 0, telefonnummern: [], adressen: [leerAdresse()], kontakte: [leerKontakt()] });
+const leer = () => ({ id: '', name: '', kuerzel: '', aktiv: true, ustId: '', steuernummer: '', zahlungsbedingung: '', leitwegId: '', lieferantennr: '', zahlungszielTage: 0, materialZeugnis: '', materialPruefungen: [], telefonnummern: [], adressen: [leerAdresse()], kontakte: [leerKontakt()] });
 
 const k = ref(null);
 const speichert = ref(false);
@@ -98,6 +102,17 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
         <label class="block"><span class="label mb-1 block">Unsere Lieferantennummer beim Kunden</span><input v-model="k.lieferantennr" class="field" /></label>
         <label class="block"><span class="label mb-1 block">Zahlungsziel (Tage)</span><input v-model.number="k.zahlungszielTage" type="number" min="0" class="field" placeholder="leer oder 0 = Standard der Firma" /></label>
       </div>
+
+      <section>
+        <h3 class="mb-1 flex items-center gap-2 text-sm font-semibold"><ShieldCheck :size="15" class="text-accent" /> Material-Vorgaben</h3>
+        <p class="mb-2 text-xs text-mute">Gilt als Mindestanforderung für jedes Rohmaterial dieses Kunden (Workbench, Auftrag, Fertigung).</p>
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex gap-1 rounded-xl border border-line bg-surface2 p-1 text-xs" role="radiogroup" aria-label="Werkszeugnis">
+            <button v-for="z in ZEUGNISSE" :key="z" type="button" class="rounded-lg px-3 py-1" :class="(k.materialZeugnis || '') === z ? 'bg-surface font-medium shadow-sm' : 'text-mute hover:text-ink'" @click="k.materialZeugnis = z">{{ z ? `Zeugnis ${z}` : 'kein Zeugnis' }}</button>
+          </div>
+          <button v-for="a in ws.baum.anforderungen" :key="a.name" type="button" class="rounded-full border px-2.5 py-1 text-xs transition" :class="(k.materialPruefungen ?? []).includes(a.name) ? 'border-accent bg-accent-soft text-accent' : 'border-line text-mute hover:text-ink'" @click="pruefungUmschalten(k, a.name)">{{ a.name }}</button>
+        </div>
+      </section>
 
       <section>
         <div class="mb-2 flex items-center justify-between"><h3 class="flex items-center gap-2 text-sm font-semibold"><Phone :size="15" class="text-accent" /> Telefon der Firma</h3><button type="button" class="btn !py-1 !text-xs" @click="nummerDazu(k.telefonnummern, 'Zentrale')"><Plus :size="13" /> Nummer</button></div>

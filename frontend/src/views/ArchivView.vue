@@ -34,7 +34,7 @@ async function speichern() {
 const ABSCHLUSS = {
   Rechnung: 'festgeschrieben', 'E-Rechnung (XML)': 'festgeschrieben', Angebot: 'gesendet', Lieferschein: 'geliefert oder storniert',
   Mahnung: 'versendet oder zurückgezogen', 'Mail-Anhang': 'Angebot zur Anfrage erstellt', Zeichnung: 'Revision bestellt', '3D-Modell': 'Revision bestellt',
-  Bestellung: 'mit dem Auftrag', Sonstiges: '',
+  Bestellung: 'mit dem Auftrag', Werkszeugnis: '', Sonstiges: '',
 };
 </script>
 

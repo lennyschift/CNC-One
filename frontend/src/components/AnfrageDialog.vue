@@ -9,6 +9,7 @@ import VorlagenChips from './VorlagenChips.vue';
 import AnfrageMailDialog from './AnfrageMailDialog.vue';
 import { repo } from '../data/repo.js';
 import { fremdPositionen, mailText } from '../lib/anfrage.js';
+import { artikelText } from '../lib/werkstoffbaum.js';
 import { useAnfragen } from '../stores/anfragen.js';
 
 const props = defineProps({
@@ -44,13 +45,15 @@ onMounted(async () => {
 });
 
 const aktiv = computed(() => positionen.filter((p) => p.an));
+// Anforderungen ans Rohmaterial (Werkszeugnis, Prüfungen) für die Vorschau
+const anforderungen = (t) => { const a = t?.roh?.anforderungen ?? { zeugnis: t?.roh?.zeugnis || '', pruefungen: [] }; return [a.zeugnis && `Zeugnis ${a.zeugnis}`, ...(a.pruefungen ?? [])].filter(Boolean).join(', '); };
 const kontext = computed(() => ({ art: 'Fremdvergabe', texte: aktiv.value.flatMap((p) => [p.ag.name, p.teil.material]) }));
 const mailVorgang = ref('');
 const auswahl = computed(() => lieferanten.value.filter((l) => gewaehlt[l.id]));
 const vorschau = computed(() => mailText({
   id: `LA-${new Date().getFullYear()}-NNNN`,
   notiz: notiz.value,
-  positionen: aktiv.value.map((p) => ({ key: p.key, agName: p.ag.name, mengen: p.mengen, teil: p.teil })),
+  positionen: aktiv.value.map((p) => ({ key: p.key, agName: p.ag.name, mengen: p.mengen, teil: { ...p.teil, material: artikelText(p.teil.material, p.teil.roh) || p.teil.material }, anforderungen: anforderungen(p.teil) })),
 }));
 
 function mengeHinzu(p) { p.mengen.push((Math.max(0, ...p.mengen) || 5) * 2); }

@@ -43,7 +43,7 @@
    "fieldname": "art",
    "fieldtype": "Select",
    "label": "Art",
-   "options": "Zeichnung\n3D-Modell\nAngebot\nRechnung\nE-Rechnung (XML)\nLieferschein\nMahnung\nBestellung\nMail-Anhang\nSonstiges",
+   "options": "Zeichnung\n3D-Modell\nAngebot\nRechnung\nE-Rechnung (XML)\nLieferschein\nMahnung\nBestellung\nWerkszeugnis\nMail-Anhang\nSonstiges",
    "in_list_view": 1,
    "in_standard_filter": 1
   },

@@ -26,6 +26,8 @@ function setzen(k, text) {
   neu[k] = v;
   emit('update:modelValue', aufmassSpeicherform(neu));
 }
+// Farbe je Richtung wie die Pfeile im 3D-Viewer (X rot, Y grün, Z blau; Stirn orange, Durchmesser lila)
+const FARBE = { xm: '#dc2626', xp: '#dc2626', x: '#dc2626', ym: '#16a34a', yp: '#16a34a', y: '#16a34a', zm: '#2563eb', zp: '#2563eb', z: '#2563eb', oben: '#2563eb', unten: '#2563eb', l1: '#d97706', l2: '#d97706', stirn: '#d97706', radial: '#7c3aed' };
 const text = (v) => String(Math.round((v || 0) * 100) / 100).replace('.', ',');
 
 // Felder je Art und Form: [Schlüssel, Beschriftung, Hinweis]
@@ -59,11 +61,12 @@ const wert = (k) => {
     </span>
     <span class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
       <label v-for="[k, l, t] in felder" :key="k" class="flex items-center gap-1" :title="t">
-        <span class="text-[11px] text-mute">{{ l }}</span>
+        <span class="text-[11px]" :class="FARBE[k] ? 'font-semibold' : 'text-mute'" :style="FARBE[k] ? { color: FARBE[k] } : {}">{{ l }}</span>
         <input :value="text(wert(k))" class="field !w-12 !px-1.5 !py-0.5 text-right text-xs tnum" :disabled="gesperrt" @change="setzen(k, $event.target.value)" @keydown.enter="$event.target.blur()" />
       </label>
       <span class="text-[11px] text-mute">mm</span>
     </span>
+    <slot />
   </span>
 </template>
 
