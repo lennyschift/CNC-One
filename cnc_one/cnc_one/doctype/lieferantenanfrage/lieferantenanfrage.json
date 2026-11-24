@@ -9,6 +9,12 @@
   "art",
   "kunde_name",
   "status",
+  "sb_fassung",
+  "fassung",
+  "ursprung",
+  "vorgaenger",
+  "ersetzt_durch",
+  "aenderungsgrund",
   "sb_notiz",
   "vorgang",
   "notiz",
@@ -68,11 +74,46 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Gesendet\nAngebot erhalten\nAbgesagt",
+   "options": "Gesendet\nAngebot erhalten\nAbgesagt\nErsetzt",
    "default": "Gesendet",
    "read_only": 1,
    "in_list_view": 1,
    "in_standard_filter": 1
+  },
+  {
+   "fieldname": "sb_fassung",
+   "fieldtype": "Section Break",
+   "label": "Fassung"
+  },
+  {
+   "fieldname": "fassung",
+   "fieldtype": "Int",
+   "label": "Fassung",
+   "read_only": 1,
+   "description": "0 = ursprüngliche Anfrage, 1, 2 … = geänderte Fassung (Nummer mit -1, -2 …)"
+  },
+  {
+   "fieldname": "ursprung",
+   "fieldtype": "Data",
+   "label": "Ursprüngliche Anfrage",
+   "read_only": 1
+  },
+  {
+   "fieldname": "vorgaenger",
+   "fieldtype": "Data",
+   "label": "Vorige Fassung",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ersetzt_durch",
+   "fieldtype": "Data",
+   "label": "Ersetzt durch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "aenderungsgrund",
+   "fieldtype": "Data",
+   "label": "Grund der Änderung"
   },
   {
    "fieldname": "sb_notiz",

@@ -34,7 +34,8 @@ class TestBenutzerMail(IntegrationTestCase):
 		self.assertEqual(name, "Max Zett | ZZ CNC")
 		# eigene Signatur ersetzt die erzeugte, Name als Absender abschaltbar
 		einstellung.profil_speichern({"signatur": "Viele Grüße\nMax", "nameAlsAbsender": False})
-		self.assertEqual(einstellung.absender_fuer("ZZ Firma GmbH", "ZZ CNC"), ("Viele Grüße\nMax", "ZZ CNC"))
+		# ein Gruß am Anfang fällt weg: die Mailvorlagen grüßen schon selbst (sonst stünde er doppelt da)
+		self.assertEqual(einstellung.absender_fuer("ZZ Firma GmbH", "ZZ CNC"), ("Max", "ZZ CNC"))
 		with self.assertRaises(frappe.ValidationError):
 			einstellung.profil_speichern({"email": "keine-adresse"})
 

@@ -1,8 +1,9 @@
 <script setup>
-import { computed, reactive, ref, watch, onMounted } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft, Mail, Copy, Save, XCircle, FileText, Send, Scale, Award, Inbox, Paperclip, ChevronDown, ScanText, CheckCircle2, AlertTriangle, CircleHelp } from '@lucide/vue';
+import { ArrowLeft, Mail, Copy, Save, XCircle, FileText, Send, Scale, Award, Inbox, Paperclip, ChevronDown, ScanText, CheckCircle2, AlertTriangle, CircleHelp, PencilLine, History } from '@lucide/vue';
 import AnfrageMailDialog from '../components/AnfrageMailDialog.vue';
+import FreieAnfrageDialog from '../components/FreieAnfrageDialog.vue';
 import LieferangebotDialog from '../components/LieferangebotDialog.vue';
 import { abgleich } from '../lib/lieferangebot.js';
 import { eur, zahl } from '../lib/format.js';
@@ -29,12 +30,25 @@ const router = useRouter();
 const imVorgang = computed(() => (a.value ? store.vorgang(a.value.vorgang) : []));
 const mailDialog = ref(false);
 const zuschlagOffen = ref(false);
+// Ändern: neue Fassung des ganzen Vorgangs (alle Lieferanten), danach gleich die Mail schreiben
+const aendernOffen = ref(false);
+function geaendert(neu) {
+  aendernOffen.value = false;
+  if (neu?.length) router.push({ path: `/anfragen/${neu[0].id}`, query: { senden: 1 } });
+}
+// Fassungen derselben Anfrage (ursprüngliche und alle Änderungen) für die Leiste oben
+const fassungen = computed(() => {
+  if (!a.value) return [];
+  const wurzel = a.value.ursprung || a.value.vorgang;
+  const vs = [...new Set(store.liste.filter((x) => x.vorgang === wurzel || x.ursprung === wurzel).map((x) => x.vorgang))];
+  return vs.sort().map((v) => ({ vorgang: v, id: (store.liste.find((x) => x.vorgang === v && x.lieferantId === a.value.lieferantId) ?? store.liste.find((x) => x.vorgang === v)).id }));
+});
 // Angebot aus PDF einlesen (aus dem Posteingang direkt mit ?einlesen=1)
 const einlesen = ref(false);
 const vonPosteingang = computed(() => route.query.von === 'posteingang');
-onMounted(() => {
-  if (route.query.senden) { mailDialog.value = true; router.replace({ query: {} }); }
-});
+watch(() => [route.params.id, route.query.senden], ([, s]) => {
+  if (s) { mailDialog.value = true; router.replace({ query: {} }); }
+}, { immediate: true });
 // auch beim Wechsel von einer Anfrage zur nächsten (die Seite bleibt dieselbe)
 watch(() => [route.params.id, route.query.einlesen], ([, e]) => {
   if (e) { einlesen.value = true; router.replace({ query: { ...route.query, einlesen: undefined } }); }
@@ -93,7 +107,13 @@ const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
           <PartImage v-for="p in a.positionen.slice(0, 3)" :key="p.key" :teil="p.teil" :groesse="64" class="ring-2 ring-surface" />
         </div>
         <div class="min-w-[240px] flex-1">
-          <div class="flex items-center gap-3"><h2 class="text-xl font-semibold tnum">{{ a.id }}</h2><StatusBadge :status="a.status" /></div>
+          <div class="flex items-center gap-3"><h2 class="text-xl font-semibold tnum">{{ a.id }}</h2><StatusBadge :status="a.status" /><span v-if="a.fassung" class="rounded-full bg-surface2 px-2 py-0.5 text-xs text-mute">Fassung {{ a.fassung }}</span></div>
+          <p v-if="a.ersetztDurch" class="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-warn/10 px-3 py-2 text-sm text-warn"><History :size="14" /> Ersetzt durch die geänderte Anfrage
+            <RouterLink :to="`/anfragen/${store.anfrage(a.ersetztDurch) ? a.ersetztDurch : (store.liste.find((x) => x.vorgang === a.ersetztDurch)?.id ?? a.ersetztDurch)}`" class="font-semibold underline tnum">{{ a.ersetztDurch }}</RouterLink></p>
+          <p v-if="a.aenderungsgrund" class="mt-1 text-xs text-mute">Geändert: {{ a.aenderungsgrund }}</p>
+          <div v-if="fassungen.length > 1" class="mt-2 flex flex-wrap items-center gap-1 text-xs"><span class="text-mute">Fassungen:</span>
+            <RouterLink v-for="f in fassungen" :key="f.vorgang" :to="`/anfragen/${f.id}`" class="rounded-full border px-2 py-0.5 tnum" :class="f.vorgang === a.vorgang ? 'border-accent bg-accent-soft text-accent' : 'border-line text-mute hover:text-ink'">{{ f.vorgang }}</RouterLink>
+          </div>
           <p class="mt-1 text-sm">an {{ a.lieferantName }} · {{ a.positionen.length }} Position{{ a.positionen.length === 1 ? '' : 'en' }}</p>
           <p class="text-sm text-mute">angelegt am {{ de(a.erstellt) }}</p>
           <p v-if="!a.angebotId" class="mt-2 text-sm"><span class="rounded-full bg-surface2 px-3 py-1 text-mute">Freie Anfrage · {{ a.art }}</span></p>
@@ -102,7 +122,8 @@ const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
           </p>
           <p v-if="a.notiz" class="mt-2 rounded-lg bg-surface2 px-3 py-2 text-sm">Hinweis: {{ a.notiz }}</p>
           <div class="mt-3 flex flex-wrap items-center gap-2">
-            <button class="btn" :class="a.versendetAm ? '' : 'btn-primary'" @click="mailDialog = true"><Send :size="15" /> {{ a.versendetAm ? 'Erneut per Mail senden' : 'Per Mail senden' }}</button>
+            <button class="btn" :class="a.versendetAm || a.ersetztDurch ? '' : 'btn-primary'" @click="mailDialog = true"><Send :size="15" /> {{ a.versendetAm ? 'Erneut per Mail senden' : 'Per Mail senden' }}</button>
+            <button v-if="!a.ersetztDurch" class="btn" title="Positionen, Mengen, Längen oder Lieferanten ändern: es entsteht eine neue Fassung (Nummer -1, -2 …)" @click="aendernOffen = true"><PencilLine :size="15" /> Ändern</button>
             <button class="btn" :class="pdfAnzahl && !a.antwort?.daten ? 'btn-primary' : ''" @click="einlesen = true"><ScanText :size="15" /> Angebot aus PDF einlesen<span v-if="pdfAnzahl" class="opacity-70"> ({{ pdfAnzahl }} PDF)</span></button>
             <RouterLink :to="{ path: `/anfragen/vergleich/${a.vorgang}`, query: vonPosteingang ? { von: 'posteingang' } : {} }" class="btn"><Scale :size="15" /> Angebote vergleichen<span v-if="imVorgang.length > 1" class="text-mute"> ({{ imVorgang.length }} Lieferanten)</span></RouterLink>
             <button v-if="a.antwort" class="btn" :class="a.zuschlag ? '!border-ok !text-ok' : ''" @click="zuschlagOffen = true"><Award :size="15" /> {{ a.zuschlag ? (a.zuschlagPositionen?.length >= a.positionen.length && !a.zuschlagAlternativen?.length ? 'Zuschlag erteilt' : `Zuschlag: ${a.zuschlagPositionen?.length ?? 0} von ${a.positionen.length}`) : 'Zuschlag erteilen' }}</button>
@@ -240,6 +261,7 @@ const de = (iso) => new Date(iso).toLocaleDateString('de-DE');
     </div>
   </div>
   <AnfrageMailDialog v-if="a && mailDialog" :vorgang="a.vorgang" @schliessen="mailDialog = false" @gesendet="mailDialog = false" />
+  <FreieAnfrageDialog v-if="a && aendernOffen" :aendern="imVorgang" @schliessen="aendernOffen = false" @angelegt="geaendert" />
   <LieferangebotDialog v-if="a && einlesen" :anfrage="a" @schliessen="einlesen = false" @erfasst="einlesen = false" />
   <div v-else-if="!a" class="card mx-auto grid max-w-lg place-items-center p-14 text-center">
     <p class="font-medium">Anfrage nicht gefunden</p>

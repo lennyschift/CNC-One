@@ -8,6 +8,7 @@ EINHEITEN = ("Stk", "m", "kg", "Stangen", "Platten", "Zuschnitte")
 
 import json
 import mimetypes
+import re
 
 import frappe
 from frappe import _
@@ -52,6 +53,11 @@ def anfrage_ui(d):
 		],
 		"erstellt": iso(d.creation),
 		"status": d.status,
+		"fassung": d.fassung or 0,
+		"ursprung": d.ursprung or "",
+		"vorgaenger": d.vorgaenger or "",
+		"ersetztDurch": d.ersetzt_durch or "",
+		"aenderungsgrund": d.aenderungsgrund or "",
 		"notiz": d.notiz or "",
 		"angebotId": d.angebot or "",
 		"art": d.art or "Fremdvergabe",
@@ -67,6 +73,7 @@ def anfrage_ui(d):
 				"agId": p.ag_id or "",
 				"agName": p.ag_name or "",
 				"abmessung": p.abmessung or "",
+				"roh": als_json(p.roh) if p.roh else None,
 				"anforderungen": p.anforderungen or "",
 				"einheit": p.einheit or "Stk",
 				"mengen": als_json(p.mengen) if p.mengen else [],
@@ -101,6 +108,32 @@ def anlegen(angebot="", lieferanten=None, positionen=None, notiz="", art=""):
 	Material zu einem Angebot (art = Material, aus der Workbench): wie die freie Anfrage, aber mit Bezug zum Angebot.
 	"""
 	nur_cnc()
+	lieferanten, positionen = _eingabe(lieferanten, positionen)
+	ang = frappe.get_doc("Angebot", angebot) if angebot else None
+	art = art if art in ARTEN else ("Fremdvergabe" if ang else "Material")
+	zeilen = _zeilen(ang, art, positionen)
+
+	neu = []
+	vorgang = None  # alle Anfragen dieses Aufrufs gehören zusammen: Nummer der ersten
+	for l in lieferanten:
+		doc = frappe.new_doc("Lieferantenanfrage")
+		doc.lieferant = l
+		doc.angebot = ang.name if ang else None
+		doc.art = art
+		doc.status = "Gesendet"
+		doc.notiz = (notiz or "").strip()
+		for z in zeilen:
+			doc.append("positionen", dict(z))
+		doc.vorgang = vorgang
+		doc.insert()
+		if not vorgang:
+			vorgang = doc.name
+			doc.db_set("vorgang", vorgang, update_modified=False)
+		neu.append(anfrage_ui(doc))
+	return neu
+
+
+def _eingabe(lieferanten, positionen):
 	if isinstance(lieferanten, str):
 		lieferanten = frappe.parse_json(lieferanten)
 	if isinstance(positionen, str):
@@ -109,12 +142,25 @@ def anlegen(angebot="", lieferanten=None, positionen=None, notiz="", art=""):
 		frappe.throw(_("Bitte mindestens einen Lieferanten wählen."))
 	if not positionen:
 		frappe.throw(_("Bitte mindestens eine Position wählen."))
-	ang = frappe.get_doc("Angebot", angebot) if angebot else None
-	art = art if art in ARTEN else ("Fremdvergabe" if ang else "Material")
 	for l in lieferanten:
 		if not frappe.db.exists("Lieferant", l):
 			frappe.throw(_("Den Lieferanten {0} gibt es nicht.").format(l))
+	return list(dict.fromkeys(lieferanten)), positionen
 
+
+def _roh(r):
+	"""Rohmaterial-Auswahl einer Materialposition (zum späteren Ändern), nur bekannte Felder."""
+	if not isinstance(r, dict):
+		return None
+	felder = ("werkstoff", "zustand", "form", "ausfuehrung", "abmessungId", "abmessung", "artikel")
+	out = {f: str(r.get(f) or "")[:140] for f in felder}
+	out["anforderungen"] = r.get("anforderungen") if isinstance(r.get("anforderungen"), dict) else {}
+	for f in ("laenge", "breite"):
+		out[f] = max(float(r.get(f) or 0), 0)
+	return json.dumps(out, ensure_ascii=False)
+
+
+def _zeilen(ang, art, positionen):
 	zeilen = []
 	for i, p in enumerate(positionen, 1):
 		teil = p.get("teil") or {}
@@ -135,30 +181,58 @@ def anlegen(angebot="", lieferanten=None, positionen=None, notiz="", art=""):
 			"material": (teil.get("material") or "").strip(),
 			"ag_id": p.get("agId") or "",
 			"ag_name": (p.get("agName") or "").strip(),
-			"abmessung": (p.get("abmessung") or "").strip(),
+			"abmessung": (p.get("abmessung") or "").strip()[:140],
+			"roh": _roh(p.get("roh")),
 			"anforderungen": (p.get("anforderungen") or "").strip()[:140],
 			"einheit": einheit,
 			"mengen": json.dumps(mengen),
 		})
+	return zeilen
 
+
+@frappe.whitelist(methods=["POST"])
+def aendern(vorgang, lieferanten=None, positionen=None, notiz="", grund=""):
+	"""Neue Fassung einer Anfrage (eines Vorgangs): je Lieferant dieselbe Nummer mit -1, -2 … Die bisherigen Anfragen
+	bleiben unverändert (mit Mails und Antworten) und gelten als ersetzt. Ein Lieferant, der neu dazukommt, bekommt eine
+	neue Nummer. Positionen wie beim Anlegen; Art und Angebot bleiben."""
+	nur_cnc()
+	alte = vorgang_docs(vorgang)
+	for d in alte:
+		d.check_permission("write")
+	ersetzt = next((d for d in alte if d.ersetzt_durch), None)
+	if ersetzt:
+		frappe.throw(_("Diese Anfrage ist schon durch {0} ersetzt. Bitte die neue Fassung ändern.").format(ersetzt.ersetzt_durch))
+	lieferanten, positionen = _eingabe(lieferanten, positionen)
+	erste = alte[0]
+	ang = frappe.get_doc("Angebot", erste.angebot) if erste.angebot else None
+	zeilen = _zeilen(ang, erste.art, positionen)
+	wurzel = erste.ursprung or vorgang_stamm(erste.vorgang or erste.name)
+	nr = int(frappe.db.sql("select coalesce(max(fassung), 0) from `tabLieferantenanfrage` where ursprung = %s", (wurzel,))[0][0] or 0) + 1
+	neuer_vorgang = f"{wurzel}-{nr}"
+	je = {d.lieferant: d for d in alte}
 	neu = []
-	vorgang = None  # alle Anfragen dieses Aufrufs gehören zusammen: Nummer der ersten
 	for l in lieferanten:
+		vorher = je.get(l)
 		doc = frappe.new_doc("Lieferantenanfrage")
-		doc.lieferant = l
-		doc.angebot = ang.name if ang else None
-		doc.art = art
-		doc.status = "Gesendet"
-		doc.notiz = (notiz or "").strip()
+		doc.update({
+			"lieferant": l, "angebot": erste.angebot, "art": erste.art, "status": "Gesendet", "notiz": (notiz or "").strip(),
+			"vorgang": neuer_vorgang, "ursprung": wurzel, "fassung": nr, "vorgaenger": vorher.name if vorher else "",
+			"aenderungsgrund": (grund or "").strip()[:140],
+		})
 		for z in zeilen:
 			doc.append("positionen", dict(z))
-		doc.vorgang = vorgang
-		doc.insert()
-		if not vorgang:
-			vorgang = doc.name
-			doc.db_set("vorgang", vorgang, update_modified=False)
-		neu.append(anfrage_ui(doc))
-	return neu
+		name = f"{vorgang_stamm(vorher.name)}-{nr}" if vorher else None
+		doc.insert(set_name=name) if name and not frappe.db.exists("Lieferantenanfrage", name) else doc.insert()
+		neu.append(doc)
+	for d in alte:
+		nachfolger = next((n for n in neu if n.vorgaenger == d.name), None)
+		d.db_set({"status": "Ersetzt", "ersetzt_durch": nachfolger.name if nachfolger else neuer_vorgang})
+	return {"neu": [anfrage_ui(d) for d in neu], "ersetzt": [anfrage_ui(frappe.get_doc("Lieferantenanfrage", d.name)) for d in alte]}
+
+
+def vorgang_stamm(nummer):
+	"""Nummer ohne Fassung: LA-2026-0001-2 → LA-2026-0001."""
+	return re.sub(r"^(LA-\d{4}-\d+)-\d{1,2}$", r"\1", nummer or "")
 
 
 def _geladen(id):
@@ -194,7 +268,8 @@ def antwort_erfassen(id, antwort):
 			"position_key": z.get("posKey"), "menge": int(z.get("menge") or 0),
 			"pro_stk": z.get("proStk") or 0, "einmalig": z.get("einmalig") or 0,
 		})
-	doc.status = "Angebot erhalten"
+	if doc.status != "Ersetzt":
+		doc.status = "Angebot erhalten"
 	doc.save()
 	return anfrage_ui(doc)
 
@@ -371,9 +446,33 @@ def tabelle_html(zeilen):
 
 
 ANFRAGE_VORLAGE = (
-	"Sehr geehrte Damen und Herren,\n\nbitte senden Sie uns ein Angebot für {was}:\n\n{{tabelle}}\n\n{hinweis}"
+	"Sehr geehrte Damen und Herren,\n\n{aenderung}bitte senden Sie uns ein Angebot für {was}:\n\n{{tabelle}}\n\n{hinweis}"
 	"Bitte nennen Sie in Ihrem Angebot unsere Anfragenummer {nummer} und Ihre Lieferzeit.{anhang}\n\nMit freundlichen Grüßen\n{absender}"
 )
+
+
+def _was(art):
+	return "folgendes Material" if art == "Material" else "folgende Leistungen" if art == "Fremdvergabe" else "folgende Positionen"
+
+
+def vorschlag_text(art, notiz, nummer, mit_bauteil=False, vorige=""):
+	"""Text der Anfrage-Mail mit dem Platzhalter {tabelle}; bei einer geänderten Fassung mit Hinweis auf die vorige."""
+	from cnc_one.api.firma import firma_ui
+	from cnc_one.logic import mail
+
+	s = mail.einstellungen()
+	return ANFRAGE_VORLAGE.format(
+		was=_was(art), nummer=nummer, absender=absender_fuer(firma_ui().get("firmenname", ""), s.absender_name)[0],
+		hinweis=f"Hinweis: {notiz}\n\n" if notiz else "",
+		anhang=" Zeichnungen finden Sie im Anhang." if mit_bauteil else "",
+		aenderung=f"unsere Anfrage {vorige} hat sich geändert. Diese Anfrage ersetzt sie; " if vorige else "",
+	)
+
+
+def empfaenger(lieferant):
+	"""Adressen für Anfragen an einen Lieferanten: die Ansprechpartner mit „Bekommt Anfragen“, sonst seine E-Mail."""
+	kontakte = frappe.get_all("Lieferant Kontakt", filters={"parenttype": "Lieferant", "parent": lieferant, "anfragen": 1, "email": ["is", "set"]}, pluck="email", order_by="idx asc")
+	return [a for a in kontakte if "@" in a] or [a for a in [frappe.db.get_value("Lieferant", lieferant, "email") or ""] if "@" in a]
 
 
 def _anhaenge(docs, zeichnungen=True, modelle=False):
@@ -408,20 +507,17 @@ def mail_vorschlag(vorgang):
 
 	docs = vorgang_docs(vorgang)
 	s = mail.einstellungen()
-	firma = firma_ui().get("firmenname", "")
 	erste = docs[0]
 	mit_bauteil = any(p.bauteil for p in erste.positionen)
-	was = "folgendes Material" if erste.art == "Material" else "folgende Leistungen" if erste.art == "Fremdvergabe" else "folgende Positionen"
-	text = ANFRAGE_VORLAGE.format(
-		was=was, nummer=vorgang, absender=absender_fuer(firma, s.absender_name)[0],
-		hinweis=f"Hinweis: {erste.notiz}\n\n" if erste.notiz else "",
-		anhang=" Zeichnungen finden Sie im Anhang." if mit_bauteil else "",
-	)
+	vorige = ""
+	if erste.fassung and erste.vorgaenger:
+		vorige = frappe.db.get_value("Lieferantenanfrage", erste.vorgaenger, "vorgang") or erste.vorgaenger
+	text = vorschlag_text(erste.art, erste.notiz, vorgang, mit_bauteil, vorige)
 	titel = erste.positionen[0].bezeichnung if len(erste.positionen) == 1 else f"{len(erste.positionen)} Positionen"
-	adressen = [(d.lieferant, frappe.db.get_value("Lieferant", d.lieferant, "email") or "") for d in docs]
+	adressen = [(d.lieferant, empfaenger(d.lieferant)) for d in docs]
 	bereit = bool(s.smtp_server and s.benutzer and s.get_password("passwort", raise_exception=False))
 	return {
-		"an": s.benutzer or "", "cc": "", "bcc": ", ".join(a for _l, a in adressen if a),
+		"an": s.benutzer or "", "cc": "", "bcc": ", ".join(x for _l, a in adressen for x in a),
 		"ohneAdresse": [l for l, a in adressen if not a],
 		"betreff": f"Anfrage {vorgang}: {titel}", "text": text,
 		"tabelle": {"kopf": list(TABELLE_KOPF), "zeilen": [list(z) for z in tabelle(erste)]},
@@ -440,11 +536,46 @@ def _absaetze(text):
 	)
 
 
-def mail_html(text, zeilen):
-	"""Unser Text als HTML; an der Stelle {tabelle} steht die Tabelle der Positionen."""
+def mail_inhalt(text, zeilen):
+	"""Unser Text als HTML-Block; an der Stelle {tabelle} steht die Tabelle der Positionen."""
 	teile = (text or "").split("{tabelle}")
 	inhalt = tabelle_html(zeilen).join(_absaetze(t) for t in teile)
-	return f'<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.45;color:#1c1c1c">{inhalt}</div></body></html>'
+	return f'<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.45;color:#1c1c1c">{inhalt}</div>'
+
+
+def mail_html(text, zeilen):
+	return f'<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>{mail_inhalt(text, zeilen)}</body></html>'
+
+
+@frappe.whitelist(methods=["POST"])
+def mail_ansehen(vorgang, text=""):
+	"""Die Mail genau so, wie sie verschickt wird (HTML mit Tabelle), für die Vorschau beim Schreiben."""
+	nur_cnc()
+	docs = vorgang_docs(vorgang)
+	docs[0].check_permission("read")
+	return {"html": mail_inhalt(text, tabelle(docs[0]))}
+
+
+@frappe.whitelist(methods=["POST"])
+def mail_muster(art="", notiz="", positionen=None, vorgang=""):
+	"""Vorschau der Anfrage-Mail, bevor die Anfrage angelegt ist (oder beim Ändern): Betreff und HTML wie beim Senden."""
+	nur_cnc()
+	if isinstance(positionen, str):
+		positionen = frappe.parse_json(positionen)
+	art = art if art in ARTEN else "Material"
+	nummer = f"{vorgang_stamm(vorgang)}-n" if vorgang else f"LA-{frappe.utils.nowdate()[:4]}-NNNN"
+	doc = frappe._dict(positionen=[
+		frappe._dict(
+			bezeichnung=(p.get("teil") or {}).get("name") or "", teilenummer=(p.get("teil") or {}).get("teilenummer") or "",
+			zeichnungsnr=(p.get("teil") or {}).get("zeichnungsnr") or "", material=(p.get("teil") or {}).get("material") or "",
+			ag_name=p.get("agName") or "", abmessung=p.get("abmessung") or "", einheit=p.get("einheit") or "Stk",
+			mengen=json.dumps(_mengen(p.get("mengen"))),
+		)
+		for p in positionen or []
+	])
+	text = vorschlag_text(art, (notiz or "").strip(), nummer, vorige=vorgang)
+	titel = doc.positionen[0].bezeichnung if len(doc.positionen) == 1 else f"{len(doc.positionen)} Positionen"
+	return {"betreff": f"Anfrage {nummer}: {titel}", "html": mail_inhalt(text, tabelle(doc))}
 
 
 @frappe.whitelist(methods=["POST"])

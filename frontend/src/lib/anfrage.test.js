@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mengenFuer, fremdPositionen, preisFuerMenge, gehoertZu, zusammenfassung, zusammenfassungText, mailText, istFrei, freieZeile } from './anfrage.js';
+import { mengenFuer, fremdPositionen, preisFuerMenge, gehoertZu, zusammenfassung, zusammenfassungText, mailText, istFrei, freieZeile, materialAbmessung } from './anfrage.js';
 
 describe('mengenFuer', () => {
   it('Staffelangebot fragt alle Staffeln an', () => {
@@ -118,4 +118,14 @@ describe('freie Anfrage (Material)', () => {
     expect(mailText({ ...a, positionen: [a.positionen[0]] }).betreff).toBe('Anfrage LA-2026-0009: Rundstahl 42CrMo4');
   });
   it('Kurzzeile', () => expect(freieZeile(a.positionen[0])).toBe('Rundstahl · 42CrMo4 · Ø 50 x 3000 mm'));
+});
+
+describe('materialAbmessung', () => {
+  const rund = { form: 'Rund', abmessung: 'Ø20', ausfuehrung: 'gezogen h9' };
+  it('Stange mit Länge', () => expect(materialAbmessung(rund, 'Stangen', 3000)).toBe('Rund Ø20 · gezogen h9 · Stangenlänge 3000 mm'));
+  it('Stange ohne Länge: Lagerlänge', () => expect(materialAbmessung(rund, 'Stangen', 0)).toBe('Rund Ø20 · gezogen h9 · Stangenlänge nach Ihrem Lager'));
+  it('Zuschnitt ohne Ausführung', () => expect(materialAbmessung({ form: 'Rund', abmessung: 'Ø40', ausfuehrung: '' }, 'Zuschnitte', 120.4)).toBe('Rund Ø40 · Zuschnitt 120 mm'));
+  it('Platte mit Länge × Breite', () => expect(materialAbmessung({ form: 'Platte', abmessung: '20 mm', ausfuehrung: 'gewalzt' }, 'Zuschnitte', 500, 300)).toBe('Platte 20 mm · gewalzt · Zuschnitt 500 × 300 mm'));
+  it('ganze Platten', () => expect(materialAbmessung({ form: 'Platte', abmessung: '20 mm' }, 'Platten', 2000, 1000)).toBe('Platte 20 mm · Plattenmaß 2000 × 1000 mm'));
+  it('ohne Rohmaterial leer', () => expect(materialAbmessung(null, 'Stangen', 1)).toBe(''));
 });

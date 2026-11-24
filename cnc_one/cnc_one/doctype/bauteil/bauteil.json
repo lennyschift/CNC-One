@@ -24,7 +24,11 @@
   "zeichnung",
   "revisionen",
   "sb_plan",
-  "arbeitsplan"
+  "arbeitsplan",
+  "sb_familie",
+  "teilefamilie",
+  "variante",
+  "fingerabdruck"
  ],
  "fields": [
   {
@@ -154,6 +158,32 @@
    "fieldtype": "Table",
    "label": "Arbeitsgänge",
    "options": "Arbeitsgang Plan"
+  },
+  {
+   "fieldname": "sb_familie",
+   "fieldtype": "Section Break",
+   "label": "Teilefamilie und Ähnlichkeit"
+  },
+  {
+   "fieldname": "teilefamilie",
+   "fieldtype": "Link",
+   "label": "Teilefamilie",
+   "options": "Teilefamilie",
+   "in_standard_filter": 1,
+   "description": "Varianten eines Teils, z. B. mehrere Teile auf einer Zeichnung; jedes bleibt einzeln bestellbar"
+  },
+  {
+   "fieldname": "variante",
+   "fieldtype": "Data",
+   "label": "Variante",
+   "description": "Was diese Variante von den anderen der Familie unterscheidet, z. B. Gewindelänge 16"
+  },
+  {
+   "fieldname": "fingerabdruck",
+   "fieldtype": "JSON",
+   "label": "Geometrie-Fingerabdruck",
+   "read_only": 1,
+   "description": "Aus dem STEP-Modell: Maße, Volumen, Oberfläche, Formverteilung (für ähnliche Bauteile)"
   }
  ],
  "links": [],

@@ -9,8 +9,9 @@ import NumField from './NumField.vue';
 import FormSymbol from './FormSymbol.vue';
 import VorlagenChips from './VorlagenChips.vue';
 import AnfrageMailDialog from './AnfrageMailDialog.vue';
+import MailMuster from './MailMuster.vue';
 import { repo } from '../data/repo.js';
-import { EINHEITEN, mailText } from '../lib/anfrage.js';
+import { EINHEITEN } from '../lib/anfrage.js';
 import { materialBedarf, artikelText } from '../lib/werkstoffbaum.js';
 import { isoGruppe } from '../lib/iso.js';
 import { zahl } from '../lib/format.js';
@@ -61,8 +62,9 @@ const positionen = computed(() => aktiv.value.map((z) => ({
   anforderungen: anfText(z.g.anforderungen),
   einheit: z.einheit,
   mengen: sauber(z.mengen),
+  // Auswahl aus dem Rohmaterial-Baum, damit die Anfrage sich später ändern lässt
+  roh: { werkstoff: z.g.werkstoff, zustand: z.g.zustand, form: z.g.form, ausfuehrung: z.g.ausfuehrung, abmessungId: z.g.abmessungId, abmessung: z.g.abmessung, anforderungen: z.g.anforderungen, artikel: artikel(z.g) },
 })));
-const vorschau = computed(() => mailText({ id: `LA-${new Date().getFullYear()}-NNNN`, art: 'Material', notiz: notiz.value, positionen: positionen.value.map((p, i) => ({ ...p, key: `mat:${i + 1}`, agName: '' })) }));
 const bereit = computed(() => auswahl.value.length && positionen.value.length && positionen.value.every((p) => p.mengen.length));
 
 const mailVorgang = ref('');
@@ -147,14 +149,7 @@ const STATUS = { lager: ['im Lager', 'bg-ok/15 text-ok'], teilweise: ['teilweise
               <label class="block"><span class="label mb-1 block">Hinweis an die Lieferanten</span><textarea v-model="notiz" rows="2" class="field resize-y" placeholder="z. B. Liefertermin, Fixlängen, gesägt auf Maß …" /></label>
             </div>
 
-            <div>
-              <div class="label mb-2 flex items-center gap-1.5"><Mail :size="13" /> Vorschau des Anschreibens</div>
-              <div class="rounded-xl border border-line bg-surface2 p-4 text-[13px] leading-relaxed">
-                <div class="mb-2 font-medium">{{ positionen.length ? vorschau.betreff : '–' }}</div>
-                <pre v-if="positionen.length" class="whitespace-pre-wrap font-sans text-mute">{{ vorschau.text }}</pre>
-                <p v-else class="text-mute">Bitte mindestens eine Zeile wählen.</p>
-              </div>
-            </div>
+            <MailMuster art="Material" :notiz="notiz" :positionen="positionen" leer-text="Bitte mindestens eine Zeile wählen." />
           </div>
 
           <footer class="flex items-center justify-between gap-4 border-t border-line bg-surface2 px-6 py-4">

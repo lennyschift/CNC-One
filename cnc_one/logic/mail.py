@@ -118,13 +118,23 @@ def gesperrt(name, daten, endungen):
 	return ""
 
 
+def lieferanten_adressen():
+	"""{Lieferant: {alle Adressen}}: E-Mail, weitere Adressen und die Adressen der Ansprechpartner."""
+	out = {}
+	for l in frappe.get_all("Lieferant", fields=["name", "email", "weitere_emails"]):
+		out[l.name] = {a for a in [(l.email or "").strip().lower(), *(z.lower() for z in _zeilen(l.weitere_emails))] if "@" in a}
+	for k in frappe.get_all("Lieferant Kontakt", filters={"parenttype": "Lieferant", "email": ["is", "set"]}, fields=["parent", "email"]):
+		if "@" in (k.email or ""):
+			out.setdefault(k.parent, set()).add(k.email.strip().lower())
+	return out
+
+
 def bekannte_absender(fm=None):
 	"""(Adressen, Domains) der Kunden-Kontakte und Lieferanten. Domains nur außerhalb der Freemail-Anbieter."""
 	fm = fm if fm is not None else freemail()
 	adressen = {(e or "").strip().lower() for e in frappe.get_all("Kunde Kontakt", filters={"parenttype": "Kunde", "email": ["is", "set"]}, pluck="email")}
-	for l in frappe.get_all("Lieferant", fields=["email", "weitere_emails"]):
-		adressen.add((l.email or "").strip().lower())
-		adressen.update(z.lower() for z in _zeilen(l.weitere_emails))
+	for a in lieferanten_adressen().values():
+		adressen.update(a)
 	adressen = {a for a in adressen if "@" in a}
 	domains = {a.rsplit("@", 1)[1] for a in adressen} - set(fm)
 	return adressen, domains
@@ -141,16 +151,16 @@ def lieferant_zur_adresse(adresse, fm=None):
 	if "@" not in a:
 		return None
 	fm = fm if fm is not None else freemail()
-	liste = frappe.get_all("Lieferant", fields=["name", "email", "weitere_emails"])
-	for l in liste:
-		if a == (l.email or "").strip().lower() or a in {z.lower() for z in _zeilen(l.weitere_emails)}:
-			return l.name
+	liste = sorted(lieferanten_adressen().items())
+	for name, adressen in liste:
+		if a in adressen:
+			return name
 	domain = a.rsplit("@", 1)[1]
 	if domain in fm:
 		return None
-	for l in liste:
-		if any(x.endswith("@" + domain) for x in [(l.email or "").lower(), *(z.lower() for z in _zeilen(l.weitere_emails))]):
-			return l.name
+	for name, adressen in liste:
+		if any(x.endswith("@" + domain) for x in adressen):
+			return name
 	return None
 
 
@@ -754,7 +764,7 @@ def _eingangsrechnungen(msg, doc, anhaenge):
 		doc.db_set("kategorie", "Rechnung", update_modified=False)
 
 
-LA_NUMMER = re.compile(r"\bLA-\d{4}-\d{3,}\b", re.I)
+LA_NUMMER = re.compile(r"\bLA-\d{4}-\d{3,}(?:-\d{1,2})?\b", re.I)  # mit Fassung: LA-2026-0001-1
 
 
 def lieferantenanfrage_zur_mail(betreff, von, ids):
@@ -775,10 +785,11 @@ def lieferantenanfrage_zur_mail(betreff, von, ids):
 	kandidaten = frappe.get_all("Lieferantenanfrage", filters={"vorgang": ["in", list(vorgaenge)]}, fields=["name", "lieferant"], order_by="name asc") or [frappe._dict(name=n, lieferant=frappe.db.get_value("Lieferantenanfrage", n, "lieferant")) for n in sorted(set(namen))]
 	von = (von or "").lower()
 	domain = von.rsplit("@", 1)[-1] if "@" in von else ""
-	adressen = {k.name: (frappe.db.get_value("Lieferant", k.lieferant, "email") or "").lower() for k in kandidaten}
-	treffer = next((k.name for k in kandidaten if adressen[k.name] and adressen[k.name] == von), None)
+	alle = lieferanten_adressen()
+	adressen = {k.name: alle.get(k.lieferant, set()) for k in kandidaten}
+	treffer = next((k.name for k in kandidaten if von and von in adressen[k.name]), None)
 	if not treffer and domain and domain not in FREEMAIL:
-		treffer = next((k.name for k in kandidaten if adressen[k.name].endswith("@" + domain)), None)
+		treffer = next((k.name for k in kandidaten if any(x.endswith("@" + domain) for x in adressen[k.name])), None)
 	return frappe.get_doc("Lieferantenanfrage", treffer or kandidaten[0].name)
 
 

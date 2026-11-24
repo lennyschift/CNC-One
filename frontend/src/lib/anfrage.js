@@ -7,6 +7,21 @@ export const EINHEITEN = ['Stk', 'm', 'kg', 'Stangen', 'Platten', 'Zuschnitte'];
 
 // Freie Anfrage: ohne Angebot, die Positionen sind selbst eingetragen
 export const istFrei = (a) => (a.positionen ?? []).length > 0 && (a.positionen ?? []).every((p) => /^(frei|mat):/.test(String(p.key ?? '')));
+// Abmessung einer Materialposition, wie sie in der Anfrage steht: Form und Maß aus dem Rohmaterial-Baum, Ausführung
+// (falls gewählt) und die Länge je Einheit, bei Platten Länge × Breite des Zuschnitts. r = Rohmaterial-Auswahl.
+// z. B. „Rund Ø20 · gezogen h9 · Stangenlänge 3000 mm“ oder „Platte 20 mm · Zuschnitt 500 × 300 mm“
+export function materialAbmessung(r, einheit, laenge = 0, breite = 0) {
+  if (!r) return '';
+  const l = Math.round(num(laenge));
+  const b = Math.round(num(breite));
+  let mass = '';
+  if (r.form === 'Platte') {
+    if (l || b) mass = `${einheit === 'Platten' ? 'Plattenmaß' : 'Zuschnitt'} ${l || '?'} × ${b || '?'} mm`;
+  } else if (l) mass = `${einheit === 'Stangen' ? 'Stangenlänge' : einheit === 'Zuschnitte' ? 'Zuschnitt' : 'Länge'} ${l} mm`;
+  else if (einheit === 'Stangen') mass = 'Stangenlänge nach Ihrem Lager';
+  return [`${r.form || ''} ${r.abmessung || ''}`.trim(), r.ausfuehrung, mass].filter(Boolean).join(' · ');
+}
+
 // „Rundstahl · 42CrMo4 · Ø 50 x 3000 mm“
 export const freieZeile = (p) => [p.teil?.name, p.teil?.material, p.abmessung].filter(Boolean).join(' · ');
 

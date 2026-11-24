@@ -109,8 +109,19 @@ def kunde_setzen(doc, d):
 
 
 # ----------------------------------------------------------------- Lieferant, Maschine, Material
+def lieferant_kontakt_ui(k):
+	return {
+		"anrede": k.anrede or "", "vorname": k.vorname or "", "nachname": k.nachname or "", "funktion": k.funktion or "",
+		"email": k.email or "", "telefon": k.telefon or "", "mobil": k.mobil or "", "anfragen": bool(k.anfragen),
+	}
+
+
 def lieferant_ui(d):
-	return {"id": d.name, "name": d.lieferantenname, "leistung": d.leistung or "", "email": d.email or "", "weitereEmails": d.weitere_emails or "", "telefon": d.telefon or "", "adresse": d.adresse or "", "ustId": d.ust_id or "", "aktiv": bool(d.aktiv)}
+	return {
+		"id": d.name, "name": d.lieferantenname, "leistung": d.leistung or "", "email": d.email or "", "weitereEmails": d.weitere_emails or "",
+		"telefon": d.telefon or "", "adresse": d.adresse or "", "ustId": d.ust_id or "", "aktiv": bool(d.aktiv),
+		"kontakte": [lieferant_kontakt_ui(k) for k in d.get("kontakte") or []],
+	}
 
 
 def lieferant_setzen(doc, d):
@@ -124,6 +135,17 @@ def lieferant_setzen(doc, d):
 		doc.weitere_emails = "\n".join(z.strip().lower() for z in re.split(r"[\s,;]+", d.get("weitereEmails") or "") if "@" in z)
 	if "ustId" in d:
 		doc.ust_id = _text(d.get("ustId"))
+	if "kontakte" in d:
+		doc.set("kontakte", [])
+		for k in d.get("kontakte") or []:
+			if not any(_text(k.get(f)) for f in ("nachname", "vorname", "email")):
+				continue
+			doc.append("kontakte", {
+				"anrede": k.get("anrede") if k.get("anrede") in ("Herr", "Frau") else "", "vorname": _text(k.get("vorname")),
+				"nachname": _text(k.get("nachname")) or _text(k.get("vorname")) or _text(k.get("email")), "funktion": _text(k.get("funktion")),
+				"email": _text(k.get("email")).lower(), "telefon": _text(k.get("telefon")), "mobil": _text(k.get("mobil")),
+				"anfragen": 1 if k.get("anfragen") else 0,
+			})
 	doc.aktiv = 1 if d.get("aktiv", True) else 0
 
 

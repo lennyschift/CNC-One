@@ -23,7 +23,7 @@ const neuDialog = ref(false);
 const einlesenDialog = ref(false);
 function angelegt(neu) { neuDialog.value = false; if (neu?.length) router.push({ path: `/anfragen/${neu[0].id}`, query: { senden: 1 } }); }
 const suche = ref('');
-const filterListe = ['Alle', 'Gesendet', 'Angebot erhalten', 'Abgesagt'];
+const filterListe = ['Alle', 'Gesendet', 'Angebot erhalten', 'Abgesagt', 'Ersetzt'];
 
 // Angebotsfilter: 'alle' oder eine Angebotsnummer
 const angebotFilter = ref(route.query.angebot ? String(route.query.angebot) : 'alle');

@@ -1,0 +1,80 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "anrede",
+  "vorname",
+  "nachname",
+  "funktion",
+  "email",
+  "telefon",
+  "mobil",
+  "anfragen"
+ ],
+ "fields": [
+  {
+   "fieldname": "anrede",
+   "fieldtype": "Select",
+   "label": "Anrede",
+   "options": "\nHerr\nFrau"
+  },
+  {
+   "fieldname": "vorname",
+   "fieldtype": "Data",
+   "label": "Vorname",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "nachname",
+   "fieldtype": "Data",
+   "label": "Nachname",
+   "in_list_view": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "funktion",
+   "fieldtype": "Data",
+   "label": "Funktion",
+   "in_list_view": 1,
+   "description": "z. B. Verkauf Innendienst, Qualität"
+  },
+  {
+   "fieldname": "email",
+   "fieldtype": "Data",
+   "label": "E-Mail",
+   "options": "Email",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "telefon",
+   "fieldtype": "Data",
+   "label": "Telefon"
+  },
+  {
+   "fieldname": "mobil",
+   "fieldtype": "Data",
+   "label": "Mobil"
+  },
+  {
+   "fieldname": "anfragen",
+   "fieldtype": "Check",
+   "label": "Bekommt Anfragen",
+   "description": "Lieferantenanfragen gehen an diese Adresse (sonst an die E-Mail des Lieferanten)"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Lieferant Kontakt",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "istable": 1,
+ "editable_grid": 1,
+ "autoname": "hash"
+}

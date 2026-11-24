@@ -63,6 +63,17 @@ export const useAnfragen = defineStore('anfragen', () => {
     return neu;
   }
 
+  // Anfrage ändern: neue Fassung (Nummer -1, -2 …) für die gewählten Lieferanten; die bisherigen gelten als ersetzt
+  async function aendern({ vorgang, lieferanten, positionen, notiz, grund }) {
+    const r = await sicher(() => call('cnc_one.api.anfrage.aendern', {
+      vorgang, grund: grund || '', notiz: notiz || '', lieferanten: lieferanten.map((l) => l.name), positionen: kopie(positionen),
+    }));
+    if (!r) return null;
+    for (const x of [...r.ersetzt, ...r.neu]) einsetzen(x);
+    ui.toast(`Neue Fassung ${r.neu[0]?.vorgang ?? ''} angelegt`, 'ok');
+    return r.neu;
+  }
+
   async function antwortErfassen(id, antwort) {
     const rec = await sicher(() => call('cnc_one.api.anfrage.antwort_erfassen', { id, antwort: kopie(antwort) }));
     if (rec) { einsetzen(rec); ui.toast(`Angebot zu ${id} erfasst`, 'ok'); }
@@ -121,5 +132,5 @@ export const useAnfragen = defineStore('anfragen', () => {
     return rec;
   }
 
-  return { liste, anfrage, fuerArbeitsgang, fuerAngebot, vorgang, anlegen, freiAnlegen, antwortErfassen, absagen, alleEinsetzen, zuschlag, gelesen, neuLaden, neueAntworten, angebotsvorlage, angebotsvorlageLernen, mailUebernehmen };
+  return { liste, anfrage, fuerArbeitsgang, fuerAngebot, vorgang, anlegen, freiAnlegen, aendern, antwortErfassen, absagen, alleEinsetzen, zuschlag, gelesen, neuLaden, neueAntworten, angebotsvorlage, angebotsvorlageLernen, mailUebernehmen };
 });

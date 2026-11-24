@@ -58,7 +58,6 @@ watch(w, (x) => {
 watch(() => [props.wahl.form, wIso.value, ws.baum], () => {
   if (props.nurAnsicht) return;
   if (props.wahl.ausfuehrung && !ausfuehrungen.value.some((a) => a.name === props.wahl.ausfuehrung)) props.wahl.ausfuehrung = '';
-  if (!props.wahl.ausfuehrung && ausfuehrungen.value.length) props.wahl.ausfuehrung = ausfuehrungen.value[0].name;
   if (props.wahl.abmessungId && !abmessungen.value.some((a) => a.id === props.wahl.abmessungId)) props.wahl.abmessungId = '';
 }, { immediate: true });
 
@@ -192,9 +191,9 @@ const tasten = (e) => { if (e.key === 'Enter' && neuGueltig.value) anlegen(); if
 
       <!-- 5 Ausführung -->
       <section>
-        <div class="stufe"><span class="nr">5</span> Ausführung <span class="font-normal text-mute">· {{ formInfo.label }}</span></div>
+        <div class="stufe"><span class="nr">5</span> Ausführung <span class="font-normal text-mute">· {{ formInfo.label }} · nur bei Bedarf, nochmal klicken hebt die Wahl auf</span></div>
         <div class="flex flex-wrap gap-1.5">
-          <button v-for="a in ausfuehrungen" :key="a.id" type="button" class="wahl !px-3 !py-1.5 text-sm" :class="wahl.ausfuehrung === a.name ? 'aktiv' : ''" @click="!nurAnsicht && (wahl.ausfuehrung = a.name)">{{ a.name }}</button>
+          <button v-for="a in ausfuehrungen" :key="a.id" type="button" class="wahl !px-3 !py-1.5 text-sm" :class="wahl.ausfuehrung === a.name ? 'aktiv' : ''" @click="!nurAnsicht && (wahl.ausfuehrung = wahl.ausfuehrung === a.name ? '' : a.name)">{{ a.name }}</button>
           <button v-if="!nurAnsicht && neu?.stufe !== 'ausfuehrung'" type="button" class="wahl neu-knopf !py-1.5" @click="oeffneNeu('ausfuehrung', { name: '', nurGruppe: false })"><Plus :size="13" /> Neu</button>
         </div>
         <div v-if="neu?.stufe === 'ausfuehrung'" class="neu-box">

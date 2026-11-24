@@ -8,6 +8,8 @@ import AnimatedNumber from './AnimatedNumber.vue';
 import PartImage from './PartImage.vue';
 import TeilDateien from './TeilDateien.vue';
 import BauteilHistorie from './BauteilHistorie.vue';
+import AehnlicheBauteile from './AehnlicheBauteile.vue';
+import TeilefamilieKarte from './TeilefamilieKarte.vue';
 import { kalkulationUebernehmen, festpreisUebernehmen } from '../lib/historie.js';
 import { call } from '../data/api.js';
 import { uid, zahl } from '../lib/format.js';
@@ -55,6 +57,15 @@ async function kalkulationAus(a) {
     ui.toast(`Kalkulation aus ${a.angebot} übernommen`);
   } catch { ui.toast('Die Kalkulation ließ sich nicht laden.', 'warn'); }
 }
+// Teilefamilie: Kalkulation dieses Bauteils auf die anderen Varianten im selben Angebot übertragen
+const andereImAngebot = computed(() => angebot.teile.filter((t) => t !== props.teil).map((t) => ({ teil: t, bauteilId: angebot.zuordnung[t.id]?.bauteilId ?? '' })).filter((x) => x.bauteilId));
+function aufVariantenUebertragen(liste) {
+  const namen = liste.map((x) => x.teil.teilenummer || x.teil.name).join(', ');
+  if (!confirm(`Kalkulation von ${props.teil.teilenummer || props.teil.name} auf ${namen} übertragen? Zeiten, Material, Kosten, Staffeln und Arbeitsgänge dort werden ersetzt.`)) return;
+  for (const x of liste) kalkulationUebernehmen(x.teil, JSON.parse(JSON.stringify(props.teil)), uid);
+  ui.toast(`Kalkulation auf ${liste.length} Variante${liste.length === 1 ? '' : 'n'} übertragen`, 'ok');
+}
+const familieKarte = ref(null);
 function festpreisAus(e, umgelegt) {
   festpreisUebernehmen(props.teil, e, { umgelegt });
   ui.toast(`Preis aus ${e.angebot || e.auftrag} als festen Stückpreis übernommen`);
@@ -143,6 +154,8 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
 
     <!-- außerhalb des gesperrten Bereichs: auch beim reinen Ansehen auf- und zuklappbar -->
     <BauteilHistorie v-if="zuordnung?.bauteilId || (angebot.kopf.kundeId && teil.teilenummer)" class="card" :bauteil-id="zuordnung?.bauteilId ?? ''" :kunde-id="angebot.kopf.kundeId" :teilenummer="teil.teilenummer" :ohne-angebot="angebot.angebotId ?? ''" :aktionen="!angebot.nurAnsicht" :offen="false" @kalkulation="kalkulationAus" @festpreis="festpreisAus" />
+    <TeilefamilieKarte v-if="zuordnung?.bauteilId" ref="familieKarte" class="card" :bauteil-id="zuordnung.bauteilId" :teile-im-angebot="andereImAngebot" :aktionen="!angebot.nurAnsicht" @uebertragen="aufVariantenUebertragen" />
+    <AehnlicheBauteile class="card" :bauteil-id="zuordnung?.bauteilId ?? ''" :kunde-id="angebot.kopf.kundeId" :teil="teil" :aktionen="!angebot.nurAnsicht" @kalkulation="kalkulationAus" @familie="familieKarte?.laden()" />
 
     <TeilDateien :teil="teil" />
 

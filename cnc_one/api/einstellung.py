@@ -2,6 +2,7 @@
 Jeder Benutzer liest und schreibt nur seine eigenen."""
 
 import json
+import re
 
 import frappe
 from frappe import _
@@ -68,6 +69,14 @@ def signatur_erzeugen(d, firma):
 	return "\n".join(x for x in (d.get("anzeigename"), d.get("funktion"), firma, telefone, d.get("email")) if x)
 
 
+# Gruß am Anfang einer eigenen Signatur: die Mailvorlagen schreiben „Mit freundlichen Grüßen“ schon selbst
+GRUSS = re.compile(r"^\s*(mit\s+)?(freundliche[n]?|beste[n]?|viele[n]?|herzliche[n]?|schöne[n]?|liebe[n]?)\s+grü(ß|ss)e[n]?\b[^\n]*\n+", re.I)
+
+
+def ohne_gruss(signatur):
+	return GRUSS.sub("", signatur or "", count=1)
+
+
 def absender_fuer(firma, absender_name="", user=None):
 	"""(Signatur, Absendername) für Mails des angemeldeten Benutzers. `firma`: Absendername der Mail-Einstellungen bzw.
 	Firmenname. Ohne eigene Einstellungen bleibt es beim gemeinsamen Absender (Signatur = Firmenname)."""
@@ -78,7 +87,7 @@ def absender_fuer(firma, absender_name="", user=None):
 	user = p.benutzer
 	name = (p.anzeigename or "").strip() or frappe.db.get_value("User", user, "full_name") or ""
 	d = {"anzeigename": name, "funktion": p.funktion or "", "telefon": p.telefon or "", "mobil": p.mobil or "", "email": (p.email or "").strip() or user}
-	text = (p.signatur or "").strip() or signatur_erzeugen(d, firma)
+	text = ohne_gruss((p.signatur or "").strip()).strip() or signatur_erzeugen(d, firma)
 	return text, (f"{name} | {basis}" if p.name_als_absender and name else basis)
 
 

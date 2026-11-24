@@ -13,6 +13,8 @@ import PartImage from '../components/PartImage.vue';
 import CustomerCombobox from '../components/CustomerCombobox.vue';
 import ArbeitsplanEditor from '../components/ArbeitsplanEditor.vue';
 import BauteilHistorie from '../components/BauteilHistorie.vue';
+import AehnlicheBauteile from '../components/AehnlicheBauteile.vue';
+import TeilefamilieKarte from '../components/TeilefamilieKarte.vue';
 import { repo } from '../data/repo.js';
 import { useStammdaten } from '../stores/stammdaten.js';
 
@@ -113,6 +115,8 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
       </div>
       <!-- Frühere Angebote, Aufträge und Fertigungen (aus den Belegen gelesen) -->
       <BauteilHistorie v-if="b.id" :bauteil-id="b.id" />
+      <TeilefamilieKarte v-if="b.id && b.teilefamilie" :bauteil-id="b.id" :aktionen="darf" />
+      <AehnlicheBauteile v-if="b.id" :bauteil-id="b.id" :kunde-id="b.kundeId" :teil="{ teilenummer: b.teilenummer, name: b.name, zeichnungsnr: b.zeichnungsnr, material: b.material, vorschaubild: b.vorschaubild }" :aktionen="darf" />
       <section v-if="b.revisionen?.length">
         <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold"><History :size="15" class="text-accent" /> Revisionen und Dateien</h3>
         <div class="divide-y divide-line rounded-xl border border-line">

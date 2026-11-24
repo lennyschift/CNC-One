@@ -1,0 +1,109 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "bezeichnung",
+  "merkmal",
+  "zeichnungsnr",
+  "kunde",
+  "notiz"
+ ],
+ "fields": [
+  {
+   "fieldname": "bezeichnung",
+   "fieldtype": "Data",
+   "label": "Bezeichnung",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "z. B. Gewindebolzen M8 oder Zeichnung 4711"
+  },
+  {
+   "fieldname": "merkmal",
+   "fieldtype": "Data",
+   "label": "Unterschied der Varianten",
+   "in_list_view": 1,
+   "description": "z. B. Gewindelänge, Bohrungsbild"
+  },
+  {
+   "fieldname": "zeichnungsnr",
+   "fieldtype": "Data",
+   "label": "Gemeinsame Zeichnung"
+  },
+  {
+   "fieldname": "kunde",
+   "fieldtype": "Link",
+   "label": "Kunde",
+   "options": "Kunde",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "notiz",
+   "fieldtype": "Small Text",
+   "label": "Notiz"
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Teilefamilie",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "TF-.####",
+ "naming_rule": "Expression (old style)",
+ "title_field": "bezeichnung",
+ "show_title_field_in_link": 1,
+ "search_fields": "bezeichnung,merkmal,zeichnungsnr",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "network"
+}

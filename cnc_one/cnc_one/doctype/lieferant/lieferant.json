@@ -12,7 +12,8 @@
   "adresse",
   "ust_id",
   "angebot_vorlage",
-  "aktiv"
+  "aktiv",
+  "kontakte"
  ],
  "fields": [
   {
@@ -70,6 +71,12 @@
    "label": "Aktiv",
    "default": "1",
    "in_list_view": 1
+  },
+  {
+   "fieldname": "kontakte",
+   "fieldtype": "Table",
+   "label": "Ansprechpartner",
+   "options": "Lieferant Kontakt"
   }
  ],
  "links": [],

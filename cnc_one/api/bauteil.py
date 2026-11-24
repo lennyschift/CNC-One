@@ -30,6 +30,9 @@ def bauteil_ui(d):
 		"stepDatei": d.step_datei or "",
 		"zeichnung": d.zeichnung or "",
 		"revisionen": revisionen_ui(d),
+		"teilefamilie": d.get("teilefamilie") or "",
+		"variante": d.get("variante") or "",
+		"hatGeometrie": bool(d.get("fingerabdruck")),
 	}
 
 

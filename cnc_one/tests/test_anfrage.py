@@ -192,6 +192,68 @@ class TestAnfrageMail(IntegrationTestCase):
 		self.assertEqual((a["neueAntwort"], a["antwort"]["lieferzeit"]), (False, "2 Wochen"))
 		self.assertTrue(anfrage.zuschlag(d.name, 1)["zuschlag"])
 
+	def test_ansprechpartner_bekommen_anfragen_und_ihre_antworten_landen_richtig(self):
+		from cnc_one.api import stammdaten
+		from cnc_one.logic import mail
+		from cnc_one.tests.test_mail import zz_mail
+
+		stammdaten.speichern("lieferant", {"id": "ZZ Alu C", "name": "ZZ Alu C", "aktiv": True, "kontakte": [
+			{"vorname": "Eva", "nachname": "Zett", "funktion": "Verkauf", "email": "Eva@zz-alu-c.de", "anfragen": True},
+			{"nachname": "Buchhaltung", "email": "rechnung@zz-alu-c.de"},
+			{"vorname": "", "nachname": "", "email": ""},
+		]})
+		self.assertEqual([k["email"] for k in stammdaten.lieferant_ui(frappe.get_doc("Lieferant", "ZZ Alu C"))["kontakte"]], ["eva@zz-alu-c.de", "rechnung@zz-alu-c.de"])
+		vorgang, v, _r, g = self.senden()
+		self.assertEqual((v["bcc"], v["ohneAdresse"]), ("verkauf@zz-alu-a.de, info@zz-alu-b.de, eva@zz-alu-c.de", []))
+		self.assertIn("eva@zz-alu-c.de", g["an"])
+		# Antwort von der Buchhaltung (Ansprechpartner ohne Anfragen) wird trotzdem C zugeordnet
+		d = mail.verarbeiten(zz_mail(betreff=f"Angebot {vorgang}", von="rechnung@zz-alu-c.de", mid="<zz-la-c@zz-alu-c.de>"))
+		self.assertEqual(d.lieferant, "ZZ Alu C")
+		self.assertEqual(mail.lieferant_zur_adresse("eva@zz-alu-c.de"), "ZZ Alu C")
+
+	def test_vorschau_genau_wie_beim_senden(self):
+		neu = anfrage.anlegen("", ["ZZ Alu A"], self.pos)
+		vorgang = neu[0]["vorgang"]
+		v = anfrage.mail_vorschlag(vorgang)
+		h = anfrage.mail_ansehen(vorgang, v["text"])["html"]
+		self.assertIn("<table", h)
+		self.assertIn("2 Stangen / 6 Stangen", h)
+		self.assertNotIn("{tabelle}", h)
+		self.assertIn(anfrage.mail_inhalt(v["text"], anfrage.tabelle(frappe.get_doc("Lieferantenanfrage", vorgang))), anfrage.mail_html(v["text"], anfrage.tabelle(frappe.get_doc("Lieferantenanfrage", vorgang))))
+		m = anfrage.mail_muster("Material", "mit Zeugnis", [{"teil": {"name": "Platte", "material": "EN AW-5083"}, "abmessung": "Platte 20 mm · Zuschnitt 500 × 300 mm", "einheit": "Zuschnitte", "mengen": [4]}])
+		self.assertTrue(m["betreff"].startswith("Anfrage LA-") and m["betreff"].endswith(": Platte"))
+		self.assertIn("Zuschnitt 500 × 300 mm", m["html"])
+		self.assertIn("Hinweis: mit Zeugnis", m["html"])
+
+	def test_aendern_legt_neue_fassung_an_und_ersetzt_die_alte(self):
+		r = [{**self.pos[0], "roh": {"werkstoff": "EN AW-6082", "form": "Rund", "abmessung": "Ø40", "laenge": 3000, "unbekannt": "x"}}]
+		neu = anfrage.anlegen("", ["ZZ Alu A", "ZZ Alu B"], r, notiz="alt", art="Material")
+		vorgang = neu[0]["vorgang"]
+		self.assertEqual(neu[0]["positionen"][0]["roh"]["laenge"], 3000)
+		self.assertNotIn("unbekannt", neu[0]["positionen"][0]["roh"])
+		pos = [{**self.pos[0], "mengen": [10]}]
+		f1 = anfrage.aendern(vorgang, ["ZZ Alu A", "ZZ Alu C"], pos, notiz="neu", grund="Menge 10")
+		namen = {x["lieferantId"]: x for x in f1["neu"]}
+		self.assertEqual(namen["ZZ Alu A"]["id"], f"{neu[0]['id']}-1")
+		self.assertEqual(namen["ZZ Alu A"]["vorgang"], f"{vorgang}-1")
+		self.assertEqual(namen["ZZ Alu C"]["vorgang"], f"{vorgang}-1")  # neuer Lieferant: neue Nummer, gleicher Vorgang
+		self.assertEqual((namen["ZZ Alu A"]["fassung"], namen["ZZ Alu A"]["aenderungsgrund"], namen["ZZ Alu A"]["positionen"][0]["mengen"]), (1, "Menge 10", [10]))
+		alt = {x["lieferantId"]: x for x in f1["ersetzt"]}
+		self.assertEqual((alt["ZZ Alu A"]["status"], alt["ZZ Alu A"]["ersetztDurch"]), ("Ersetzt", f"{neu[0]['id']}-1"))
+		self.assertEqual(alt["ZZ Alu B"]["ersetztDurch"], f"{vorgang}-1")
+		# die Mail nennt die vorige Anfrage
+		self.assertIn(f"unsere Anfrage {vorgang} hat sich geändert", anfrage.mail_vorschlag(f"{vorgang}-1")["text"])
+		# die alte lässt sich nicht noch einmal ändern, die neue schon (-2)
+		with self.assertRaises(frappe.ValidationError):
+			anfrage.aendern(vorgang, ["ZZ Alu A"], pos)
+		f2 = anfrage.aendern(f"{vorgang}-1", ["ZZ Alu A"], pos)
+		self.assertEqual(f2["neu"][0]["id"], f"{neu[0]['id']}-2")
+		self.assertEqual(anfrage.vorgang_stamm(f"{vorgang}-2"), vorgang)
+		# Antwort mit der neuen Nummer im Betreff landet bei der neuen Fassung
+		from cnc_one.logic import mail
+
+		self.assertEqual(mail.lieferantenanfrage_zur_mail(f"AW: Anfrage {vorgang}-2: Rundstange", "verkauf@zz-alu-a.de", []).name, f"{neu[0]['id']}-2")
+
 	def test_zuschlag_fuer_ausgewaehlte_positionen_jede_position_nur_einmal(self):
 		zwei = [*self.pos, {"teil": {"name": "Platte", "material": "EN AW-5083"}, "einheit": "Stk", "mengen": [1]}]
 		a, b = anfrage.anlegen("", ["ZZ Alu A", "ZZ Alu B"], zwei)

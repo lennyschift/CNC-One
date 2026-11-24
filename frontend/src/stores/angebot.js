@@ -712,6 +712,13 @@ export const useAngebot = defineStore('angebot', () => {
     bildKette = p.catch(() => {});
     return p;
   }
+  // Geometrie-Fingerabdruck je Modell (für „ähnliche Bauteile“); wird mit dem Angebot gespeichert und kommt ans Bauteil
+  async function geoSetzen(teil, url, netze) {
+    if (nurAnsicht.value || teil.geo?.url === url) return;
+    const { fingerabdruck } = await import('../lib/geometrie.js');
+    const f = fingerabdruck(netze);
+    if (f && modellUrl(teil) === url) teil.geo = { url, ...f };
+  }
   async function modelleVorladen() {
     const liste = teile.value.map((t) => [t, modellUrl(t)]).filter(([, url]) => url);
     if (!liste.length) return;
@@ -721,7 +728,7 @@ export const useAngebot = defineStore('angebot', () => {
     liste.sort((a, b) => rang(a[0]) - rang(b[0]));
     for (const [t, url] of liste) {
       (rang(t) === 0 ? stepNetze(url) : stepVorladen(url))
-        .then((netze) => (t.vorschaubild ? null : vorschauAutomatisch(t, netze)))
+        .then((netze) => { geoSetzen(t, url, netze).catch(() => {}); return t.vorschaubild ? null : vorschauAutomatisch(t, netze); })
         .catch(() => {}); // Fehler zeigt die 3D-Ansicht beim Anklicken
     }
   }

@@ -23,6 +23,7 @@ const props = defineProps({
   // Spalten der Liste: Schlüssel der Felder
   spalten: { type: Array, required: true },
   nav: { type: Boolean, default: true }, // Reiter der Stammdaten oben (aus, wenn die Seite eigene Reiter hat)
+  dialogBreite: { type: String, default: '640px' },
 });
 
 const store = useStammdaten();
@@ -95,7 +96,7 @@ const kopf = (key) => (key === 'name' ? 'Name' : props.felder.find((g) => g.key 
       <p v-if="!zeilen.length" class="px-6 py-12 text-center text-sm text-mute">{{ store.listen[art] === null ? 'Lädt …' : liste.length ? 'Keine Treffer.' : `Noch keine ${einzahl}-Einträge.` }}</p>
     </div>
 
-    <StammDialog v-if="bearbeitet" :titel="neu ? `Neu: ${einzahl}` : bearbeitet.name" :untertitel="neu ? '' : einzahl" :neu="neu" :schreibgeschuetzt="!darf" :speichert="speichert" :gueltig="!!bearbeitet.name.trim()" @schliessen="bearbeitet = null" @speichern="speichern" @loeschen="loeschen">
+    <StammDialog v-if="bearbeitet" :breite="dialogBreite" :titel="neu ? `Neu: ${einzahl}` : bearbeitet.name" :untertitel="neu ? '' : einzahl" :neu="neu" :schreibgeschuetzt="!darf" :speichert="speichert" :gueltig="!!bearbeitet.name.trim()" @schliessen="bearbeitet = null" @speichern="speichern" @loeschen="loeschen">
       <label class="block"><span class="label mb-1 block">Name</span>
         <input v-model="bearbeitet.name" class="field" :disabled="!neu || !darf" autofocus />
         <span v-if="!neu" class="mt-1 block text-[11px] text-mute">Der Name lässt sich nach dem Anlegen nicht mehr ändern, weil Angebote und Arbeitspläne ihn verwenden.</span>
@@ -116,6 +117,8 @@ const kopf = (key) => (key === 'name' ? 'Name' : props.felder.find((g) => g.key 
           <label v-else class="block"><span class="label mb-1 block">{{ f.label }}</span><input v-model="bearbeitet[f.key]" class="field" :placeholder="f.hinweis" :disabled="!darf" /></label>
         </template>
       </div>
+      <!-- weitere Angaben der Seite, z. B. Ansprechpartner beim Lieferanten -->
+      <slot name="mehr" :x="bearbeitet" :darf="darf" />
       <Toggle v-model="bearbeitet.aktiv" label="Aktiv (in Auswahllisten sichtbar)" />
     </StammDialog>
   </div>

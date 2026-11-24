@@ -7,6 +7,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, get_datetime, getdate, now_datetime, nowdate
 
+from cnc_one.api import aehnlich as aehnlich_api
 from cnc_one.api import bauteil as bauteil_api
 from cnc_one.api import mail as mail_api
 from cnc_one.api.stamm import kunde_ui, nur_cnc
@@ -151,7 +152,10 @@ def entwurf_speichern(angebot):
 	# Revision und Dateien am Bauteil ablegen; die Position merkt sich die Revision (auch die aktuelle, wenn keine angegeben ist)
 	for z in doc.positionen:
 		if z.bauteil:
-			rev = bauteil_api.revision_uebernehmen(z.bauteil, json.loads(z.kalkulation or "{}"), doc.name)
+			kalk = json.loads(z.kalkulation or "{}")
+			# Geometrie-Fingerabdruck aus dem STEP-Modell (rechnet die Workbench) für „ähnliche Bauteile“
+			aehnlich_api.geo_uebernehmen(z.bauteil, kalk.get("geo"))
+			rev = bauteil_api.revision_uebernehmen(z.bauteil, kalk, doc.name)
 			if rev != (z.revision or ""):
 				z.db_set("revision", rev, update_modified=False)
 	# Bauteile, die dieses Angebot neu angelegt hatte und die nicht mehr vorkommen, wieder entfernen
@@ -285,6 +289,10 @@ def _bild(url):
 	else:
 		return ""
 	pfad = os.path.abspath(pfad)
+	# nur Dateien unterhalb von files/ bzw. private/files/ (kein „../“ aus einer manipulierten Adresse)
+	erlaubt = [os.path.abspath(frappe.get_site_path(*t)) + os.sep for t in (("private", "files"), ("public", "files"))]
+	if not any(pfad.startswith(e) for e in erlaubt):
+		return ""
 	return "file://" + pfad if os.path.exists(pfad) else ""
 
 

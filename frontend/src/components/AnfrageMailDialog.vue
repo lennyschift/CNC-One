@@ -1,10 +1,11 @@
 <script setup>
 // Lieferantenanfrage per Mail: eine Mail für den ganzen Vorgang, die Lieferanten stehen in BCC und sehen sich nicht.
 // An, CC, BCC, Betreff und Text sind frei änderbar; {tabelle} im Text wird zur Tabelle der Positionen.
-import { ref, onMounted } from 'vue';
-import { X, Send, AlertTriangle, Loader, EyeOff, Table2 } from '@lucide/vue';
+import { ref, onMounted, watch, onBeforeUnmount } from 'vue';
+import { X, Send, AlertTriangle, Loader, EyeOff, Table2, Eye } from '@lucide/vue';
 import { call } from '../data/api.js';
 import Toggle from './Toggle.vue';
+import MailHtml from './MailHtml.vue';
 import { benutzer } from '../data/repo.js';
 import { useAnfragen } from '../stores/anfragen.js';
 import { useUi } from '../stores/ui.js';
@@ -24,6 +25,23 @@ const istAdmin = (benutzer()?.rollen ?? []).some((x) => ['CNC Admin', 'System Ma
 onMounted(async () => {
   try { v.value = await call('cnc_one.api.anfrage.mail_vorschlag', { vorgang: props.vorgang }); } catch (e) { ui.toast(e.message, 'warn'); emit('schliessen'); }
 });
+
+// Vorschau: die Mail genau so, wie sie verschickt wird (HTML vom Server, Tabelle an der Stelle {tabelle})
+const html = ref('');
+let zeitgeber = null;
+let nr = 0;
+watch(() => v.value?.text, (text) => {
+  if (text == null) return;
+  clearTimeout(zeitgeber);
+  zeitgeber = setTimeout(async () => {
+    const meins = ++nr;
+    try {
+      const r = await call('cnc_one.api.anfrage.mail_ansehen', { vorgang: props.vorgang, text });
+      if (meins === nr) html.value = r.html;
+    } catch { /* nur Vorschau */ }
+  }, html.value ? 300 : 0);
+});
+onBeforeUnmount(() => clearTimeout(zeitgeber));
 
 // Platzhalter für die Tabelle an der Cursorstelle einsetzen (falls er gelöscht wurde)
 function tabelleEinfuegen() {
@@ -57,7 +75,7 @@ const bereit = () => v.value && v.value.bereit && (v.value.an.trim() || v.value.
   <Teleport to="body">
     <div class="fixed inset-0 z-[55] grid place-items-center bg-black/45 p-4 backdrop-blur-[2px]" @mousedown.self="emit('schliessen')">
       <Transition name="pop" appear>
-        <div class="card flex max-h-[94vh] w-[min(860px,96vw)] flex-col overflow-hidden shadow-2xl">
+        <div class="card flex max-h-[94vh] w-[min(1280px,97vw)] flex-col overflow-hidden shadow-2xl">
           <header class="flex items-center justify-between border-b border-line px-6 py-4">
             <div>
               <h2 class="text-base font-semibold">Anfrage per Mail senden</h2>
@@ -67,7 +85,8 @@ const bereit = () => v.value && v.value.bereit && (v.value.an.trim() || v.value.
           </header>
 
           <div v-if="!v" class="flex items-center gap-2 p-6 text-sm text-mute"><Loader :size="15" class="animate-spin" /> Wird vorbereitet …</div>
-          <div v-else class="space-y-3 overflow-auto px-6 py-5">
+          <div v-else class="grid min-h-0 flex-1 gap-5 overflow-auto px-6 py-5 lg:grid-cols-[1fr_1fr]">
+           <div class="space-y-3">
             <p v-if="v.versendetAm" class="rounded-xl bg-surface2 px-3 py-2 text-sm">Schon verschickt am {{ zeit(v.versendetAm) }}. Erneut senden schickt die Mail noch einmal.</p>
             <p v-if="!v.bereit" class="flex items-start gap-2 rounded-xl bg-warn/10 px-3 py-2 text-sm text-warn">
               <AlertTriangle :size="15" class="mt-0.5 shrink-0" />
@@ -91,19 +110,25 @@ const bereit = () => v.value && v.value.bereit && (v.value.an.trim() || v.value.
                 <span>Text</span>
                 <button v-if="!v.text.includes('{tabelle}')" type="button" class="inline-flex items-center gap-1 text-xs normal-case tracking-normal text-accent hover:underline" @click="tabelleEinfuegen"><Table2 :size="12" /> Tabelle hier einsetzen</button>
               </span>
-              <textarea ref="textfeld" v-model="v.text" rows="12" class="field font-[inherit] leading-relaxed" />
-              <span class="mt-1 block text-[11px] text-mute">An der Stelle <code class="rounded bg-surface2 px-1">{tabelle}</code> steht in der Mail die Tabelle der Positionen.</span>
+              <textarea ref="textfeld" v-model="v.text" rows="14" class="field font-[inherit] leading-relaxed" />
+              <span class="mt-1 block text-[11px] text-mute">An der Stelle <code class="rounded bg-surface2 px-1">{tabelle}</code> steht in der Mail die Tabelle der Positionen (siehe Vorschau).</span>
             </label>
-            <div class="overflow-auto rounded-xl border border-line">
-              <table class="w-full text-left text-xs">
-                <thead class="bg-surface2 text-mute"><tr><th v-for="k in v.tabelle.kopf" :key="k" class="px-3 py-2 font-medium">{{ k }}</th></tr></thead>
-                <tbody><tr v-for="(z, i) in v.tabelle.zeilen" :key="i" class="border-t border-line"><td v-for="(w, j) in z" :key="j" class="px-3 py-2 align-top">{{ w }}</td></tr></tbody>
-              </table>
-            </div>
             <div v-if="v.zeichnungen" class="flex flex-wrap gap-5">
               <Toggle v-model="zeichnungen" klein label="Zeichnungen anhängen" />
               <Toggle v-model="modelle" klein label="3D-Modelle anhängen" />
             </div>
+           </div>
+           <div class="min-w-0">
+            <div class="label mb-1 flex items-center gap-1.5"><Eye :size="12" /> So kommt die Mail beim Lieferanten an</div>
+            <div class="rounded-xl border border-line bg-white p-4 text-[13px] text-[#1c1c1c]">
+              <div class="mb-3 space-y-0.5 border-b border-[#e5e5e5] pb-2">
+                <div><span class="text-[#777]">Von: </span>{{ v.absender }}</div>
+                <div><span class="text-[#777]">Betreff: </span><span class="font-medium">{{ v.betreff }}</span></div>
+              </div>
+              <MailHtml v-if="html" :html="html" />
+              <div v-else class="flex items-center gap-2 text-[#777]"><Loader :size="13" class="animate-spin" /> Vorschau wird erstellt …</div>
+            </div>
+           </div>
           </div>
 
           <footer class="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
