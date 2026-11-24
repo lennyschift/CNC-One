@@ -12,6 +12,8 @@
   "material",
   "status",
   "notiz_intern",
+  "frueher_gefertigt",
+  "frueher_notiz",
   "sb_serie",
   "seriennummern",
   "serien_stellen",
@@ -77,6 +79,18 @@
    "fieldtype": "Small Text",
    "label": "Interne Notiz",
    "description": "Aus der Workbench; steht nicht auf Belegen"
+  },
+  {
+   "fieldname": "frueher_gefertigt",
+   "fieldtype": "Check",
+   "label": "Schon gefertigt (vor CNC One)",
+   "description": "Von Hand: wurde schon einmal ohne CNC One gefertigt; Aufträge in CNC One zeigt die Historie"
+  },
+  {
+   "fieldname": "frueher_notiz",
+   "fieldtype": "Data",
+   "label": "Früher gefertigt: Hinweis",
+   "description": "z. B. 2022, alter Auftrag 4711"
   },
   {
    "fieldname": "sb_serie",

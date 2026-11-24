@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { TrendingDown, ListChecks, Database, Hash, Info, History, CalendarDays } from '@lucide/vue';
+import { TrendingDown, ListChecks, Database, Hash, Info, History, CalendarDays, ShoppingCart, BadgeCheck } from '@lucide/vue';
 import Toggle from './Toggle.vue';
 import KalkulationTabelle from './KalkulationTabelle.vue';
 import PriceChart from './PriceChart.vue';
@@ -15,7 +15,7 @@ import { useUi } from '../stores/ui.js';
 import { useAngebot } from '../stores/angebot.js';
 import { repo } from '../data/repo.js';
 import { eur } from '../lib/format.js';
-import { festerPreis } from '../lib/calc.js';
+import { festerPreis, berechne } from '../lib/calc.js';
 
 const props = defineProps({ teil: { type: Object, required: true }, ergebnis: { type: Object, required: true } });
 const emit = defineEmits(['anfrage']);
@@ -59,6 +59,16 @@ function festpreisAus(e, umgelegt) {
   festpreisUebernehmen(props.teil, e, { umgelegt });
   ui.toast(`Preis aus ${e.angebot || e.auftrag} als festen Stückpreis übernommen`);
 }
+// Aus einer Bestellung: Preis wie bestellt; daneben, was die Kalkulation (Zeiten, Material, Arbeitsgänge) ergäbe
+const bestellung = computed(() => props.teil.bestellung ?? null);
+const kalkuliert = computed(() => {
+  if (!bestellung.value) return null;
+  const r = berechne({ ...props.teil, preisart: 'kalkuliert', staffel: { ...props.teil.staffel, aktiv: false } });
+  return r.gesamt > 0 ? Math.round((r.gesamt / Math.max(1, props.teil.menge)) * 100) / 100 : null;
+});
+// Schon gefertigt, bevor es CNC One gab (von Hand; am Bauteil gespeichert). Aufträge in CNC One zeigt die Historie.
+const frueher = computed(() => props.teil.frueher ?? zuordnung.value?.frueher ?? { gefertigt: false, notiz: '' });
+function frueherSetzen(feld, wert) { props.teil.frueher = { ...frueher.value, [feld]: wert }; }
 const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)} KB`);
 </script>
 
@@ -94,6 +104,19 @@ const groesse = (b) => (b > 1e6 ? `${zahl(b / 1e6, 1)} MB` : `${zahl(b / 1e3, 0)
             <span v-else-if="bestand"><strong>Bestandsbauteil</strong> <span class="tnum">{{ zuordnung.bauteilId }}</span> aus den Stammdaten. Teilenummer und Stammdaten bleiben unverändert; „Am Bauteil speichern“ aktualisiert den Arbeitsplan.</span>
             <span v-else>Noch nicht in den Stammdaten: Sobald Kunde und Teilenummer eingetragen sind, wird das Bauteil dort angelegt. Eine vorhandene Teilenummer wird als Bestandsbauteil erkannt, es entsteht keine Dublette.</span>
             <RouterLink v-if="zuordnung" to="/stammdaten/bauteile" class="ml-auto underline-offset-2 hover:underline">In den Stammdaten ansehen</RouterLink>
+          </div>
+          <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <label class="inline-flex cursor-pointer items-center gap-1.5" :class="frueher.gefertigt ? 'font-medium text-ok' : 'text-mute'" title="Wurde schon einmal gefertigt, bevor es CNC One gab; wird am Bauteil gespeichert">
+              <input type="checkbox" class="accent-[var(--accent)]" :checked="frueher.gefertigt" @change="frueherSetzen('gefertigt', $event.target.checked)" /><BadgeCheck :size="14" /> Schon gefertigt (vor CNC One)
+            </label>
+            <input v-if="frueher.gefertigt" :value="frueher.notiz" class="field !w-56 !py-0.5 !text-xs" placeholder="z. B. 2022, alter Auftrag 4711" @change="frueherSetzen('notiz', $event.target.value)" />
+          </div>
+          <!-- aus einer Bestellung des Kunden -->
+          <div v-if="bestellung" class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-accent-soft/60 px-3.5 py-2 text-xs">
+            <span class="inline-flex items-center gap-1.5 font-medium text-accent"><ShoppingCart :size="14" /> Bestellt{{ bestellung.position ? ` (Pos. ${bestellung.position})` : '' }}: {{ bestellung.menge }} Stk × {{ eur(bestellung.preis) }}</span>
+            <span v-if="kalkuliert != null" :class="kalkuliert > bestellung.preis ? 'text-warn' : 'text-mute'">Kalkulation ergäbe {{ eur(kalkuliert) }} je Stk<template v-if="bestellung.preis"> ({{ kalkuliert > bestellung.preis ? '+' : '' }}{{ Math.round(((kalkuliert - bestellung.preis) / bestellung.preis) * 100) }} %)</template></span>
+            <span v-else class="text-mute">Noch keine Kalkulation (Zeiten, Material) für den Vergleich</span>
+            <button v-if="teil.preisart !== 'fest' || teil.festpreis !== bestellung.preis" class="underline-offset-2 hover:underline" @click="teil.preisart = 'fest'; teil.festpreis = bestellung.preis; teil.staffel.aktiv = false">Preis der Bestellung wieder einsetzen</button>
           </div>
         </div>
         <div class="flex flex-col gap-3">

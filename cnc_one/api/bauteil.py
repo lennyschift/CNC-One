@@ -20,6 +20,8 @@ def bauteil_ui(d):
 		"revision": d.revision or "",
 		"material": d.material or "",
 		"notizIntern": d.notiz_intern or "",
+		"frueherGefertigt": bool(d.frueher_gefertigt),
+		"frueherNotiz": d.frueher_notiz or "",
 		"arbeitsgaenge": [arbeitsgang_ui(r) for r in d.arbeitsplan],
 		"seriennummern": bool(d.seriennummern),
 		"serienStellen": d.serien_stellen or 4,
@@ -154,11 +156,19 @@ def _angaben_setzen(doc, teil):
 def notiz_setzen(doc, teil):
 	"""Interne Notiz aus der Workbench am Bauteil ablegen, auch bei Bestandsbauteilen. Eine leere Notiz im Angebot
 	löscht die am Bauteil nicht (sie ist dann meist nur nicht geladen); leeren geht in den Stammdaten."""
+	geaendert = False
 	notiz = (teil.get("notizIntern") or "").strip()
 	if notiz and notiz != (doc.notiz_intern or "").strip():
 		doc.notiz_intern = notiz
-		return True
-	return False
+		geaendert = True
+	# „schon gefertigt (vor CNC One)“: nur wenn in der Workbench gesetzt oder geändert (sonst steht es nicht im Teil)
+	f = teil.get("frueher")
+	if isinstance(f, dict):
+		gefertigt, text = 1 if f.get("gefertigt") else 0, (f.get("notiz") or "").strip()[:140]
+		if (doc.frueher_gefertigt or 0) != gefertigt or (doc.frueher_notiz or "") != text:
+			doc.frueher_gefertigt, doc.frueher_notiz = gefertigt, text
+			geaendert = True
+	return geaendert
 
 
 DATEIFELDER = ("zeichnung", "step_datei", "vorschaubild")

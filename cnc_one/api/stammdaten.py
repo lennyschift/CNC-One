@@ -196,6 +196,9 @@ def bauteil_setzen(doc, d):
 	doc.status = d.get("status") if d.get("status") in ("Aktiv", "Gesperrt") else "Aktiv"
 	if "notizIntern" in d:
 		doc.notiz_intern = (d.get("notizIntern") or "").strip()
+	if "frueherGefertigt" in d:
+		doc.frueher_gefertigt = 1 if d.get("frueherGefertigt") else 0
+		doc.frueher_notiz = (d.get("frueherNotiz") or "").strip()[:140]
 	doc.seriennummern = 1 if d.get("seriennummern") else 0
 	stellen = min(9, max(1, int(d.get("serienStellen") or 4)))
 	letzte = max(0, int(d.get("letzteSeriennummer") or 0))

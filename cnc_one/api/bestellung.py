@@ -88,8 +88,8 @@ def _angebotsquellen(kunde, bauteil, teilenummer, menge, preis, kosten_bestellt,
 	zeilen = frappe.db.sql(
 		f"""select p.parent, p.position_key, p.kalkulation, p.revision, a.status, a.creation, a.versandt_am
 		from `tabAngebotsposition` p join `tabAngebot` a on a.name = p.parent
-		where {bed} and a.kunde = %(kunde)s and a.status in ('Gesendet', 'Abgelehnt') and p.parenttype = 'Angebot'
-		order by a.status = 'Gesendet' desc, coalesce(a.versandt_am, a.creation) desc limit 6""",
+		where {bed} and a.kunde = %(kunde)s and a.status in ('Gesendet', 'Bestellt', 'Abgelehnt') and p.parenttype = 'Angebot'
+		order by a.status in ('Gesendet', 'Bestellt') desc, coalesce(a.versandt_am, a.creation) desc limit 6""",
 		{"bauteil": bauteil, "nr": (teilenummer or "").strip().lower(), "kunde": kunde},
 		as_dict=True,
 	)
@@ -115,11 +115,12 @@ def _beste(quellen):
 def _bauteil_kurz(name):
 	if not name:
 		return None
-	b = frappe.db.get_value("Bauteil", name, ["name", "bezeichnung", "teilenummer", "zeichnungsnr", "revision", "material", "vorschaubild", "seriennummern", "serien_stellen", "letzte_seriennummer"], as_dict=True)
+	b = frappe.db.get_value("Bauteil", name, ["name", "bezeichnung", "teilenummer", "zeichnungsnr", "revision", "material", "vorschaubild", "seriennummern", "serien_stellen", "letzte_seriennummer", "zeichnung", "step_datei", "frueher_gefertigt", "frueher_notiz"], as_dict=True)
 	return {
 		"id": b.name, "name": b.bezeichnung or "", "teilenummer": b.teilenummer or "", "zeichnungsnr": b.zeichnungsnr or "", "revision": b.revision or "",
 		"material": b.material or "", "vorschaubild": b.vorschaubild or "", "seriennummern": bool(b.seriennummern), "serienStellen": b.serien_stellen or 4,
-		"letzteSeriennummer": b.letzte_seriennummer or 0,
+		"letzteSeriennummer": b.letzte_seriennummer or 0, "zeichnung": b.zeichnung or "", "stepDatei": b.step_datei or "",
+		"frueherGefertigt": bool(b.frueher_gefertigt), "frueherNotiz": b.frueher_notiz or "",
 	}
 
 

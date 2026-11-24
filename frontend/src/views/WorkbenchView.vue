@@ -1,12 +1,15 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle, Inbox, Lock, ClipboardList, LogOut, Layers } from '@lucide/vue';
+import { MapPin, UserRound, Hash, Eye, FilePlus2, Send, Check, Loader, AlertTriangle, Inbox, Lock, ClipboardList, LogOut, Layers, ShoppingCart, FileText } from '@lucide/vue';
 import { useBelege } from '../stores/belege.js';
 import AnfrageDialog from '../components/AnfrageDialog.vue';
 import MaterialAnfrageDialog from '../components/MaterialAnfrageDialog.vue';
 import BauteilWahlDialog from '../components/BauteilWahlDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
+import BestellungImportDialog from '../components/BestellungImportDialog.vue';
+import AuftragDialog from '../components/AuftragDialog.vue';
+import BelegLink from '../components/BelegLink.vue';
 import { useAnfragen } from '../stores/anfragen.js';
 import { fremdPositionen } from '../lib/anfrage.js';
 import { useUi } from '../stores/ui.js';
@@ -83,6 +86,27 @@ const vorherigerEntwurf = computed(() => {
   const x = a.nurAnsicht?.zurueckZu ? belege.angebot(a.nurAnsicht.zurueckZu) : null;
   return x && x.status === 'Entwurf' ? x : null;
 });
+// Aus einer Bestellung des Kunden: Bestellung einlesen, danach direkt den Auftrag anlegen (kein Angebot an den Kunden)
+const bestellungOffen = ref(false);
+const auftragOffen = ref(false);
+const bestellsumme = computed(() => a.teile.reduce((x, t) => x + (Number(t.bestellung?.preis) || 0) * (Number(t.bestellung?.menge) || 0), 0));
+const angebotRecord = computed(() => (a.angebotId ? belege.angebot(a.angebotId) : null));
+async function auftragOeffnen() {
+  if (!kunde.value) { ui.toast('Bitte zuerst einen Kunden wählen', 'warn'); return; }
+  if (!a.teile.length) { ui.toast('Der Entwurf enthält noch kein Bauteil', 'warn'); return; }
+  await a.speichern();
+  if (a.speicherStand !== 'gespeichert' || !angebotRecord.value) return;
+  auftragOffen.value = true;
+}
+async function auftragAngelegt(neu) {
+  auftragOffen.value = false;
+  const rec = angebotRecord.value;
+  if (rec) belege.einsetzen({ ...rec, status: 'Bestellt' });
+  await a.neu();
+  router.push(`/auftraege/${neu.id}`);
+}
+const de = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('de-DE') : '');
+
 async function ansichtVerlassen() {
   if (vorherigerEntwurf.value) await a.ausAngebot(vorherigerEntwurf.value);
   else await a.neu();
@@ -98,6 +122,13 @@ async function ansichtVerlassen() {
       <RouterLink :to="`/angebote/${a.angebotId}`" class="btn !py-1.5"><Eye :size="15" /> Zum Angebot</RouterLink>
       <RouterLink v-if="a.nurAnsicht.auftragId" :to="`/auftraege/${a.nurAnsicht.auftragId}`" class="btn !py-1.5"><ClipboardList :size="15" /> Zum Auftrag {{ a.nurAnsicht.auftragId }}</RouterLink>
       <button class="btn !py-1.5" @click="ansichtVerlassen"><LogOut :size="15" /> {{ vorherigerEntwurf ? `Zurück zu ${vorherigerEntwurf.id}` : 'Neues Angebot' }}</button>
+    </div>
+    <!-- Entwurf aus einer Bestellung des Kunden: wird nicht gesendet, daraus entsteht direkt der Auftrag -->
+    <div v-if="a.kopf.bestellung && !a.nurAnsicht" class="flex flex-wrap items-center gap-3 rounded-2xl border border-accent/40 bg-accent-soft/60 px-5 py-3 text-sm">
+      <ShoppingCart :size="16" class="shrink-0 text-accent" />
+      <span class="min-w-0 flex-1">Aus der <strong>Bestellung {{ a.kopf.bestellung.nr || '(ohne Nummer)' }}</strong><template v-if="a.kopf.bestellung.datum"> vom {{ de(a.kopf.bestellung.datum) }}</template>: Preise wie bestellt ({{ eur(bestellsumme) }} netto). Rohmaterial und Arbeitsgänge ausarbeiten, dann den Auftrag anlegen. Ein Angebot an den Kunden gibt es nicht.</span>
+      <BelegLink v-if="a.kopf.bestellung.datei" :url="a.kopf.bestellung.datei" name="Bestellung" :titel="a.kopf.bestellung.nr" class="btn !py-1.5"><FileText :size="15" /> Bestellung</BelegLink>
+      <button class="btn btn-primary !py-1.5" @click="auftragOeffnen"><ClipboardList :size="15" /> Auftrag anlegen</button>
     </div>
     <!-- Angebotskopf -->
     <section class="card p-5">
@@ -140,8 +171,10 @@ async function ansichtVerlassen() {
           </div>
           <button v-if="anzahlFremd && !a.nurAnsicht" class="btn mt-4 w-full justify-center !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" @click="anfrageOeffnen()"><Send :size="15" /> Lieferantenanfrage ({{ anzahlFremd }} Fremdvergabe{{ anzahlFremd === 1 ? '' : 'n' }}<template v-if="anzahlAnfragen">, {{ anzahlAnfragen }} gesendet</template>)</button>
           <button v-if="anzahlMaterial && !a.nurAnsicht" class="btn mt-2 w-full justify-center !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" title="Rohmaterial aller Positionen mit Lagerabgleich anfragen" @click="materialOeffnen"><Layers :size="15" /> Material anfragen ({{ anzahlMaterial }} Artikel)</button>
+          <button v-if="!a.nurAnsicht && !a.kopf.bestellung" class="btn mt-2 w-full justify-center !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" title="Bestellung des Kunden mit Zeichnungen und STEP-Modellen einlesen: Wiederholteile mit ihrer Kalkulation, Preise wie bestellt" @click="bestellungOffen = true"><ShoppingCart :size="15" /> Bestellung einlesen</button>
           <div v-if="!a.nurAnsicht" class="mt-2 flex gap-2">
-            <button class="btn btn-primary flex-1 justify-center" @click="ansehen"><Eye :size="16" /> Angebot ansehen</button>
+            <button v-if="a.kopf.bestellung" class="btn btn-primary flex-1 justify-center" @click="auftragOeffnen"><ClipboardList :size="16" /> Auftrag anlegen</button>
+            <button v-else class="btn btn-primary flex-1 justify-center" @click="ansehen"><Eye :size="16" /> Angebot ansehen</button>
             <button class="btn !border-white/20 !bg-white/10 !text-bg hover:!bg-white/20" title="Neues, leeres Angebot beginnen" @click="neuesAngebot"><FilePlus2 :size="16" /></button>
           </div>
           <div v-if="!a.nurAnsicht" class="mt-3 flex items-center justify-center gap-1.5 text-xs opacity-70">
@@ -169,6 +202,8 @@ async function ansichtVerlassen() {
 
     <BauteilWahlDialog v-if="ui.bauteilWahlOffen" @schliessen="ui.bauteilWahlOffen = false" />
     <AnfrageDialog v-if="anfrageOffen" :teile="a.teile" :vorgewaehlt="anfrageAg" :bezug="bezug" @schliessen="anfrageOffen = false" />
+    <BestellungImportDialog v-if="bestellungOffen" @schliessen="bestellungOffen = false" />
+    <AuftragDialog v-if="auftragOffen && angebotRecord" :angebot="angebotRecord" @schliessen="auftragOffen = false" @angelegt="auftragAngelegt" />
     <MaterialAnfrageDialog v-if="materialOffen" :teile="a.teile" :angebot-id="a.angebotId" @schliessen="materialOffen = false" />
   </div>
 </template>

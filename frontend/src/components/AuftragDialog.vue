@@ -21,14 +21,17 @@ const stamm = useStamm();
 const kundeId = props.angebot.kopf.kundeId;
 
 const bestellt = computed(() => b.bestelltFuer(props.angebot.id));
-const bestellnr = reactive({ wert: '' });
+// aus einer Bestellung des Kunden (Workbench „Bestellung einlesen“): Nummer, Menge, Termin und Preis laut Bestellung
+const bestellnr = reactive({ wert: props.angebot.kopf.bestellung?.nr ?? '' });
+const bestellungVon = (p) => (Number(p.teil.bestellung?.preis) > 0 ? p.teil.bestellung : null);
 
 // pro Angebotsposition: Auswahl der Staffel, Menge, Liefertermin und welche Kosten berechnet werden
 const zustand = reactive(props.angebot.positionen.map((p) => {
   const opt = optionen(p.teil, p.ergebnis);
   // Arbeitsplan: am Bauteil gespeichert hat Vorrang, sonst der aus dem Angebot, sonst leer
   const plan = stamm.planFuer(kundeId, p.teil.teilenummer) ?? JSON.parse(JSON.stringify(p.teil.arbeitsgaenge ?? []));
-  return { key: p.key, aktiv: (bestellt.value[p.key] ?? 0) === 0, optId: opt[0].id, menge: opt[0].menge, termin: p.teil.liefertermin ?? '', serienStart: '', kostenAus: {}, plan, planSpeichern: true, planOffen: false };
+  const best = bestellungVon(p);
+  return { key: p.key, aktiv: (bestellt.value[p.key] ?? 0) === 0, optId: opt[0].id, menge: best?.menge || opt[0].menge, termin: best?.termin || p.teil.liefertermin || '', serienStart: '', kostenAus: {}, plan, planSpeichern: true, planOffen: false };
 }));
 
 // Seriennummern: Stammdaten des Bauteils (Kennzeichen und letzte vergebene Nummer) frisch holen
@@ -52,13 +55,16 @@ const sicht = computed(() => props.angebot.positionen.map((p, i) => {
   const z = zustand[i];
   const opts = optionen(p.teil, p.ergebnis);
   const opt = opts.find((o) => o.id === z.optId) ?? opts[0];
-  const pos = auftragsPosition(p.teil, p.ergebnis, opt, z.menge);
+  const best = bestellungVon(p);
+  const kalk = auftragsPosition(p.teil, p.ergebnis, opt, z.menge);
+  // Preis laut Bestellung: Stückpreis wie bestellt, keine eigenen Kostenzeilen
+  const pos = best ? { ...kalk, einzelpreis: Number(best.preis), kosten: [], unterStaffel: false } : kalk;
   const kosten = pos.kosten.map((k) => ({ ...k, an: !z.kostenAus[k.label] }));
   const summe = pos.einzelpreis * pos.menge + kosten.filter((k) => k.an).reduce((s, k) => s + k.betrag, 0);
   const stellen = stellenVon(p);
   const br = bereich(z.serienStart, pos.menge);
   const serie = serieVon(p) ? { letzte: letzte(p), stellen, bereich: br, passt: !br || br.bis <= hoechste(stellen) } : null;
-  return { p, z, opts, opt, pos, kosten, summe, serie };
+  return { p, z, opts: best ? [] : opts, opt, pos, kosten, summe, serie, best };
 }));
 
 const gesamt = computed(() => sicht.value.filter((s) => s.z.aktiv).reduce((x, s) => x + s.summe, 0));
@@ -81,6 +87,7 @@ async function anlegen() {
     arbeitsgaenge: planAus(s.z.plan, uid),
     planSpeichern: s.z.planSpeichern,
     serienStart: s.serie ? String(s.z.serienStart ?? '') : '',
+    ...(s.best ? { bestellposition: s.best.position ?? '', bestellpreis: Number(s.best.preis), preisform: 'Bestellung' } : {}),
   }));
   speichert.value = true;
   const neu = await b.auftragAnlegen({ angebotId: props.angebot.id, kundenbestellnr: bestellnr.wert, positionen });
@@ -115,7 +122,7 @@ async function anlegen() {
                 <div class="min-w-0 flex-1">
                   <div class="flex items-start justify-between gap-3">
                     <div>
-                      <div class="font-medium">{{ s.p.teil.name }}</div>
+                      <div class="font-medium"><span v-if="s.best?.position" class="mr-1.5 text-mute" title="Position in der Bestellung des Kunden">Pos. {{ s.best.position }}</span>{{ s.p.teil.name }}</div>
                       <div class="text-xs text-mute">{{ s.p.teil.teilenummer || 'ohne Teilenummer' }}<template v-if="bestellt[s.p.key]"> · bereits bestellt: {{ bestellt[s.p.key] }} Stk</template></div>
                     </div>
                     <Toggle v-model="s.z.aktiv" label="Bestellen" />
@@ -147,6 +154,7 @@ async function anlegen() {
                     <p v-if="s.pos.unterStaffel" class="flex items-center gap-2 text-xs text-warn"><AlertTriangle :size="14" /> Der Staffelpreis gilt ab {{ s.pos.staffelMenge }} Stk, die Menge liegt darunter.</p>
 
                     <div class="rounded-xl bg-surface2 px-4 py-3 text-sm">
+                      <div v-if="s.best" class="mb-1 text-xs text-mute">Preis laut Bestellung des Kunden</div>
                       <div class="flex justify-between"><span>{{ s.pos.menge }} Stk × {{ eur(s.pos.einzelpreis) }}</span><span class="tnum">{{ eur(s.pos.einzelpreis * s.pos.menge) }}</span></div>
                       <div v-for="k in s.kosten" :key="k.label" class="mt-1.5 flex items-center justify-between gap-3 text-mute">
                         <span class="flex items-center gap-2">↳ {{ k.label }}</span>

@@ -30,6 +30,14 @@ def _revisionen(bauteil):
 	return {"bauteilRevision": frappe.db.get_value("Bauteil", bauteil, "revision") or "", "bauteilRevisionen": list(dict.fromkeys(r for r in namen if r))}
 
 
+def _frueher(bauteil):
+	"""Von Hand vermerkt: das Bauteil wurde schon vor CNC One gefertigt."""
+	if not bauteil:
+		return {"gefertigt": False, "notiz": ""}
+	w = frappe.db.get_value("Bauteil", bauteil, ["frueher_gefertigt", "frueher_notiz"], as_dict=True) or {}
+	return {"gefertigt": bool(w.get("frueher_gefertigt")), "notiz": w.get("frueher_notiz") or ""}
+
+
 def angebot_ui(d):
 	"""Das Angebot in der Form, die die Oberfläche erwartet."""
 	kunde = frappe.get_doc("Kunde", d.kunde) if d.kunde else None
@@ -48,6 +56,7 @@ def angebot_ui(d):
 			"projekt": d.projekt or "",
 			"kontaktName": d.kontakt_name or "",
 			"kontaktEmail": d.kontakt_email or "",
+			"bestellung": _json(d.bestellung) or None,
 			"kundeName": d.kunde_name or "",
 			"kunde": kunde_ui(kunde) if kunde else None,
 		},
@@ -57,6 +66,7 @@ def angebot_ui(d):
 				"bauteilId": z.bauteil or "", "herkunft": ("neu" if z.bauteil_neu else "bestand") if z.bauteil else "",
 				"seriennummern": bool(z.bauteil and frappe.db.get_value("Bauteil", z.bauteil, "seriennummern")),
 				"bauteilNotiz": (frappe.db.get_value("Bauteil", z.bauteil, "notiz_intern") or "") if z.bauteil else "",
+				"bauteilFrueher": _frueher(z.bauteil),
 				**_revisionen(z.bauteil),
 			}
 			for z in d.positionen
@@ -120,6 +130,9 @@ def entwurf_speichern(angebot):
 	doc.projekt = (kopf.get("projekt") or "").strip()
 	doc.kontakt_name = (kopf.get("kontaktName") or "").strip()
 	doc.kontakt_email = (kopf.get("kontaktEmail") or "").strip().lower()
+	if "bestellung" in kopf:
+		b = kopf.get("bestellung")
+		doc.bestellung = frappe.as_json({k: b.get(k) or "" for k in ("nr", "datum", "datei")}) if b else None
 
 	# Was dieses Angebot an Bauteilen schon verknüpft hat: Position -> (Bauteil, mit diesem Angebot neu angelegt)
 	alt = {z.position_key: (z.bauteil, bool(z.bauteil_neu)) for z in doc.positionen if z.bauteil}

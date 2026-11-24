@@ -146,6 +146,41 @@ class TestBestellung(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			bestellung.auftrag_anlegen(self.kunde, [{"bauteil": b, "menge": 5}])
 
+	def test_workbench_aus_bestellung_direkt_zum_auftrag(self):
+		# früheres Angebot zum Wiederholteil: Quelle für die Kalkulation, auch wenn es aus einer Bestellung kam
+		alt = self.gesendet([teil("t1", teilenummer="ZZ-WB-1")])
+		t = {**teil("w1", teilenummer="ZZ-WB-1", menge=5), "preisart": "fest", "festpreis": 373,
+			"bestellung": {"position": "1", "preis": 373, "menge": 5, "termin": "2026-12-11"}, "frueher": {"gefertigt": True, "notiz": "2022"}}
+		neu = {**teil("w2", teilenummer="ZZ-WB-2", menge=10), "bestellung": {"position": "2", "preis": 38, "menge": 10, "termin": ""}}
+		kopf = {"kundeId": self.kunde, "projekt": "Bestellung 20260050", "bestellung": {"nr": "20260050", "datum": "2026-11-05", "datei": "/private/files/zz-bestellung.pdf"}}
+		a = angebot.entwurf_speichern({"id": None, "kopf": kopf, "teile": [t, neu]})
+		self.assertEqual(a["kopf"]["bestellung"]["nr"], "20260050")
+		b1 = a["positionen"][0]["bauteilId"]
+		self.assertEqual(a["positionen"][0]["herkunft"], "bestand")
+		self.assertEqual(a["positionen"][0]["bauteilFrueher"], {"gefertigt": True, "notiz": "2022"})
+		self.assertEqual(frappe.db.get_value("Bauteil", b1, ["frueher_gefertigt", "frueher_notiz"]), (1, "2022"))
+		self.assertEqual(bestellung.vorschlag(self.kunde, [{"teilenummer": "ZZ-WB-1", "menge": 5, "preis": 373}])["positionen"][0]["bauteil"]["frueherGefertigt"], True)
+		# Auftrag direkt aus dem Entwurf (ohne Senden), Preis und Positionsnummer laut Bestellung
+		r = auftrag.aus_angebot(a["id"], "", [
+			{"angebotKey": "w1", "menge": 5, "termin": "2026-12-11", "bestellposition": "1", "bestellpreis": 373, "preisform": "Bestellung"},
+			{"angebotKey": "w2", "menge": 10, "bestellposition": "2", "bestellpreis": 38, "preisform": "Bestellung"},
+		])
+		self.assertEqual((r["kundenbestellnr"], r["bestelldatum"]), ("20260050", "2026-11-05"))
+		self.assertEqual([(p["bestellposition"], p["einzelpreis"], p["kosten"]) for p in r["positionen"]], [("1", 373, []), ("2", 38, [])])
+		self.assertAlmostEqual(r["netto"], 5 * 373 + 10 * 38, places=2)
+		self.assertEqual(frappe.db.get_value("Angebot", a["id"], "status"), "Bestellt")
+		self.assertEqual(frappe.db.get_value("Auftrag", r["id"], "bestellung_datei"), "/private/files/zz-bestellung.pdf")
+		# zweimal geht nicht, und ein gewöhnlicher Entwurf bleibt ohne Senden gesperrt
+		with self.assertRaises(frappe.ValidationError):
+			auftrag.aus_angebot(a["id"], "", [{"angebotKey": "w1", "menge": 5}])
+		e = angebot.entwurf_speichern({"id": None, "kopf": {"kundeId": self.kunde}, "teile": [teil("x1", teilenummer="ZZ-WB-3")]})
+		with self.assertRaises(frappe.ValidationError):
+			auftrag.aus_angebot(e["id"], "", [{"angebotKey": "x1", "menge": 1}])
+		# der Haken lässt sich wieder nehmen
+		angebot.entwurf_speichern({"id": e["id"], "kopf": {"kundeId": self.kunde}, "teile": [{**teil("x1", teilenummer="ZZ-WB-1"), "frueher": {"gefertigt": False, "notiz": ""}}]})
+		self.assertEqual(frappe.db.get_value("Bauteil", b1, "frueher_gefertigt"), 0)
+		self.assertTrue(alt["id"])
+
 	def test_neues_bauteil_aus_bestellung(self):
 		r = bestellung.auftrag_anlegen(self.kunde, [{"teilenummer": "ZZ-NEU-1", "bezeichnung": "Hülse", "menge": 3, "bestellpreis": 12}])
 		self.assertTrue(frappe.db.exists("Bauteil", {"kunde": self.kunde, "teilenummer": "ZZ-NEU-1"}))

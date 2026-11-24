@@ -83,7 +83,8 @@ function demoTeile() {
   return [a, b, c];
 }
 
-const leererKopf = () => ({ kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache', projekt: '', kontaktName: '', kontaktEmail: '', materialDrucken: false });
+// bestellung: { nr, datum, datei } bei einem Entwurf aus einer Bestellung des Kunden (wird nicht gesendet, daraus entsteht direkt der Auftrag)
+const leererKopf = () => ({ kundeId: '', anfrageNr: '', gueltigWochen: 4, lieferzeit: 'Nach Absprache', projekt: '', kontaktName: '', kontaktEmail: '', materialDrucken: false, bestellung: null });
 
 // Das Angebot, an dem gerade gearbeitet wird. Es liegt als Entwurf in Frappe und wird nach jeder Änderung
 // kurz verzögert gespeichert. In Frappe merkt sich die Workbench je Benutzer, welches Angebot offen war.
@@ -138,7 +139,7 @@ export const useAngebot = defineStore('angebot', () => {
   function zuordnungAus(positionen) {
     const m = {};
     for (const p of positionen) {
-      if (p.bauteilId) m[p.key] = { bauteilId: p.bauteilId, herkunft: p.herkunft, seriennummern: !!p.seriennummern, revision: p.bauteilRevision ?? '', revisionen: p.bauteilRevisionen ?? [] };
+      if (p.bauteilId) m[p.key] = { bauteilId: p.bauteilId, herkunft: p.herkunft, seriennummern: !!p.seriennummern, revision: p.bauteilRevision ?? '', revisionen: p.bauteilRevisionen ?? [], frueher: p.bauteilFrueher ?? null };
       // interne Notiz steht am Bauteil: ist sie im Angebot leer, die vom Bauteil zeigen
       const t = teile.value.find((x) => x.id === p.key);
       if (t && !t.notizIntern && p.bauteilNotiz) t.notizIntern = p.bauteilNotiz;
@@ -166,6 +167,7 @@ export const useAngebot = defineStore('angebot', () => {
     kopf.value = {
       kundeId: k.kundeId, anfrageNr: k.anfrageNr, gueltigWochen: k.gueltigWochen, lieferzeit: k.lieferzeit,
       projekt: k.projekt ?? '', kontaktName: k.kontaktName ?? '', kontaktEmail: k.kontaktEmail ?? '', materialDrucken: !!k.materialDrucken,
+      bestellung: k.bestellung?.nr || k.bestellung?.datei ? k.bestellung : null,
     };
     // ältere Angebote hatten „Werkstoff nennen“ nur für das ganze Angebot: an die Positionen übertragen
     teile.value = record.positionen.map((p) => {
@@ -394,8 +396,9 @@ export const useAngebot = defineStore('angebot', () => {
     // Dateien hängen am Angebot: der Entwurf muss gespeichert sein
     if (!angebotId.value) await speichern();
     if (!angebotId.value) { ui.toast('Das Angebot ließ sich nicht speichern, die Dateien wurden nicht hochgeladen.', 'warn'); return; }
-    await Promise.all(auftraege.map(async ({ teil, datei }) => {
-      uploads.value[teil.id] = [...(uploads.value[teil.id] ?? []), datei.name];
+    // nacheinander hochladen: gleichzeitig kollidieren die Einträge im Archiv-Protokoll (Nummernkreis, Deadlock)
+    for (const { teil, datei } of auftraege) uploads.value[teil.id] = [...(uploads.value[teil.id] ?? []), datei.name];
+    for (const { teil, datei } of auftraege) await (async () => {
       try {
         const f = await hochladen(datei, { doctype: 'Angebot', docname: angebotId.value });
         const eintrag = { id: f.name, name: datei.name, art: dateiArt(datei.name), groesse: datei.size, url: f.file_url };
@@ -408,7 +411,7 @@ export const useAngebot = defineStore('angebot', () => {
       } finally {
         uploads.value[teil.id] = (uploads.value[teil.id] ?? []).filter((n) => n !== datei.name);
       }
-    }));
+    })();
   }
 
   // Angebot aus einer Mail-Anfrage (cnc_one.api.mail.angebot_anlegen): Entwurf laden, je Zeichnung/Modell-Paar ein Bauteil
@@ -439,6 +442,70 @@ export const useAngebot = defineStore('angebot', () => {
       if (z) erkennenFuer(t, z);
     }
     ui.toast(`${gruppen.length} Bauteil${gruppen.length === 1 ? '' : 'e'} aus der Anfrage übernommen`, 'ok');
+  }
+
+  // Workbench aus einer Bestellung des Kunden (BestellungImportDialog): neuer Entwurf, Projekt = Bestellnummer, je
+  // Bestellposition ein Bauteil. Wiederholteile bringen Kalkulation, Rohmaterial und Arbeitsgänge aus ihrem letzten
+  // Angebot mit (`quelle`), sonst Zeichnung und Modell des Bauteils. Preis = Stückpreis der Bestellung (fester Preis),
+  // Menge und Termin wie bestellt. Das Bestell-PDF hängt am Entwurf, Zeichnungen und Modelle an ihrer Position.
+  // positionen: [{ bestellposition, teilenummer, bezeichnung, menge, preis, termin, zeichnungsnr, index, bauteil, quelle, frueher, dateien: [File] }]
+  async function ausBestellung({ kundeId, bestellung, positionen, bestellPdf = null }) {
+    await neu();
+    const { kalkulationUebernehmen } = await import('../lib/historie.js');
+    const neueTeile = [];
+    for (const p of positionen) {
+      const t = neuesTeil(p.bezeichnung || p.teilenummer || 'Bauteil');
+      if (p.quelle?.angebot) {
+        try {
+          kalkulationUebernehmen(t, await call('cnc_one.api.historie.kalkulation', { angebot: p.quelle.angebot, position_key: p.quelle.angebotKey }), uid);
+        } catch { ui.toast(`${p.teilenummer}: Kalkulation aus ${p.quelle.angebot} ließ sich nicht laden`, 'warn'); }
+      } else if (p.bauteil?.material) t.material = p.bauteil.material;
+      const b = p.bauteil;
+      Object.assign(t, {
+        teilenummer: b?.teilenummer || p.teilenummer || '',
+        zeichnungsnr: p.zeichnungsnr || b?.zeichnungsnr || '',
+        revision: p.index || '',
+        menge: Math.max(1, Math.round(Number(p.menge) || 1)),
+        liefertermin: p.termin || '',
+        preisart: 'fest',
+        festpreis: Number(p.preis) || 0,
+        staffel: { ...(t.staffel ?? {}), aktiv: false, stufen: t.staffel?.stufen ?? [] },
+        bestellung: { position: p.bestellposition || '', preis: Number(p.preis) || 0, menge: Math.max(1, Math.round(Number(p.menge) || 1)), termin: p.termin || '' },
+        dateien: !p.dateien?.length && b ? [
+          ...(b.zeichnung ? [{ name: dateiname(b.zeichnung), art: 'Zeichnung', url: b.zeichnung }] : []),
+          ...(b.stepDatei ? [{ name: dateiname(b.stepDatei), art: 'STEP', url: b.stepDatei }] : []),
+        ] : [],
+        vorschaubild: !p.dateien?.some((f) => dateiArt(f.name) === 'STEP') ? (b?.vorschaubild ?? '') : '',
+        seriennummern: b ? !!b.seriennummern : t.seriennummern,
+      });
+      if (p.frueher) t.frueher = { gefertigt: !!p.frueher.gefertigt, notiz: p.frueher.notiz ?? '' };
+      neueTeile.push({ t, p });
+    }
+    await ruhig(() => {
+      kopf.value = {
+        ...leererKopf(), kundeId,
+        projekt: bestellung?.nr ? `Bestellung ${bestellung.nr}` : 'Bestellung',
+        lieferzeit: 'laut Bestellung',
+        bestellung: { nr: bestellung?.nr ?? '', datum: bestellung?.datum ?? '', datei: '' },
+      };
+      teile.value = neueTeile.map((x) => x.t);
+      auswahlId.value = teile.value[0]?.id ?? null;
+    });
+    await speichern();
+    if (!angebotId.value) { ui.toast('Der Entwurf ließ sich nicht speichern.', 'warn'); return; }
+    // Bestell-PDF und die Dateien der Positionen hochladen
+    if (bestellPdf) {
+      try {
+        const f = await hochladen(bestellPdf, { doctype: 'Angebot', docname: angebotId.value });
+        kopf.value.bestellung = { ...kopf.value.bestellung, datei: f.file_url };
+      } catch (e) { ui.toast(`${bestellPdf.name}: ${e.message}`, 'warn'); }
+    }
+    for (const { p } of neueTeile.filter((x) => x.p.dateien?.length)) {
+      const teil = teile.value.find((x) => x.id === neueTeile.find((y) => y.p === p).t.id);
+      await dateienHinzufuegen(p.dateien, teil);
+    }
+    await speichern();
+    ui.toast(`${neueTeile.length} Position${neueTeile.length === 1 ? '' : 'en'} aus Bestellung ${bestellung?.nr ?? ''} übernommen`, 'ok');
   }
 
   // Schriftfeld-Angaben aus der Zeichnung lesen und vorhandene Bauteile dazu suchen. Übernommen wird erst nach Bestätigung.
@@ -626,5 +693,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { nurAnsicht, kopf, teile, zuordnung, fruehesterTermin, mailAnfrage, ausMailAnfrage, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, zusammenfuehren, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
+  return { nurAnsicht, kopf, teile, zuordnung, fruehesterTermin, mailAnfrage, ausMailAnfrage, ausBestellung, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, zusammenfuehren, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
 });

@@ -22,6 +22,7 @@
   "gueltig_wochen",
   "lieferzeit",
   "material_drucken",
+  "bestellung",
   "versandt_am",
   "sb_pos",
   "positionen"
@@ -46,7 +47,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Entwurf\nGesendet\nAbgelehnt\nErsetzt",
+   "options": "Entwurf\nGesendet\nBestellt\nAbgelehnt\nErsetzt",
    "default": "Entwurf",
    "read_only": 1,
    "in_list_view": 1,
@@ -146,6 +147,12 @@
    "fieldtype": "Check",
    "label": "Werkstoff auf dem Angebot",
    "description": "Werkstoff je Position im Angebots-PDF nennen"
+  },
+  {
+   "fieldname": "bestellung",
+   "fieldtype": "JSON",
+   "label": "Aus Bestellung",
+   "description": "Workbench aus einer Bestellung des Kunden: {nr, datum, datei}; Status „Bestellt“ = Auftrag daraus angelegt, nie an den Kunden gesendet"
   },
   {
    "fieldname": "versandt_am",

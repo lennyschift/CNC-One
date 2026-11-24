@@ -108,10 +108,21 @@ def aus_angebot(angebot, kundenbestellnr="", positionen=None):
 	if not positionen:
 		frappe.throw(_("Der Auftrag braucht mindestens eine Position."))
 	ang = frappe.get_doc("Angebot", angebot)
-	if ang.status != "Gesendet":
+	bestellung = als_json(ang.bestellung) if ang.bestellung else {}
+	# Workbench aus einer Bestellung des Kunden: der Entwurf wird nie gesendet, er wird mit dem Auftrag „Bestellt“
+	aus_bestellung = ang.status == "Entwurf" and bool(bestellung)
+	if ang.status != "Gesendet" and not aus_bestellung:
 		frappe.throw(_("Nur aus einem gesendeten Angebot lässt sich ein Auftrag anlegen."))
+	if aus_bestellung:
+		if not ang.kunde:
+			frappe.throw(_("Bitte zuerst einen Kunden wählen."))
+		if frappe.db.exists("Auftrag", {"angebot": ang.name, "status": ["!=", "Storniert"]}):
+			frappe.throw(_("Aus dieser Bestellung gibt es schon einen Auftrag."))
 
-	doc = neuer_auftrag(ang.kunde, kundenbestellnr, ang)
+	doc = neuer_auftrag(ang.kunde, kundenbestellnr or bestellung.get("nr") or "", ang)
+	if bestellung:
+		doc.bestelldatum = bestellung.get("datum") or None
+		doc.bestellung_datei = bestellung.get("datei") or ""
 	merker = {"serien": [], "vergeben": [], "plaene": []}
 	for p in positionen:
 		ap = next((z for z in ang.positionen if z.position_key == p.get("angebotKey")), None)
@@ -120,6 +131,10 @@ def aus_angebot(angebot, kundenbestellnr="", positionen=None):
 		position_aus_angebot(doc, ang, ap, p, merker)
 	doc.insert()
 	nachbereiten(doc, merker)
+	if aus_bestellung:
+		ang.flags.status_wechsel = True
+		ang.status = "Bestellt"
+		ang.save()
 	return auftrag_ui(doc)
 
 
