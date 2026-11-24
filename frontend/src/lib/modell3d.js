@@ -66,13 +66,19 @@ export function flaecheHervorheben(netz, dreiecke, farbe = 0xd4242a) {
   return mesh;
 }
 
-// Linien eines Rohteils in CAD-Koordinaten: Quader { min, max } oder Rundmaterial { achse, mitte, durchmesser, laenge }
+// Punkt eines Quaders (Koordinaten in seiner Ausrichtung, siehe messen.quader) in CAD-Koordinaten
+const qp = (r, l) => {
+  const B = r.achsen ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  return [0, 1, 2].map((k) => l[0] * B[0][k] + l[1] * B[1][k] + l[2] * B[2][k]);
+};
+
+// Linien eines Rohteils in CAD-Koordinaten: Quader { min, max, achsen? } oder Rundmaterial { achse, mitte, durchmesser, laenge }
 export function rohteilLinien(r, farbe = 0x2563eb) {
   const pkt = [];
   if (r.art === 'Quader') {
     const [x0, y0, z0] = r.min;
     const [x1, y1, z1] = r.max;
-    const e = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+    const e = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]].map((l) => qp(r, l));
     for (const [i, j] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) pkt.push(...e[i], ...e[j]);
   } else {
     const a = new THREE.Vector3(...r.achse).normalize();
@@ -164,48 +170,111 @@ export function vorschauPng(netze, groesse = 480) {
 
 // Richtungspfeile am Rohteil, damit klar ist, wohin ein Aufmaß wirkt. Quader: je Fläche ein Pfeil nach außen (X rot, Y grün,
 // Z blau wie im CAD) mit „X+“, „X−“ …; Rund: Stirn A/B an den Enden der Achse und ein Pfeil für den Durchmesser.
+// Jeder Pfeil hat einen unsichtbaren, dicken Griff zum Ziehen (userData.griff = { richtung, von, dir }); text(richtung, name)
+// liefert die Beschriftung (z. B. mit dem Wert), bearbeiten(richtung, div) wird beim Klick auf die Beschriftung gerufen.
+// Richtungen: xm, xp, ym, yp, zm, zp (Quader), a, b, r (Rund).
 export const ACHS_FARBEN = { X: '#dc2626', Y: '#16a34a', Z: '#2563eb', A: '#d97706', R: '#7c3aed' };
-export function richtungsPfeile(r) {
+export function richtungsPfeile(r, { text = null, bearbeiten = null } = {}) {
   const gruppe = new THREE.Group();
   const teile = [];
-  const pfeil = (von, richtung, laenge, farbe, text) => {
-    const dir = new THREE.Vector3(...richtung).normalize();
-    const p = new THREE.ArrowHelper(dir, new THREE.Vector3(...von), laenge, new THREE.Color(farbe).getHex(), laenge * 0.28, laenge * 0.16);
+  const reste = [];
+  const griffe = [];
+  const pfeile = {};
+  const pfeil = (richtung, von, richtungVektor, laenge, farbe, name) => {
+    const dir = new THREE.Vector3(...richtungVektor).normalize();
+    const start = new THREE.Vector3(...von);
+    const p = new THREE.ArrowHelper(dir, start, laenge, new THREE.Color(farbe).getHex(), laenge * 0.28, laenge * 0.16);
     for (const m of [p.line.material, p.cone.material]) { m.depthTest = false; m.transparent = true; }
     p.renderOrder = 10;
     gruppe.add(p);
     teile.push(p);
+    // Griff: Zylinder um Schaft und Spitze, etwas dicker, damit er sich gut greifen lässt
+    const geo = new THREE.CylinderGeometry(laenge * 0.13, laenge * 0.13, laenge * 1.15, 10);
+    const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, depthTest: false });
+    const griff = new THREE.Mesh(geo, mat);
+    griff.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    griff.position.copy(start).addScaledVector(dir, laenge * 0.57);
+    griff.userData.griff = { richtung, von: start.toArray(), dir: dir.toArray() };
+    gruppe.add(griff);
+    griffe.push(griff);
+    reste.push(geo, mat);
     const div = document.createElement('div');
     div.className = 'achs-beschriftung';
     div.style.background = farbe;
-    div.textContent = text;
+    div.textContent = text ? text(richtung, name) : name;
+    if (bearbeiten) {
+      div.classList.add('bearbeitbar');
+      div.title = 'Klicken und Wert eingeben (oder am Pfeil ziehen)';
+      div.addEventListener('pointerdown', (e) => e.stopPropagation());
+      div.addEventListener('click', (e) => { e.stopPropagation(); bearbeiten(richtung, div); });
+    }
     const l = new CSS2DObject(div);
-    l.position.copy(new THREE.Vector3(...von).addScaledVector(dir, laenge * 1.22));
+    l.position.copy(start).addScaledVector(dir, laenge * 1.22);
     gruppe.add(l);
+    pfeile[richtung] = { pfeil: p, div };
   };
   if (r.art === 'Quader') {
     const mitte = [0, 1, 2].map((i) => (r.min[i] + r.max[i]) / 2);
     const laenge = Math.max(4, Math.max(r.x, r.y, r.z) * 0.22);
     ['X', 'Y', 'Z'].forEach((achse, i) => {
       for (const s of [-1, 1]) {
-        const von = [...mitte];
-        von[i] = s > 0 ? r.max[i] : r.min[i];
-        const dir = [0, 0, 0];
-        dir[i] = s;
-        pfeil(von, dir, laenge, ACHS_FARBEN[achse], `${achse}${s > 0 ? '+' : '−'}`);
+        const lokal = [...mitte];
+        lokal[i] = s > 0 ? r.max[i] : r.min[i];
+        const von = qp(r, lokal);
+        const dir = (r.achsen ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]])[i].map((w) => w * s);
+        pfeil(`${achse.toLowerCase()}${s > 0 ? 'p' : 'm'}`, von, dir, laenge, ACHS_FARBEN[achse], `${achse}${s > 0 ? '+' : '−'}`);
       }
     });
   } else {
     const a = new THREE.Vector3(...r.achse).normalize();
     const m = new THREE.Vector3(...r.mitte);
     const laenge = Math.max(4, Math.max(r.durchmesser, r.laenge) * 0.22);
-    pfeil(m.clone().addScaledVector(a, -r.laenge / 2).toArray(), a.clone().negate().toArray(), laenge, ACHS_FARBEN.A, 'Stirn A');
-    pfeil(m.clone().addScaledVector(a, r.laenge / 2).toArray(), a.toArray(), laenge, ACHS_FARBEN.A, 'Stirn B');
-    const hilf = Math.abs(a.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
-    const u = new THREE.Vector3().crossVectors(a, hilf).normalize();
-    const quer = new THREE.Vector3().crossVectors(u, a).normalize(); // möglichst „nach oben“
-    pfeil(m.clone().addScaledVector(quer, r.durchmesser / 2).toArray(), quer.toArray(), laenge * 0.8, ACHS_FARBEN.R, '⌀ je Seite');
+    pfeil('a', m.clone().addScaledVector(a, -r.laenge / 2).toArray(), a.clone().negate().toArray(), laenge, ACHS_FARBEN.A, 'Stirn A');
+    pfeil('b', m.clone().addScaledVector(a, r.laenge / 2).toArray(), a.toArray(), laenge, ACHS_FARBEN.A, 'Stirn B');
+    const quer = rundQuer(a);
+    pfeil('r', m.clone().addScaledVector(quer, r.durchmesser / 2).toArray(), quer.toArray(), laenge * 0.8, ACHS_FARBEN.R, '⌀ je Seite');
   }
-  gruppe.userData.entsorgen = () => teile.forEach((p) => p.dispose());
+  gruppe.userData.griffe = griffe;
+  gruppe.userData.pfeile = pfeile;
+  gruppe.userData.entsorgen = () => { teile.forEach((p) => p.dispose()); reste.forEach((x) => x.dispose()); };
+  return gruppe;
+}
+
+// Richtung quer zur Achse, möglichst „nach oben“ (CAD Z)
+function rundQuer(a) {
+  const hilf = Math.abs(a.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+  const u = new THREE.Vector3().crossVectors(a, hilf).normalize();
+  return new THREE.Vector3().crossVectors(u, a).normalize();
+}
+
+// Maße des Rohteils direkt am Rahmen: Quader an drei Kanten (X, Y, Z, aus der Iso-Ansicht vorne sichtbar), Rund der
+// Durchmesser an der Stirnseite B und die Länge an der Mantellinie. format(mm) liefert den Text.
+export function rohteilMasse(r, format) {
+  const gruppe = new THREE.Group();
+  const marke = (ort, text, farbe) => {
+    const div = document.createElement('div');
+    div.className = 'roh-mass';
+    div.style.borderColor = farbe;
+    div.textContent = text;
+    const l = new CSS2DObject(div);
+    l.position.set(...ort);
+    gruppe.add(l);
+  };
+  if (r.art === 'Quader') {
+    const [x0, y0, z0] = r.min;
+    const [x1, y1] = r.max;
+    const z1 = r.max[2];
+    marke(qp(r, [(x0 + x1) / 2, y0, z0]), format(r.x), ACHS_FARBEN.X);
+    marke(qp(r, [x1, (y0 + y1) / 2, z0]), format(r.y), ACHS_FARBEN.Y);
+    marke(qp(r, [x1, y0, (z0 + z1) / 2]), format(r.z), ACHS_FARBEN.Z);
+  } else {
+    const a = new THREE.Vector3(...r.achse).normalize();
+    const m = new THREE.Vector3(...r.mitte);
+    const quer = rundQuer(a);
+    const seite = new THREE.Vector3().crossVectors(a, quer).normalize();
+    const rad = r.durchmesser / 2;
+    marke(m.clone().addScaledVector(a, r.laenge / 2).addScaledVector(seite, -rad).toArray(), `⌀ ${format(r.durchmesser)}`, ACHS_FARBEN.R);
+    marke(m.clone().addScaledVector(quer, -rad).toArray(), format(r.laenge), ACHS_FARBEN.A);
+  }
   return gruppe;
 }

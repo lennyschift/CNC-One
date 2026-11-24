@@ -83,11 +83,8 @@ function gewaehlt(e) {
   if (files.length) angebot.dateienHinzufuegen(files, props.teil);
 }
 
-async function modellGeladen(netze) {
-  if (props.teil.vorschaubild || angebot.nurAnsicht) return;
-  const { vorschauPng } = await import('../lib/modell3d.js');
-  angebot.vorschaubildSetzen(props.teil, await vorschauPng(netze));
-}
+// fehlt das Vorschaubild noch (das Vorladen im Hintergrund war noch nicht so weit), entsteht es jetzt
+const modellGeladen = (netze) => angebot.vorschauAutomatisch(props.teil, netze);
 const vorschauUebernehmen = (blob) => angebot.vorschaubildSetzen(props.teil, blob, true);
 const nurAnsicht = computed(() => !!angebot.nurAnsicht);
 

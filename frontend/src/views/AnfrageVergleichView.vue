@@ -5,7 +5,7 @@
 // in die Summe einrechnen. Das PDF des Angebots geht im Belegfenster auf (gern auf dem zweiten Bildschirm).
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, Award, Crown, Inbox, Pencil, Scale, AlertTriangle, FileText, Shuffle, CornerDownRight } from '@lucide/vue';
+import { ArrowLeft, Award, Crown, Inbox, Pencil, Scale, AlertTriangle, FileText, Shuffle, CornerDownRight, Truck } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import BelegLink from '../components/BelegLink.vue';
@@ -38,6 +38,8 @@ const mitPreisen = computed(() => v.value.lieferanten.filter((l) => l.hatPreise)
 // aus dem Posteingang gekommen: Rückweg anbieten und beim Weitergehen mitnehmen
 const von = computed(() => (route.query.von === 'posteingang' ? { von: 'posteingang' } : {}));
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
+// Liefertermin einer Position: als Datum, wenn lesbar, sonst der Text aus dem PDF
+const termin = (datum, text) => (datum ? de(datum) : (text || '').slice(0, 40));
 </script>
 
 <template>
@@ -89,6 +91,7 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
                   <div class="font-semibold" :class="z.bester === l.id ? 'text-ok' : ''"><Award v-if="z.vergeben?.id === l.id && !z.vergeben.perAlternative" :size="13" class="mr-1 inline text-ok" /><Crown v-else-if="z.bester === l.id && Object.values(z.zellen).filter(Boolean).length > 1" :size="12" class="mr-1 inline" />{{ eur(z.zellen[l.id].gesamt) }}</div>
                   <div class="text-[11px] text-mute">{{ eur(z.zellen[l.id].proStk) }} / {{ z.einheit }}<template v-if="z.zellen[l.id].einmalig"> + {{ eur(z.zellen[l.id].einmalig) }} einmalig</template></div>
                   <div v-if="z.zellen[l.id].abweichung != null" class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-warn/15 px-1.5 text-[10px] text-warn" :title="`Der Lieferant bietet ${z.zellen[l.id].abweichung} ${z.einheit} an; der Preis je ${z.einheit} gilt hier für die angefragte Menge`"><AlertTriangle :size="10" /> angeboten {{ z.zellen[l.id].abweichung }} {{ z.einheit }}</div>
+                  <div v-if="z.zellen[l.id].termin" class="mt-0.5 flex items-center justify-end gap-1 text-[10px]" :class="z.zellen[l.id].datum && z.zellen[l.id].datum === l.spaetester && l.verschieden ? 'font-semibold text-warn' : 'text-mute'" :title="`Liefertermin laut Angebot: ${z.zellen[l.id].termin}`"><Truck :size="10" /> {{ termin(z.zellen[l.id].datum, z.zellen[l.id].termin) }}</div>
                 </template>
                 <span v-else class="text-mute">–</span>
               </td>
@@ -111,6 +114,7 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
                       <input type="checkbox" class="accent-[var(--accent)]" :checked="alternativen.includes(w.key)" @change="umschalten(w.key)" /><Award v-if="w.zuschlag" :size="13" class="text-ok" />{{ eur(w.o.betrag) }}
                     </label>
                     <div class="text-[11px] text-mute">{{ preisText(w.o) }}</div>
+                    <div v-if="w.o.liefertermin" class="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-mute" :title="`Liefertermin laut Angebot: ${w.o.liefertermin}`"><Truck :size="10" /> {{ termin(w.o.lieferdatum, w.o.liefertermin) }}</div>
                   </template>
                 </td>
               </tr>
@@ -137,6 +141,7 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
                     <input type="checkbox" class="accent-[var(--accent)]" :checked="alternativen.includes(w.key)" @change="umschalten(w.key)" /><Award v-if="w.zuschlag" :size="13" class="text-ok" />{{ eur(w.o.betrag) }}
                   </label>
                   <div class="text-[11px] text-mute">{{ preisText(w.o) }}</div>
+                  <div v-if="w.o.liefertermin" class="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-mute" :title="`Liefertermin laut Angebot: ${w.o.liefertermin}`"><Truck :size="10" /> {{ termin(w.o.lieferdatum, w.o.liefertermin) }}</div>
                 </template>
               </td>
             </tr>
@@ -162,8 +167,15 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
             <td v-for="l in v.lieferanten" :key="l.id" class="px-3 py-2 text-right tnum">{{ l.netto ? eur(l.netto) : '–' }}</td>
           </tr>
           <tr class="border-t border-line text-xs">
-            <td class="sticky left-0 z-10 bg-surface px-4 py-2 text-mute">Lieferzeit</td><td />
-            <td v-for="l in v.lieferanten" :key="l.id" class="px-3 py-2 text-right">{{ l.lieferzeit || '–' }}</td>
+            <td class="sticky left-0 z-10 bg-surface px-4 py-2 text-mute">Liefertermin<span class="block text-[11px]">alles da (späteste Position)</span></td><td />
+            <td v-for="l in v.lieferanten" :key="l.id" class="px-3 py-2 text-right align-top">
+              <template v-if="l.spaetester">
+                <div class="font-semibold tnum" :class="l.schnellster ? 'text-ok' : ''"><Truck :size="12" class="mr-1 inline" />{{ de(l.spaetester) }}</div>
+                <div v-if="l.verschieden" class="text-[11px] text-mute">Termine je Position verschieden</div>
+                <div v-if="l.ohneDatum.length" class="text-[11px] text-warn" :title="l.ohneDatum.join('\n')">+ {{ l.ohneDatum.length }} ohne Datum: {{ l.ohneDatum[0].slice(0, 30) }}</div>
+              </template>
+              <template v-else>{{ l.lieferzeit || '–' }}</template>
+            </td>
           </tr>
           <tr class="text-xs">
             <td class="sticky left-0 z-10 bg-surface px-4 py-2 text-mute">Angebot · gültig bis</td><td />

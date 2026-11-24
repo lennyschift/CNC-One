@@ -91,6 +91,46 @@ export function aufmassText(a, form = 'Quader') {
     : `X −${mm(m.xm)}/+${mm(m.xp)}, Y −${mm(m.ym)}/+${mm(m.yp)}, Z −${mm(m.zm)}/+${mm(m.zp)} mm`;
 }
 
+// ---- Ziehen an den Richtungspfeilen im 3D-Viewer (wie in Fusion)
+// Pfeile: Quader xm, xp, ym, yp, zm, zp; Rund a (Stirn A), b (Stirn B), r (Durchmesser).
+// Welches Feld der gewählten Aufmaß-Art ändert ein Pfeil? faktor 2: feste Größe ist mittig, ein Pfeil um 1 mm
+// gezogen macht das Rohteil 2 mm größer.
+export function pfeilFeld(a, form, richtung) {
+  const art = aufmassNorm(a).art;
+  if (art === 'gleich') return { feld: 'wert', faktor: 1 };
+  if (form === 'Quader') {
+    if (art === 'seiten') return { feld: richtung === 'zp' ? 'oben' : richtung === 'zm' ? 'unten' : 'seite', faktor: 1 };
+    if (art === 'einzeln') return { feld: richtung, faktor: 1 };
+    return { feld: richtung[0], faktor: 2 };
+  }
+  if (richtung === 'r') return art === 'fest' ? { feld: 'd', faktor: 2 } : { feld: 'radial', faktor: 1 };
+  if (art === 'seiten') return { feld: 'stirn', faktor: 1 };
+  if (art === 'einzeln') return { feld: richtung === 'a' ? 'l1' : 'l2', faktor: 1 };
+  return { feld: 'l', faktor: 2 };
+}
+
+// Feste Größe aus dem aktuellen Rohteil (auf volle mm aufgerundet), für noch leere Felder
+function festAus(rohteil) {
+  const auf = (v) => Math.ceil((v || 0) - 1e-6);
+  if (!rohteil) return {};
+  return rohteil.art === 'Quader' ? { x: auf(rohteil.x), y: auf(rohteil.y), z: auf(rohteil.z) } : { d: auf(rohteil.durchmesser), l: auf(rohteil.laenge) };
+}
+
+// Aktueller Wert eines Pfeils (Aufmaß je Seite bzw. bei fester Größe das Rohteilmaß)
+export function pfeilWert(a, form, richtung, rohteil = null) {
+  const m = aufmassNorm(a);
+  const { feld } = pfeilFeld(m, form, richtung);
+  return m.art === 'fest' && !m[feld] ? festAus(rohteil)[feld] ?? 0 : m[feld];
+}
+
+// Ein Feld setzen (auf 0,01 mm, nicht negativ); bei fester Größe die übrigen leeren Maße aus dem Rohteil mitspeichern
+export function aufmassAendern(a, feld, wert, rohteil = null) {
+  const m = aufmassNorm(a);
+  if (m.art === 'fest') for (const [k, v] of Object.entries(festAus(rohteil))) if (!m[k]) m[k] = v;
+  m[feld] = Math.max(0, Math.round((Number(wert) || 0) * 100) / 100);
+  return aufmassSpeicherform(m);
+}
+
 // Nur die Felder speichern, die die Art braucht (rundum bleibt eine Zahl wie bisher)
 export function aufmassSpeicherform(m) {
   if (m.art === 'gleich') return m.wert;

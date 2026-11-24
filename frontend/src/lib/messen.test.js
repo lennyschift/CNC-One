@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { volumenUndFlaeche, gewichtKg, rundmaterial, quader, rohteile, umkreis, flaecheAnalysieren, flaecheZuDreieck, messpunkt, abstand, ACHSEN, drehteilErkennen, drehrohteil, achseZuFlaeche } from './messen.js';
+import { volumenUndFlaeche, gewichtKg, rundmaterial, quader, rohteile, umkreis, flaecheAnalysieren, flaecheZuDreieck, messpunkt, abstand, ACHSEN, drehteilErkennen, drehrohteil, achseZuFlaeche, quaderBasis, quaderPunkt } from './messen.js';
 import modelle from './testdaten/modelle.json';
 
 // Eigene Testmodelle (CadQuery): Flansch Scheibe ⌀80×12 + Bund ⌀40×20, Bohrung ⌀25, 4 Löcher ⌀6,6 auf LK ⌀60, Fase 1 mm oben;
@@ -117,5 +117,31 @@ describe('Drehfrästeile', () => {
     expect(achseZuFlaeche(achsen, bund)).toBe(haupt);
     const loch = analysen(flansch).find((a) => a.art === 'Zylinder' && Math.abs(a.durchmesser - 6.6) < 0.1);
     expect(achseZuFlaeche(achsen, loch)).not.toBe(haupt);
+  });
+});
+
+describe('Quader an Fläche und Kante ausrichten', () => {
+  // Halteblock 120 × 60 × 30, um 30° um Z gedreht: ohne Ausrichtung wird der Quader größer
+  const w = Math.PI / 6;
+  const gedreht = block.map((n) => {
+    const p = Float32Array.from(n.position);
+    for (let i = 0; i < p.length; i += 3) { const x = p[i]; const y = p[i + 1]; p[i] = x * Math.cos(w) - y * Math.sin(w); p[i + 1] = x * Math.sin(w) + y * Math.cos(w); }
+    return { ...n, position: p };
+  });
+  const masse = (q) => [q.x, q.y, q.z].map((v) => Math.round(v)).sort((a, b) => a - b);
+  it('findet ohne X-Kante die kleinste Grundfläche', () => {
+    expect(masse(quader(gedreht))).not.toEqual([30, 60, 120]);
+    const q = quader(gedreht, 0, quaderBasis(gedreht, [0, 0, 1]));
+    expect(masse(q)).toEqual([30, 60, 120]);
+    expect(q.achsen).toHaveLength(3);
+  });
+  it('nimmt die X-Richtung aus einer Kante und rechnet Punkte zurück', () => {
+    const basis = quaderBasis(gedreht, [0, 0, 1], [Math.cos(w), Math.sin(w), 0.3]);
+    const q = quader(gedreht, 1, basis);
+    expect(q.x).toBeCloseTo(122, 0);
+    expect(q.z).toBeCloseTo(32, 0);
+    const p = quaderPunkt(q, q.min);
+    expect(Math.hypot(...p)).toBeGreaterThan(0);
+    expect(quaderBasis(gedreht, [0, 0, 1], [0, 0, 5])).toBeNull();
   });
 });

@@ -122,6 +122,14 @@ export const useAngebot = defineStore('angebot', () => {
   let laeuft = false;
   let nochmal = false;
   let laufend = Promise.resolve();
+  // Alle Uploads der Workbench nacheinander (Dateien, Vorschaubilder im Hintergrund, Bestell-PDF): gleichzeitig
+  // kollidieren die Einträge im Archiv-Protokoll (Nummernkreis, Deadlock)
+  let uploadKette = Promise.resolve();
+  const hochladenNacheinander = (...args) => {
+    const p = uploadKette.then(() => hochladen(...args));
+    uploadKette = p.catch(() => {});
+    return p;
+  };
 
   const ergebnisse = computed(() => Object.fromEntries(teile.value.map((t) => [t.id, berechne(t)])));
   const netto = computed(() => summe(Object.values(ergebnisse.value)));
@@ -400,7 +408,7 @@ export const useAngebot = defineStore('angebot', () => {
     for (const { teil, datei } of auftraege) uploads.value[teil.id] = [...(uploads.value[teil.id] ?? []), datei.name];
     for (const { teil, datei } of auftraege) await (async () => {
       try {
-        const f = await hochladen(datei, { doctype: 'Angebot', docname: angebotId.value });
+        const f = await hochladenNacheinander(datei, { doctype: 'Angebot', docname: angebotId.value });
         const eintrag = { id: f.name, name: datei.name, art: dateiArt(datei.name), groesse: datei.size, url: f.file_url };
         teil.dateien.push(eintrag);
         if (eintrag.art === 'Zeichnung') erkennenFuer(teil, eintrag);
@@ -496,7 +504,7 @@ export const useAngebot = defineStore('angebot', () => {
     // Bestell-PDF und die Dateien der Positionen hochladen
     if (bestellPdf) {
       try {
-        const f = await hochladen(bestellPdf, { doctype: 'Angebot', docname: angebotId.value });
+        const f = await hochladenNacheinander(bestellPdf, { doctype: 'Angebot', docname: angebotId.value });
         kopf.value.bestellung = { ...kopf.value.bestellung, datei: f.file_url };
       } catch (e) { ui.toast(`${bestellPdf.name}: ${e.message}`, 'warn'); }
     }
@@ -677,13 +685,47 @@ export const useAngebot = defineStore('angebot', () => {
     if (!angebotId.value) return;
     try {
       const name = `vorschau-${(teil.teilenummer || teil.id).replace(/[^\w.-]+/g, '_')}.png`;
-      const f = await hochladen(blob, { doctype: 'Angebot', docname: angebotId.value, name });
+      const f = await hochladenNacheinander(blob, { doctype: 'Angebot', docname: angebotId.value, name });
       teil.vorschaubild = f.file_url;
       if (melden) ui.toast('Vorschaubild übernommen', 'ok');
     } catch (e) {
       ui.toast(`Vorschaubild: ${e.message}`, 'warn');
     }
   }
+
+  // ---- Vorschaubilder im Hintergrund: alle STEP-Modelle der Workbench werden vorgeladen (mehrere gleichzeitig, das
+  // gewählte Bauteil zuerst), fehlende Vorschaubilder entstehen daraus ohne Anklicken. Die Bilder werden nacheinander
+  // gerendert (jedes braucht kurz einen eigenen WebGL-Kontext).
+  const vorschauInArbeit = new Set();
+  let bildKette = Promise.resolve();
+  const modellUrl = (t) => t.dateien.find((d) => d.art === 'STEP' && d.url)?.url ?? '';
+  function vorschauAutomatisch(teil, netze) {
+    if (teil.vorschaubild || nurAnsicht.value || vorschauInArbeit.has(teil.id)) return Promise.resolve();
+    vorschauInArbeit.add(teil.id);
+    const url = modellUrl(teil);
+    const p = bildKette.then(async () => {
+      if (teil.vorschaubild || modellUrl(teil) !== url || !teile.value.includes(teil)) return;
+      const { vorschauPng } = await import('../lib/modell3d.js');
+      const blob = await vorschauPng(netze);
+      if (!teil.vorschaubild && modellUrl(teil) === url) await vorschaubildSetzen(teil, blob);
+    }).finally(() => vorschauInArbeit.delete(teil.id));
+    bildKette = p.catch(() => {});
+    return p;
+  }
+  async function modelleVorladen() {
+    const liste = teile.value.map((t) => [t, modellUrl(t)]).filter(([, url]) => url);
+    if (!liste.length) return;
+    const { stepNetze, stepVorladen } = await import('../lib/step.js');
+    // das gewählte Bauteil zuerst, dann die ohne Vorschaubild, dann der Rest
+    const rang = (t) => (t.id === auswahlId.value ? 0 : t.vorschaubild ? 2 : 1);
+    liste.sort((a, b) => rang(a[0]) - rang(b[0]));
+    for (const [t, url] of liste) {
+      (rang(t) === 0 ? stepNetze(url) : stepVorladen(url))
+        .then((netze) => (t.vorschaubild ? null : vorschauAutomatisch(t, netze)))
+        .catch(() => {}); // Fehler zeigt die 3D-Ansicht beim Anklicken
+    }
+  }
+  watch(() => teile.value.map((t) => `${t.id}|${modellUrl(t)}|${t.vorschaubild ? 1 : 0}`).join(';'), () => { modelleVorladen(); });
 
   function beispieleEinfuegen() {
     if (gesperrt()) return null;
@@ -693,5 +735,5 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast('Beispiel-Bauteile eingefügt');
   }
 
-  return { nurAnsicht, kopf, teile, zuordnung, fruehesterTermin, mailAnfrage, ausMailAnfrage, ausBestellung, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, zusammenfuehren, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
+  return { nurAnsicht, kopf, teile, zuordnung, fruehesterTermin, mailAnfrage, ausMailAnfrage, ausBestellung, auswahlId, angebotId, speicherStand, uploads, erkennungen, anlernen, markierung, fokus, ausBauteilHinzufuegen, auswahl, ergebnisse, netto, neu, ausAngebot, speichern, hinzufuegen, duplizieren, loeschen, zusammenfuehren, verschieben, dateienHinzufuegen, dateiEntfernen, vorschaubildSetzen, vorschauAutomatisch, erkennenFuer, anlernPunkt, erkennungUebernehmen, vorlageVergessen, bestandUebernehmen, erkennungVerwerfen, rohmaterialAnlegen, schreibweiseMerken, beispieleEinfuegen };
 });

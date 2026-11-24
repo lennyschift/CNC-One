@@ -1,7 +1,7 @@
 <script setup>
 // Aufmaß des Rohteils wählen: rundum, Seiten/Oben/Unten, je Richtung oder feste Größe (siehe lib/aufmass.js).
 // Beim Umschalten werden die Felder aus dem bisher wirksamen Aufmaß vorbelegt.
-import { computed } from 'vue';
+import { computed, reactive } from 'vue';
 import { AUFMASS_ARTEN, aufmassNorm, aufmassUmschalten, aufmassSpeicherform } from '../lib/aufmass.js';
 
 const props = defineProps({
@@ -18,8 +18,22 @@ function art(id) {
   if (props.gesperrt || id === m.value.art) return;
   emit('update:modelValue', aufmassSpeicherform(aufmassUmschalten(m.value, id, props.rohteil)));
 }
+// Beim Tippen sofort übernehmen (das Rohteil im 3D-Viewer wächst live mit); solange das Feld den Fokus hat, bleibt der
+// getippte Text stehen (sonst würde z. B. „1,“ gleich zu „1“)
+const entwurf = reactive({});
+function tippen(k, text) {
+  entwurf[k] = text;
+  const t = String(text).trim();
+  if (t === '' || !Number.isFinite(Number(t.replace(',', '.')))) return;
+  setzen(k, t);
+}
+function fertig(k, text) {
+  delete entwurf[k];
+  setzen(k, text);
+}
 function setzen(k, text) {
   const v = Math.max(0, Number(String(text).replace(',', '.')) || 0);
+  if (v === wert(k) && m.value.art !== 'fest') return;
   const neu = { ...m.value };
   // feste Größe: die angezeigten Werte (ggf. aus dem Rohteil vorbelegt) mitspeichern
   if (neu.art === 'fest') for (const [f] of felder.value) neu[f] = wert(f);
@@ -28,6 +42,8 @@ function setzen(k, text) {
 }
 // Farbe je Richtung wie die Pfeile im 3D-Viewer (X rot, Y grün, Z blau; Stirn orange, Durchmesser lila)
 const FARBE = { xm: '#dc2626', xp: '#dc2626', x: '#dc2626', ym: '#16a34a', yp: '#16a34a', y: '#16a34a', zm: '#2563eb', zp: '#2563eb', z: '#2563eb', oben: '#2563eb', unten: '#2563eb', l1: '#d97706', l2: '#d97706', stirn: '#d97706', radial: '#7c3aed' };
+// Feld so breit wie die Zahl (mindestens 3 Stellen), damit z. B. „437,5“ ganz lesbar ist
+const breite = (t) => `calc(${Math.max(3, String(t).length)}ch + 1.1rem)`;
 const text = (v) => String(Math.round((v || 0) * 100) / 100).replace('.', ',');
 
 // Felder je Art und Form: [Schlüssel, Beschriftung, Hinweis]
@@ -62,7 +78,7 @@ const wert = (k) => {
     <span class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
       <label v-for="[k, l, t] in felder" :key="k" class="flex items-center gap-1" :title="t">
         <span class="text-[11px]" :class="FARBE[k] ? 'font-semibold' : 'text-mute'" :style="FARBE[k] ? { color: FARBE[k] } : {}">{{ l }}</span>
-        <input :value="text(wert(k))" class="field !w-12 !px-1.5 !py-0.5 text-right text-xs tnum" :disabled="gesperrt" @change="setzen(k, $event.target.value)" @keydown.enter="$event.target.blur()" />
+        <input :value="entwurf[k] ?? text(wert(k))" inputmode="decimal" :style="{ width: breite(entwurf[k] ?? text(wert(k))) }" class="field !px-1.5 !py-0.5 text-right text-xs tnum" :disabled="gesperrt" @input="tippen(k, $event.target.value)" @blur="fertig(k, $event.target.value)" @keydown.enter="$event.target.blur()" />
       </label>
       <span class="text-[11px] text-mute">mm</span>
     </span>

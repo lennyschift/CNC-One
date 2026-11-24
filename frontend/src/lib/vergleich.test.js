@@ -113,3 +113,30 @@ describe('Zuschlag je Position', () => {
     expect(v.weitere.map((w) => [w.key, w.index, w.bezug, w.zuschlag])).toEqual([['LA-1|1', 1, 'frei:1', true]]);
   });
 });
+
+describe('Liefertermine je Position', () => {
+  const mitTerminen = (id, d1, d2) => anfrage(id, [
+    { posKey: 'frei:1', menge: 2, proStk: 50, einmalig: 0 },
+    { posKey: 'frei:2', menge: 1, proStk: 80, einmalig: 0 },
+  ], {});
+  const x = mitTerminen('LA-7');
+  x.antwort.daten = { positionen: [
+    { pos: '1', zuordnung: 'frei:1', betrag: 100, liefertermin: '10.12.2026', lieferdatum: '2026-12-10' },
+    { pos: '2', zuordnung: 'frei:2', betrag: 80, liefertermin: 'KW 52', lieferdatum: '2026-12-24' },
+    { pos: '3', zuordnung: '', betrag: 30, werkstoff: 'EN AW-5083', liefertermin: '2027-01-15', lieferdatum: '2027-01-15' },
+  ] };
+  const y = mitTerminen('LA-8');
+  y.antwort.daten = { positionen: [{ pos: '1', zuordnung: 'frei:1', betrag: 90, liefertermin: 'ab Lager', lieferdatum: '' }, { pos: '2', zuordnung: 'frei:2', betrag: 70, liefertermin: '2026-12-01', lieferdatum: '2026-12-01' }] };
+  it('zeigt den Termin in der Zelle und den spätesten als Gesamttermin', () => {
+    const v = vergleich([x, y]);
+    expect(v.zeilen[0].zellen['LA-7']).toMatchObject({ termin: '10.12.2026', datum: '2026-12-10' });
+    const l7 = v.lieferanten.find((l) => l.id === 'LA-7');
+    const l8 = v.lieferanten.find((l) => l.id === 'LA-8');
+    expect(l7).toMatchObject({ spaetester: '2026-12-24', verschieden: true });
+    expect(l8).toMatchObject({ spaetester: '2026-12-01', ohneDatum: ['ab Lager'], schnellster: true });
+  });
+  it('rechnet gewählte Alternativen in den Gesamttermin ein', () => {
+    const v = vergleich([x, y], { alternativen: ['LA-7|2'] });
+    expect(v.lieferanten.find((l) => l.id === 'LA-7').spaetester).toBe('2027-01-15');
+  });
+});

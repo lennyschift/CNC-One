@@ -35,10 +35,22 @@ export function volumenUndFlaeche(netze) {
 // Gewicht in kg aus Volumen (mm³) und Dichte (kg/dm³ = g/cm³)
 export const gewichtKg = (volumenMm3, dichte) => (volumenMm3 / 1e6) * (dichte || 0);
 
+// Was nicht vom Aufmaß abhängt (Punkte, Hüllquader, Umkreis je Achse), wird je Modell gemerkt: so rechnet das Rohteil
+// beim Tippen oder Ziehen am Pfeil live mit, ohne jedes Mal alle Punkte neu zu durchlaufen.
+const geometrieCache = new WeakMap();
+function gemerkt(netze, schluessel, rechnen) {
+  let c = geometrieCache.get(netze);
+  if (!c) { c = new Map(); geometrieCache.set(netze, c); }
+  if (!c.has(schluessel)) c.set(schluessel, rechnen());
+  return c.get(schluessel);
+}
+
 function allePunkte(netze) {
-  const p = [];
-  for (const n of netze) for (let i = 0; i < n.position.length; i += 3) p.push([n.position[i], n.position[i + 1], n.position[i + 2]]);
-  return p;
+  return gemerkt(netze, 'punkte', () => {
+    const p = [];
+    for (const n of netze) for (let i = 0; i < n.position.length; i += 3) p.push([n.position[i], n.position[i + 1], n.position[i + 2]]);
+    return p;
+  });
 }
 
 // Basis senkrecht zu einer Achse (für Projektionen in die Ebene quer zur Achse)
@@ -82,10 +94,11 @@ export function rundmaterial(netze, achse, aufmass = 0) {
   const z = rundZugaben(aufmass);
   const a = einheit(achse);
   const [u, v] = quer(a);
-  const p = allePunkte(netze);
-  let min = Infinity; let max = -Infinity;
-  const flach = p.map((q) => { const s = dot(q, a); if (s < min) min = s; if (s > max) max = s; return [dot(q, u), dot(q, v)]; });
-  const k = umkreis(flach);
+  const { k, min, max } = gemerkt(netze, `rund|${a.join(',')}`, () => {
+    let lo = Infinity; let hi = -Infinity;
+    const flach = allePunkte(netze).map((q) => { const s = dot(q, a); if (s < lo) lo = s; if (s > hi) hi = s; return [dot(q, u), dot(q, v)]; });
+    return { k: umkreis(flach), min: lo, max: hi };
+  });
   const lage = rundLage(2 * k.r, min, max, z);
   const mitte = add(add(mul(u, k.x), mul(v, k.y)), mul(a, lage.s));
   return { art: 'Rund', achse: a, durchmesser: lage.d, laenge: lage.l, mitte, kleiner: lage.kleiner, volumen: Math.PI * (lage.d / 2) ** 2 * lage.l };
@@ -98,13 +111,19 @@ function rundLage(dBauteil, min, max, z) {
   return { d: dBauteil + 2 * z.radial, l: max - min + z.l1 + z.l2, s: (min - z.l1 + max + z.l2) / 2, kleiner: false };
 }
 
-// Quader entlang der CAD-Achsen; aufmass als Zahl oder Aufmaß-Objekt (je Richtung, Seiten/Oben/Unten, feste Größe)
-export function quader(netze, aufmass = 0) {
+// Quader entlang der CAD-Achsen oder einer eigenen Ausrichtung (basis = [X, Y, Z] als Einheitsvektoren, z. B. aus einer
+// angeklickten Fläche und Kante); aufmass als Zahl oder Aufmaß-Objekt (je Richtung, Seiten/Oben/Unten, feste Größe).
+// min/max sind Koordinaten in dieser Ausrichtung (ohne basis = CAD-Koordinaten); mit basis liefert das Ergebnis `achsen`.
+export function quader(netze, aufmass = 0, basis = null) {
   const z = quaderZugaben(aufmass);
-  const p = allePunkte(netze);
-  const min = [Infinity, Infinity, Infinity];
-  const max = [-Infinity, -Infinity, -Infinity];
-  for (const q of p) for (let i = 0; i < 3; i++) { if (q[i] < min[i]) min[i] = q[i]; if (q[i] > max[i]) max[i] = q[i]; }
+  const B = basis ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  const schluessel = basis ? `box|${B.flat().map((v) => v.toFixed(6)).join(',')}` : 'box';
+  const { min, max } = gemerkt(netze, schluessel, () => {
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    for (const q of allePunkte(netze)) for (let i = 0; i < 3; i++) { const w = dot(q, B[i]); if (w < lo[i]) lo[i] = w; if (w > hi[i]) hi[i] = w; }
+    return { min: lo, max: hi };
+  });
   let lo = min.map((m, i) => m - z.minus[i]);
   let hi = max.map((m, i) => m + z.plus[i]);
   let kleiner = false;
@@ -114,7 +133,56 @@ export function quader(netze, aufmass = 0) {
     kleiner = z.fest.some((w, i) => w < max[i] - min[i] - 1e-6);
   }
   const masse = [0, 1, 2].map((i) => hi[i] - lo[i]);
-  return { art: 'Quader', x: masse[0], y: masse[1], z: masse[2], min: lo, max: hi, kleiner, volumen: masse[0] * masse[1] * masse[2] };
+  return { art: 'Quader', x: masse[0], y: masse[1], z: masse[2], min: lo, max: hi, kleiner, volumen: masse[0] * masse[1] * masse[2], ...(basis ? { achsen: B } : {}) };
+}
+
+// Punkt aus Quader-Koordinaten (min/max) in CAD-Koordinaten
+export function quaderPunkt(r, lokal) {
+  const B = r.achsen ?? [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  return [0, 1, 2].map((k) => lokal[0] * B[0][k] + lokal[1] * B[1][k] + lokal[2] * B[2][k]);
+}
+
+// Konvexe Hülle von 2D-Punkten (monotone Kette)
+function huelle2d(punkte) {
+  const p = punkte.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (p.length < 3) return p;
+  const kreuz = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const unten = [];
+  for (const q of p) { while (unten.length >= 2 && kreuz(unten[unten.length - 2], unten[unten.length - 1], q) <= 0) unten.pop(); unten.push(q); }
+  const oben = [];
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (oben.length >= 2 && kreuz(oben[oben.length - 2], oben[oben.length - 1], q) <= 0) oben.pop(); oben.push(q); }
+  return unten.slice(0, -1).concat(oben.slice(0, -1));
+}
+
+// Ausrichtung des Quaders aus einer Z-Richtung (Normale einer angeklickten Fläche) und optional einer X-Richtung (Kante
+// oder Fläche). Ohne X: die Drehung um Z mit der kleinsten Grundfläche (wie „kleinstes Rohteil“ in CAM-Programmen).
+// Liefert [X, Y, Z] als Einheitsvektoren (rechtshändig) oder null, wenn X und Z (fast) parallel sind.
+export function quaderBasis(netze, zRichtung, xRichtung = null) {
+  const ez = einheit(zRichtung);
+  if (xRichtung) {
+    const xp = sub(xRichtung, mul(ez, dot(xRichtung, ez)));
+    if (laenge(xp) < 0.05 * laenge(xRichtung)) return null;
+    const ex = einheit(xp);
+    return [ex, cross(ez, ex), ez];
+  }
+  const [u, v] = quer(ez);
+  const h = gemerkt(netze, `huelle|${ez.map((w) => w.toFixed(6)).join(',')}`, () => huelle2d(allePunkte(netze).map((q) => [dot(q, u), dot(q, v)])));
+  const flaeche = (w) => {
+    const c = Math.cos(w); const s = Math.sin(w);
+    let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
+    for (const [a, b] of h) { const x = a * c + b * s; const y = -a * s + b * c; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    return (x1 - x0) * (y1 - y0);
+  };
+  // Kanten der Hülle als Kandidaten (das kleinste Rechteck liegt an einer Hüllkante an), dazu 0°
+  let best = 0; let bestF = flaeche(0);
+  for (let i = 0; i < h.length; i++) {
+    const a = h[i]; const b = h[(i + 1) % h.length];
+    const w = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    const f = flaeche(w);
+    if (f < bestF - 1e-9) { bestF = f; best = w; }
+  }
+  const ex = einheit(add(mul(u, Math.cos(best)), mul(v, Math.sin(best))));
+  return [ex, cross(ez, ex), ez];
 }
 
 // Mögliche Rohteile (Quader und Rundmaterial je Achse) mit dem kleinsten Volumen als Vorschlag
@@ -272,17 +340,20 @@ export function achseZuFlaeche(achsen, analyse) {
 export function drehrohteil(netze, achse, punktAufAchse, { aufmass = 0, durchmesser = null } = {}) {
   const z = rundZugaben(aufmass);
   const a = einheit(achse);
-  let rMax = 0; let min = Infinity; let max = -Infinity;
-  for (const n of netze) {
-    for (let i = 0; i < n.position.length; i += 3) {
-      const d = [n.position[i] - punktAufAchse[0], n.position[i + 1] - punktAufAchse[1], n.position[i + 2] - punktAufAchse[2]];
-      const s = dot(d, a);
-      if (s < min) min = s;
-      if (s > max) max = s;
-      const r = laenge(sub(d, mul(a, s)));
-      if (r > rMax) rMax = r;
+  const { rMax, min, max } = gemerkt(netze, `dreh|${a.join(',')}|${punktAufAchse.join(',')}`, () => {
+    let rm = 0; let lo = Infinity; let hi = -Infinity;
+    for (const n of netze) {
+      for (let i = 0; i < n.position.length; i += 3) {
+        const d = [n.position[i] - punktAufAchse[0], n.position[i + 1] - punktAufAchse[1], n.position[i + 2] - punktAufAchse[2]];
+        const s = dot(d, a);
+        if (s < lo) lo = s;
+        if (s > hi) hi = s;
+        const r = laenge(sub(d, mul(a, s)));
+        if (r > rm) rm = r;
+      }
     }
-  }
+    return { rMax: rm, min: lo, max: hi };
+  });
   const huelle = 2 * rMax;
   const lage = rundLage(durchmesser || huelle, min, max, z);
   return { art: 'Rund', drehteil: true, achse: a, punkt: punktAufAchse, durchmesser: lage.d, huelle: huelle + 2 * z.radial, huelleBauteil: huelle, laenge: lage.l, kleiner: lage.kleiner, mitte: add(punktAufAchse, mul(a, lage.s)), volumen: Math.PI * (lage.d / 2) ** 2 * lage.l };

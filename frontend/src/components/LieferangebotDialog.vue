@@ -62,7 +62,10 @@ function auswerten() {
   r.value = angebotLesen(seiten.value, vorlage.value);
   zuordnung.value = zuordnen(r.value.positionen, props.anfrage);
   neben.value = r.value.nebenkosten.map((n) => ({ ...n, an: true }));
-  const lt = r.value.positionen.map((p) => p.liefertermin).find(Boolean) ?? '';
+  // Lieferzeit des Angebots: bei verschiedenen Terminen je Position der späteste (alles ist erst dann da)
+  const mitDatum = r.value.positionen.filter((p) => p.lieferdatum).sort((x, y) => x.lieferdatum.localeCompare(y.lieferdatum));
+  const verschieden = new Set(mitDatum.map((p) => p.lieferdatum)).size > 1;
+  const lt = verschieden ? `je Position, spätestens ${mitDatum.at(-1).liefertermin}` : r.value.positionen.map((p) => p.liefertermin).find(Boolean) ?? '';
   kopf.value = { angebotsnr: r.value.kopf.angebotsnr || '', gueltigBis: r.value.kopf.gueltigBis || '', lieferzeit: lt.slice(0, 140) };
 }
 

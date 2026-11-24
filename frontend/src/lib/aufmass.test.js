@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { aufmassNorm, quaderZugaben, rundZugaben, aufmassUmschalten, aufmassSpeicherform, aufmassText } from './aufmass.js';
+import { aufmassNorm, quaderZugaben, rundZugaben, aufmassUmschalten, aufmassSpeicherform, aufmassText, pfeilFeld, pfeilWert, aufmassAendern } from './aufmass.js';
 import { quader, rundmaterial, ACHSEN } from './messen.js';
 
 // Würfel 10 × 20 × 30 mm von (0,0,0) bis (10,20,30) als ein Netz aus Eckpunkten
@@ -63,5 +63,28 @@ describe('Aufmaß des Rohteils', () => {
     expect(aufmassText(2)).toBe('2 mm je Seite');
     expect(aufmassText({ art: 'seiten', seite: 4, oben: 1, unten: 5 })).toBe('Seiten 4, oben 1, unten 5 mm');
     expect(aufmassText({ art: 'einzeln', radial: 1.5, l1: 2, l2: 3 }, 'Rund')).toBe('⌀ +3, Stirnseiten 2 / 3 mm');
+  });
+});
+
+describe('Ziehen an den Richtungspfeilen', () => {
+  it('wählt das Feld je Aufmaß-Art und Pfeil', () => {
+    expect(pfeilFeld(2, 'Quader', 'xp')).toEqual({ feld: 'wert', faktor: 1 });
+    expect(pfeilFeld({ art: 'seiten' }, 'Quader', 'ym')).toEqual({ feld: 'seite', faktor: 1 });
+    expect(pfeilFeld({ art: 'seiten' }, 'Quader', 'zp').feld).toBe('oben');
+    expect(pfeilFeld({ art: 'seiten' }, 'Quader', 'zm').feld).toBe('unten');
+    expect(pfeilFeld({ art: 'einzeln' }, 'Quader', 'yp').feld).toBe('yp');
+    expect(pfeilFeld({ art: 'fest' }, 'Quader', 'zm')).toEqual({ feld: 'z', faktor: 2 });
+    expect(pfeilFeld({ art: 'einzeln' }, 'Rund', 'a').feld).toBe('l1');
+    expect(pfeilFeld({ art: 'einzeln' }, 'Rund', 'b').feld).toBe('l2');
+    expect(pfeilFeld({ art: 'seiten' }, 'Rund', 'r').feld).toBe('radial');
+    expect(pfeilFeld({ art: 'fest' }, 'Rund', 'r')).toEqual({ feld: 'd', faktor: 2 });
+  });
+  it('liest und setzt den Wert, feste Größe aus dem Rohteil vorbelegt', () => {
+    expect(pfeilWert({ art: 'einzeln', xp: 3 }, 'Quader', 'xp')).toBe(3);
+    const r = quader(block, 0);
+    expect(pfeilWert({ art: 'fest' }, 'Quader', 'yp', r)).toBe(20);
+    expect(aufmassAendern({ art: 'fest' }, 'x', 14, r)).toEqual({ art: 'fest', x: 14, y: 20, z: 30, d: 0, l: 0 });
+    expect(aufmassAendern(1, 'wert', 2.345)).toBe(2.35);
+    expect(aufmassAendern({ art: 'einzeln', xm: 1 }, 'xm', -4).xm).toBe(0);
   });
 });

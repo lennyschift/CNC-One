@@ -28,7 +28,22 @@ function zelle(a, posKey, menge) {
   const einmalig = Number(q.einmalig) || 0;
   // aus dem PDF eingelesen: hat der Lieferant eine andere Menge angeboten?
   const je = a.antwort?.daten?.je?.[posKey];
-  return { proStk, einmalig, gesamt: r2(proStk * menge + einmalig), abweichung: je?.abweichung ? je.angeboten : null };
+  // Liefertermin dieser Position laut PDF (Text wie im Angebot und, wenn lesbar, als Datum)
+  const o = (a.antwort?.daten?.positionen ?? []).find((x) => x.zuordnung === posKey);
+  return { proStk, einmalig, gesamt: r2(proStk * menge + einmalig), abweichung: je?.abweichung ? je.angeboten : null, termin: o?.liefertermin ?? '', datum: o?.lieferdatum ?? '' };
+}
+
+// Gesamtliefertermin eines Lieferanten: der späteste Termin seiner zugeordneten Positionen (und der gewählten
+// Alternativen), denn erst dann ist alles da. { spaetester, verschieden, ohneDatum }
+function termine(a, gewaehlt) {
+  const ps = a.antwort?.daten?.positionen ?? [];
+  const relevant = [...ps.filter((o) => o.zuordnung), ...gewaehlt.filter((w) => w.lieferantId === a.id).map((w) => w.o)];
+  const daten = relevant.map((o) => o.lieferdatum).filter(Boolean);
+  return {
+    spaetester: daten.sort().at(-1) ?? '',
+    verschieden: new Set(daten).size > 1,
+    ohneDatum: relevant.filter((o) => !o.lieferdatum && o.liefertermin).map((o) => o.liefertermin),
+  };
 }
 
 const guenstigster = (zellen) => {
@@ -87,6 +102,11 @@ export function vergleich(anfragen, { alternativen = [] } = {}) {
   };
   const weitere = weiterePositionen(anfragen);
   const gewaehlt = weitere.filter((w) => alternativen.includes(w.key));
+  for (const l of lieferanten) Object.assign(l, termine(anfragen.find((a) => a.id === l.id), gewaehlt));
+  // frühester Gesamtliefertermin unter den Lieferanten mit Preisen (wird grün)
+  const mitTermin = lieferanten.filter((l) => l.hatPreise && l.spaetester);
+  const schnellster = mitTermin.length > 1 ? mitTermin.reduce((x, y) => (y.spaetester < x.spaetester ? y : x)).id : null;
+  for (const l of lieferanten) l.schnellster = l.id === schnellster;
   const zeilen = [];
   basis.positionen.forEach((p, i) => {
     p.mengen.forEach((m, stufe) => {
