@@ -5,7 +5,7 @@
 // Sitzung (sessionStorage); Lage und Größe merkt sich der Browser (localStorage), damit es wieder dort aufgeht.
 import { reactive } from 'vue';
 
-export const ARTEN = { zeichnung: 'Zeichnung', modell: '3D-Modell' };
+export const ARTEN = { zeichnung: 'Zeichnung', modell: '3D-Modell', beleg: 'Beleg' };
 const KANAL = 'cnc-one-fenster';
 
 const lesen = (speicher, k) => { try { return speicher.getItem(k); } catch { return null; } };
@@ -59,12 +59,45 @@ function hauptStarten() {
 }
 const antwort = {};
 
+// ------------------------------------------------------------------ zweiter Bildschirm (Chrome/Edge: „Fensterverwaltung“)
+// Ist die Berechtigung schon erteilt, wissen wir die Bildschirme im Voraus; dann geht ein neues Fenster ohne gemerkte
+// Lage gleich auf den anderen Bildschirm. Die Berechtigung erfragt der Knopf „Auf 2. Bildschirm“ im Fenster selbst.
+let bildschirme = null;
+async function bildschirmeLaden() {
+  if (typeof window === 'undefined' || !('getScreenDetails' in window)) return;
+  try {
+    const p = await navigator.permissions.query({ name: 'window-management' });
+    if (p.state === 'granted') bildschirme = await window.getScreenDetails();
+  } catch { /* Browser kann es nicht */ }
+}
+bildschirmeLaden();
+
+export const andererBildschirm = (details) => {
+  const liste = details?.screens ?? [];
+  if (liste.length < 2) return null;
+  return liste.find((s) => s !== details.currentScreen && !s.isPrimary) ?? liste.find((s) => s !== details.currentScreen) ?? null;
+};
+
+// Im Fenster: sich selbst auf den anderen Bildschirm legen (aus einem Klick, fragt beim ersten Mal nach der Berechtigung)
+export async function aufAnderenBildschirm() {
+  if (!('getScreenDetails' in window)) return 'Dieser Browser kann Fenster nicht auf einen anderen Bildschirm legen. Bitte das Fenster einmal hinüberziehen, es öffnet sich dann wieder dort.';
+  let d;
+  try { d = await window.getScreenDetails(); } catch { return 'Die Berechtigung „Fenster verwalten“ wurde nicht erteilt (Schloss-Symbol in der Adresszeile).'; }
+  const s = andererBildschirm(d);
+  if (!s) return 'Es ist nur ein Bildschirm angeschlossen.';
+  window.moveTo(s.availLeft, s.availTop);
+  window.resizeTo(s.availWidth, s.availHeight);
+  return '';
+}
+
 // Ein Fenster öffnen bzw. nach vorne holen. Muss aus einem Klick heraus aufgerufen werden (Popup-Sperre).
 export function oeffnen(art, inhalt) {
   hauptStarten();
   letzter[art] = inhalt ?? null;
   let lage = null;
   try { lage = JSON.parse(lesen(localStorage, `fensterLage:${art}`) || 'null'); } catch { lage = null; }
+  const anderer = lage ? null : andererBildschirm(bildschirme);
+  if (anderer) lage = { links: anderer.availLeft, oben: anderer.availTop, breite: anderer.availWidth, hoehe: anderer.availHeight };
   const b = lage?.breite || Math.round(screen.availWidth * 0.6);
   const h = lage?.hoehe || Math.round(screen.availHeight * 0.85);
   const merkmale = [`popup=yes`, `width=${b}`, `height=${h}`, ...(lage ? [`left=${lage.links}`, `top=${lage.oben}`] : [])].join(',');

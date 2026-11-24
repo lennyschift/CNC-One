@@ -72,9 +72,15 @@ export const useAnfragen = defineStore('anfragen', () => {
   // Nach dem Versand: die Anfragen des Vorgangs mit Mail im Verlauf
   function alleEinsetzen(recs) { for (const r of recs ?? []) einsetzen(r); }
 
-  async function zuschlag(id, an) {
-    const rec = await sicher(() => call('cnc_one.api.anfrage.zuschlag', { id, an: an ? 1 : 0 }));
-    if (rec) { einsetzen(rec); ui.toast(an ? `Zuschlag an ${rec.lieferantName}` : 'Zuschlag zurückgenommen', 'ok'); }
+  // Zuschlag für alle (positionen = null) oder ausgewählte Positionen und Alternativen; eine Position geht nur an einen
+  // Lieferanten, die anderen Anfragen des Vorgangs kommen geändert mit zurück
+  async function zuschlag(id, an, positionen = null, alternativen = []) {
+    const r = await sicher(() => call('cnc_one.api.anfrage.zuschlag', { id, an: an ? 1 : 0, ...(an && positionen ? { positionen: JSON.stringify(positionen), alternativen: JSON.stringify(alternativen) } : {}) }));
+    if (!r) return null;
+    const { geaenderte = [], ...rec } = r;
+    einsetzen(rec);
+    for (const x of geaenderte) einsetzen(x);
+    ui.toast(an ? `Zuschlag an ${rec.lieferantName}${geaenderte.length ? ` (bei ${geaenderte.map((x) => x.lieferantName).join(', ')} entfernt)` : ''}` : 'Zuschlag zurückgenommen', 'ok');
     return rec;
   }
 
@@ -89,5 +95,31 @@ export const useAnfragen = defineStore('anfragen', () => {
     return rec;
   }
 
-  return { liste, anfrage, fuerArbeitsgang, fuerAngebot, vorgang, anlegen, freiAnlegen, antwortErfassen, absagen, alleEinsetzen, zuschlag, gelesen };
+  // Neu vom Server (z. B. im Posteingang: Antworten der Lieferanten kommen per Mail-Abruf dazu)
+  async function neuLaden() {
+    const l = await sicher(() => call('cnc_one.api.anfrage.liste'));
+    if (l) liste.value = l;
+  }
+
+  // Anfragen mit neuer Antwort eines Lieferanten (Mail eingegangen, noch nicht angesehen), neueste zuerst
+  const neueAntworten = () => liste.value.filter((x) => x.neueAntwort)
+    .map((x) => ({ a: x, letzte: [...x.nachrichten].reverse().find((n) => n.richtung === 'Eingang') ?? null }))
+    .sort((p, q) => (q.letzte?.datum ?? '').localeCompare(p.letzte?.datum ?? ''));
+
+  // Vorlage des Lieferanten für seine Angebots-PDFs (angelernte Spalten, Preiseinheit)
+  const angebotsvorlage = (lieferant) => sicher(() => call('cnc_one.api.anfrage.angebotsvorlage', { lieferant }));
+  async function angebotsvorlageLernen(lieferant, vorlage) {
+    const v = await sicher(() => call('cnc_one.api.anfrage.angebotsvorlage_lernen', { lieferant, vorlage: kopie(vorlage) }));
+    if (v) ui.toast(v.preisJe || Object.keys(v.spalten ?? {}).length ? `Für ${lieferant} gemerkt` : `Vorlage von ${lieferant} vergessen`, 'ok');
+    return v;
+  }
+
+  // Mail aus dem Posteingang (Antwort ohne Anfragenummer) zur Anfrage holen
+  async function mailUebernehmen(mail, id) {
+    const rec = await sicher(() => call('cnc_one.api.anfrage.mail_uebernehmen', { mail, id }));
+    if (rec) { einsetzen(rec); ui.toast(`Mail zu ${id} übernommen`, 'ok'); }
+    return rec;
+  }
+
+  return { liste, anfrage, fuerArbeitsgang, fuerAngebot, vorgang, anlegen, freiAnlegen, antwortErfassen, absagen, alleEinsetzen, zuschlag, gelesen, neuLaden, neueAntworten, angebotsvorlage, angebotsvorlageLernen, mailUebernehmen };
 });

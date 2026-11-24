@@ -3,8 +3,9 @@ import FilterLeiste from '../components/FilterLeiste.vue';
 import ListenTabelle from '../components/ListenTabelle.vue';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Send, Search, FileText, Plus, Package } from '@lucide/vue';
+import { Send, Search, FileText, Plus, Package, ScanText } from '@lucide/vue';
 import FreieAnfrageDialog from '../components/FreieAnfrageDialog.vue';
+import AngeboteVergleichDialog from '../components/AngeboteVergleichDialog.vue';
 import { istFrei, freieZeile } from '../lib/anfrage.js';
 import PartImage from '../components/PartImage.vue';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -18,6 +19,8 @@ const belege = useBelege();
 
 const filter = ref('Alle');
 const neuDialog = ref(false);
+// Angebote ohne Anfrage aus CNC One einlesen und vergleichen
+const einlesenDialog = ref(false);
 function angelegt(neu) { neuDialog.value = false; if (neu?.length) router.push({ path: `/anfragen/${neu[0].id}`, query: { senden: 1 } }); }
 const suche = ref('');
 const filterListe = ['Alle', 'Gesendet', 'Angebot erhalten', 'Abgesagt'];
@@ -82,9 +85,11 @@ const titel = (x) => {
         <input v-model="suche" class="field !w-60 !pl-9" placeholder="Nummer, Lieferant, Bauteil …" />
       </label>
       <span class="ml-auto text-sm text-mute tnum">{{ zeilen.length }} von {{ a.liste.length }}</span>
+      <button class="btn" title="Angebots-PDFs von Lieferanten einlesen und vergleichen, auch wenn die Anfrage außerhalb von CNC One lief" @click="einlesenDialog = true"><ScanText :size="16" /> Angebote einlesen</button>
       <button class="btn btn-primary" @click="neuDialog = true"><Plus :size="16" /> Neue Anfrage</button>
     </div>
     <FreieAnfrageDialog v-if="neuDialog" @schliessen="neuDialog = false" @angelegt="angelegt" />
+    <AngeboteVergleichDialog v-if="einlesenDialog" @schliessen="einlesenDialog = false" />
 
     <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="anfragen" :beschriftungen="beschriftungen" :standard-angeheftet="['lieferantName']" />
     <ListenTabelle :spalten="SPALTEN" :zeilen="zeilen" :link="(x) => `/anfragen/${x.id}`" min-breite="1000px">

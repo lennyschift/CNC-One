@@ -5,7 +5,7 @@
 import { ref, computed, watch, onMounted, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Inbox, RefreshCw, Paperclip, FileText, Box, Table2, File, FileArchive, Building2, UserPlus, Check, Ban, Reply, Settings, MailWarning, Calculator, ArrowRight, Search, X, MessagesSquare, ShoppingCart, Receipt, Truck, Shapes, ShieldAlert, CheckCircle2, RotateCcw, FileCode2, AlertCircle } from '@lucide/vue';
+import { Inbox, RefreshCw, Paperclip, FileText, Box, Table2, File, FileArchive, Building2, UserPlus, Check, Ban, Reply, Settings, MailWarning, Calculator, ArrowRight, Search, X, MessagesSquare, ShoppingCart, Receipt, Truck, Shapes, ShieldAlert, CheckCircle2, RotateCcw, FileCode2, AlertCircle, ScanText, Scale, Send } from '@lucide/vue';
 import BestellungDialog from '../components/BestellungDialog.vue';
 import { repo } from '../data/repo.js';
 import FilterLeiste from '../components/FilterLeiste.vue';
@@ -13,8 +13,10 @@ import { useAngebot } from '../stores/angebot.js';
 import StatusBadge from '../components/StatusBadge.vue';
 import CustomerCombobox from '../components/CustomerCombobox.vue';
 import MailHtml from '../components/MailHtml.vue';
+import BelegLink from '../components/BelegLink.vue';
 import TabelleDialog from '../components/TabelleDialog.vue';
 import { useMail } from '../stores/mail.js';
+import { useAnfragen } from '../stores/anfragen.js';
 import { benutzer } from '../data/repo.js';
 import { zahl } from '../lib/format.js';
 import { bauteilGruppen } from '../lib/anhaenge.js';
@@ -115,7 +117,30 @@ const hervor = (text) => {
 
 const id = computed(() => route.params.id || '');
 const d = computed(() => (id.value ? mail.details[id.value] : null));
+
+// ---- Angebote der Lieferanten: Antworten auf unsere Anfragen liegen bei der Lieferantenanfrage, hier als Hinweis oben
+const anfragen = useAnfragen();
+const neueAngebote = computed(() => anfragen.neueAntworten());
+const pdfsIn = (n) => (n?.anhaenge ?? []).filter((x) => /\.pdf$/i.test(x.name)).length;
+async function abrufen() {
+  await mail.abrufen();
+  await anfragen.neuLaden();
+}
+// Mail eines Lieferanten ohne Anfragenummer: zu einer seiner offenen Anfragen holen
+const offeneAnfragen = computed(() => (d.value?.lieferantId ? anfragen.liste.filter((x) => x.lieferantId === d.value.lieferantId && x.status !== 'Abgesagt') : []));
+const anfrageWahl = ref('');
+watch(offeneAnfragen, (l) => { anfrageWahl.value = l.length === 1 ? l[0].id : ''; }, { immediate: true });
+async function zurAnfrage() {
+  const mid = d.value.id;
+  const rec = await anfragen.mailUebernehmen(mid, anfrageWahl.value);
+  if (!rec) return;
+  mail.liste = mail.liste.filter((x) => x.id !== mid);
+  mail.zaehlen();
+  router.push({ path: `/anfragen/${rec.id}`, query: { von: 'posteingang', einlesen: '1' } });
+}
+
 onMounted(async () => {
+  anfragen.neuLaden();
   await mail.laden();
   await Promise.resolve();
   if (!id.value && zeilen.value.length && window.innerWidth >= 1024) router.replace(`/posteingang/${zeilen.value[0].id}`);
@@ -240,7 +265,7 @@ const kurzZeit = (iso) => {
         <button v-if="suche" class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-mute hover:text-ink" title="Suche leeren" @click="suche = ''"><X :size="14" /></button>
       </label>
       <RouterLink v-if="istAdmin" to="/stammdaten/mail" class="ml-auto inline-flex items-center gap-1.5 text-xs text-mute hover:text-ink"><Settings :size="14" /> Mail-Anbindung</RouterLink>
-      <button class="btn" :class="istAdmin ? '' : 'ml-auto'" :disabled="mail.ruft" @click="mail.abrufen()"><RefreshCw :size="15" :class="mail.ruft ? 'animate-spin' : ''" /> Jetzt abrufen</button>
+      <button class="btn" :class="istAdmin ? '' : 'ml-auto'" :disabled="mail.ruft" @click="abrufen"><RefreshCw :size="15" :class="mail.ruft ? 'animate-spin' : ''" /> Jetzt abrufen</button>
     </div>
     <!-- Schnellfilter und anpassbare Filter -->
     <div class="mb-4 flex flex-wrap items-center gap-2">
@@ -251,6 +276,29 @@ const kurzZeit = (iso) => {
       <button v-if="sucheAktiv" class="text-xs text-mute underline-offset-2 hover:text-ink hover:underline" @click="zuruecksetzen">Zurücksetzen</button>
     </div>
     <FilterLeiste v-model="zeilen" class="mb-4" :liste="vorgefiltert" modul="posteingang" :beschriftungen="beschriftungen" :ausblenden="['vorschau', 'id', 'betreff', 'vonName']" />
+
+    <!-- Neue Angebote der Lieferanten (Antworten auf unsere Anfragen) -->
+    <section v-if="neueAngebote.length" class="card mb-4 border-accent/40 p-4">
+      <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold"><span class="h-2 w-2 rounded-full bg-accent" /> Neue Angebote von Lieferanten <span class="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent tnum">{{ neueAngebote.length }}</span></h3>
+      <div class="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <div v-for="x in neueAngebote" :key="x.a.id" class="flex flex-col gap-2 rounded-xl border border-line px-3 py-2.5">
+          <div class="flex items-start gap-2">
+            <Truck :size="16" class="mt-0.5 shrink-0 text-accent" />
+            <div class="min-w-0 flex-1">
+              <div class="truncate text-sm font-medium">{{ x.a.lieferantName }} <span class="text-xs font-normal text-mute tnum">· {{ x.a.id }}</span></div>
+              <div class="truncate text-xs text-mute">{{ x.letzte?.betreff || 'Antwort' }}</div>
+            </div>
+            <span class="shrink-0 text-[11px] text-mute">{{ x.letzte?.datum ? new Date(x.letzte.datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : '' }}</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <RouterLink :to="{ path: `/anfragen/${x.a.id}`, query: { von: 'posteingang', ...(pdfsIn(x.letzte) ? { einlesen: '1' } : {}) } }" class="btn !py-1 !text-xs" :class="pdfsIn(x.letzte) ? 'btn-primary' : ''">
+              <template v-if="pdfsIn(x.letzte)"><ScanText :size="13" /> Angebot einlesen ({{ pdfsIn(x.letzte) }} PDF)</template><template v-else><Send :size="13" /> Antwort ansehen</template>
+            </RouterLink>
+            <RouterLink :to="{ path: `/anfragen/vergleich/${x.a.vorgang}`, query: { von: 'posteingang' } }" class="btn !py-1 !text-xs"><Scale :size="13" /> Vergleich</RouterLink>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <div class="grid items-start gap-4 lg:grid-cols-[400px_1fr]">
       <!-- Liste -->
@@ -353,6 +401,16 @@ const kurzZeit = (iso) => {
             <Truck :size="15" class="text-accent" /> Lieferant <strong>{{ lieferantName(d.lieferantId) }}</strong>
             <span class="ml-auto text-xs text-mute">{{ d.vonEmail }}</span>
           </div>
+          <!-- Antwort des Lieferanten ohne Anfragenummer: zu unserer Anfrage holen (dort einlesen und vergleichen) -->
+          <div v-if="d.lieferantId && offeneAnfragen.length && !d.eingangsrechnungen?.length" class="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft/40 px-3.5 py-2.5 text-sm">
+            <Scale :size="15" class="shrink-0 text-accent" /> <span>Angebot zu unserer Anfrage?</span>
+            <select v-model="anfrageWahl" class="field !w-auto !py-1 text-sm">
+              <option value="" disabled>Anfrage wählen …</option>
+              <option v-for="x in offeneAnfragen" :key="x.id" :value="x.id">{{ x.id }} · {{ x.positionen.map((p) => p.teil.name).slice(0, 2).join(', ') }}{{ x.positionen.length > 2 ? ' …' : '' }} · {{ x.status }}</option>
+            </select>
+            <button class="btn btn-primary !py-1.5" :disabled="!anfrageWahl" :class="!anfrageWahl ? 'pointer-events-none opacity-40' : ''" @click="zurAnfrage"><ArrowRight :size="15" /> Zur Anfrage · einlesen</button>
+            <span class="w-full text-xs text-mute">Die Mail wandert mit Anhängen zur Lieferantenanfrage und verschwindet hier; dort wird das PDF eingelesen und verglichen.</span>
+          </div>
           <div v-else-if="!istKunde && !d.kundeId" class="mt-4 rounded-2xl border border-warn/40 bg-warn/5 p-4">
             <div class="mb-3 flex items-center gap-2 text-sm font-medium"><Truck :size="16" class="text-warn" /> {{ d.vonEmail }} ist noch keinem Lieferanten zugeordnet</div>
             <div class="flex flex-wrap gap-2">
@@ -441,9 +499,9 @@ const kurzZeit = (iso) => {
                 <div v-if="ag.sonstige.length">
                   <div class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-mute">Weitere Dateien</div>
                   <div class="flex flex-col gap-1.5">
-                    <a v-for="a in ag.sonstige" :key="a.url" :href="a.url" target="_blank" rel="noopener" class="datei !max-w-none" :title="a.aus ? `${a.name}\naus ${a.aus}` : a.name">
+                    <component :is="/\.pdf$/i.test(a.name) ? BelegLink : 'a'" v-for="a in ag.sonstige" :key="a.url" :url="a.url" :name="a.name" :href="a.url" target="_blank" rel="noopener" class="datei !max-w-none" :title="a.aus ? `${a.name}\naus ${a.aus}` : a.name">
                       <component :is="ICON[a.art]" :size="14" class="shrink-0" /><span class="min-w-0 flex-1 truncate">{{ a.name }}</span><span class="text-[10px] opacity-70 tnum">{{ groesse(a.groesse) }}</span>
-                    </a>
+                    </component>
                   </div>
                 </div>
               </template>

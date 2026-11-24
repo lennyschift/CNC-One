@@ -19,6 +19,11 @@
   "gueltig_bis",
   "lieferzeit",
   "zuschlag",
+  "zuschlag_positionen",
+  "nebenkosten",
+  "nebenkosten_text",
+  "angebot_pdf",
+  "angebot_daten",
   "sb_pos",
   "positionen",
   "preise",
@@ -124,6 +129,36 @@
    "fieldname": "zuschlag",
    "fieldtype": "Check",
    "label": "Zuschlag erteilt"
+  },
+  {
+   "fieldname": "zuschlag_positionen",
+   "fieldtype": "JSON",
+   "label": "Zuschlag für",
+   "description": "{positionen: [posKey], alternativen: [Index im eingelesenen Angebot]}; leer = alle Positionen mit Preis"
+  },
+  {
+   "fieldname": "nebenkosten",
+   "fieldtype": "Currency",
+   "label": "Nebenkosten",
+   "precision": "2",
+   "description": "Verpackung, Fracht, Zuschläge: einmal je Angebot, im Vergleich in der Summe"
+  },
+  {
+   "fieldname": "nebenkosten_text",
+   "fieldtype": "Small Text",
+   "label": "Nebenkosten (Aufstellung)"
+  },
+  {
+   "fieldname": "angebot_pdf",
+   "fieldtype": "Data",
+   "label": "Angebots-PDF",
+   "description": "Datei, aus der das Angebot eingelesen wurde"
+  },
+  {
+   "fieldname": "angebot_daten",
+   "fieldtype": "JSON",
+   "label": "Eingelesenes Angebot",
+   "description": "Positionen des Lieferanten mit Zuordnung zu unseren Positionen"
   },
   {
    "fieldname": "sb_pos",

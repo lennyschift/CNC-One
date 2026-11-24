@@ -26,9 +26,10 @@
   {
    "fieldname": "pro_stk",
    "fieldtype": "Currency",
-   "label": "Preis je Stück",
-   "precision": "2",
-   "in_list_view": 1
+   "label": "Preis je Einheit",
+   "precision": "4",
+   "in_list_view": 1,
+   "description": "4 Nachkommastellen (Preise je kg, aus Beträgen umgerechnet)"
   },
   {
    "fieldname": "einmalig",

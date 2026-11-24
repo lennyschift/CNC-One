@@ -174,6 +174,7 @@ DOCTYPES = [
         Data("telefon", "Telefon"),
         Text("adresse", "Adresse"),
         Data("ust_id", "USt-IdNr.", description="Ordnet E-Rechnungen dem Lieferanten zu"),
+        Json("angebot_vorlage", "Vorlage für Angebots-PDFs", description="Angelernt beim Einlesen: Spalten der Tabelle, Preiseinheit"),
         Check("aktiv", "Aktiv", default="1", in_list_view=1),
     ]),
     dict(name="Arbeitsgangart", autoname="AA-.####", title="bezeichnung", rechte=stamm_rechte(), icon="list-tree", fields=[
@@ -440,7 +441,7 @@ DOCTYPES += [
     dict(name="Anfragepreis", istable=1, fields=[
         Data("position_key", "Position", read_only=1, in_list_view=1),
         Int("menge", "Menge", in_list_view=1),
-        Money("pro_stk", "Preis je Stück", in_list_view=1),
+        F("pro_stk", "Currency", "Preis je Einheit", precision="4", in_list_view=1, description="4 Nachkommastellen (Preise je kg, aus Beträgen umgerechnet)"),
         Money("einmalig", "Einmalig", in_list_view=1),
     ]),
     dict(name="Lieferantenanfrage", autoname="LA-.YYYY.-.####", rechte=stamm_rechte(("CNC Vertrieb",)), icon="send", extra={"search_fields": "lieferant,angebot,kunde_name"}, fields=[
@@ -459,6 +460,11 @@ DOCTYPES += [
         Date("gueltig_bis", "Gültig bis"),
         Data("lieferzeit", "Lieferzeit", description="z. B. 2 Wochen oder KW 50"),
         Check("zuschlag", "Zuschlag erteilt"),
+        Json("zuschlag_positionen", "Zuschlag für", description="{positionen: [posKey], alternativen: [Index im eingelesenen Angebot]}; leer = alle Positionen mit Preis"),
+        Money("nebenkosten", "Nebenkosten", description="Verpackung, Fracht, Zuschläge: einmal je Angebot, im Vergleich in der Summe"),
+        Text("nebenkosten_text", "Nebenkosten (Aufstellung)"),
+        Data("angebot_pdf", "Angebots-PDF", description="Datei, aus der das Angebot eingelesen wurde"),
+        Json("angebot_daten", "Eingelesenes Angebot", description="Positionen des Lieferanten mit Zuordnung zu unseren Positionen"),
         Section("sb_pos", "Positionen und Preise"),
         Table("positionen", "Anfrageposition", "Positionen"),
         Table("preise", "Anfragepreis", "Preise des Lieferanten"),

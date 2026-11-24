@@ -95,9 +95,14 @@ def liste():
 
 @frappe.whitelist(methods=["POST"])
 def anzahl():
-	"""Offene Anfragen für das Abzeichen in der Navigation (neu oder mit neuer Antwort des Kunden)."""
+	"""Offene Mails für das Abzeichen in der Navigation: neu, mit neuer Antwort des Kunden oder neue Antwort eines
+	Lieferanten auf unsere Anfrage (Angebot)."""
 	nur_cnc()
-	return frappe.db.count("Mail Anfrage", {"status": "Neu"}) + frappe.db.count("Mail Anfrage", {"status": ["!=", "Neu"], "neue_antwort": 1})
+	return (
+		frappe.db.count("Mail Anfrage", {"status": "Neu"})
+		+ frappe.db.count("Mail Anfrage", {"status": ["!=", "Neu"], "neue_antwort": 1})
+		+ frappe.db.count("Lieferantenanfrage", {"neue_antwort": 1})
+	)
 
 
 @frappe.whitelist(methods=["POST"])

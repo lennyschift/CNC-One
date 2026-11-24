@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { zahlAus, preiseinheitAus, zeilenAus, positionenAus, kopfAus, bestellungLesen, vorlageAus } from './bestellung.js';
+import fs from 'node:fs';
+import { zahlAus, preiseinheitAus, zeilenAus, positionenAus, kopfAus, bestellungLesen, vorlageAus, kwDatum, zeichnungAus } from './bestellung.js';
+
+// Text mit Lage aus einer echten Bestellung (Bankverbindung entfernt)
+const ECHT = JSON.parse(fs.readFileSync(new URL('./testdaten/bestellungen.json', import.meta.url), 'utf8'));
 
 // Seite aus Zeilen bauen: [y, [[x, text, breite], …]] (Lage 0 bis 1 wie zeichnungText.js)
 const seite = (zeilen) => ({ elemente: zeilen.flatMap(([y, zellen]) => zellen.map(([x, text, b]) => ({ text, x, y, b: b ?? text.length * 0.007, h: 0.012 }))) });
@@ -73,5 +77,29 @@ describe('Bestellung lesen', () => {
 
   it('ohne erkennbare Tabelle keine Positionen', () => {
     expect(positionenAus(zeilenAus([seite([[0.1, [[0.1, 'Nur ein Brief']]]])])).positionen).toEqual([]);
+  });
+});
+
+describe('Bestellung über zwei Seiten mit Kästchen im Kopf (echtes PDF)', () => {
+  const r = bestellungLesen(ECHT.eiberger);
+  it('liest alle Positionen beider Seiten, Fußzeilen stören nicht', () => {
+    expect(r.positionen.map((p) => [p.bestellposition, p.teilenummer, p.menge, p.preis, p.betrag])).toEqual([
+      ['1', '215975', 5, 373, 1865], ['2', '215810', 10, 38, 380], ['3', '216011', 10, 15, 150], ['4', '216067', 20, 56.2, 1124],
+      ['5', '216085', 10, 75, 750], ['6', '216083', 10, 40, 400], ['7', '216084', 10, 40, 400], ['8', '216043', 20, 34, 680],
+    ]);
+    expect(r.positionen.reduce((s, p) => s + p.betrag, 0)).toBe(5749);
+    expect(r.positionen[4].text).not.toMatch(/Seite 2|Ust-IdNr/);
+  });
+  it('Bestellnummer unter dem Stichwort, Liefertermin KW50 für alle, Zeichnung mit Index', () => {
+    expect(r.kopf).toMatchObject({ bestellnr: '20260050', datum: '2026-11-05', liefertermin: '2026-12-11' });
+    expect(r.positionen.every((p) => p.termin === '2026-12-11')).toBe(true);
+    expect(r.positionen[0]).toMatchObject({ bezeichnung: 'Fahrzeugdeckel MPU5', zeichnungsnr: '10241355', index: 'A' });
+    expect(r.positionen[5]).toMatchObject({ zeichnungsnr: '10242012', index: '' });
+  });
+  it('Kalenderwoche und Zeichnungsnummer', () => {
+    expect(kwDatum('KW 3/2027')).toBe('2027-01-22');
+    expect(kwDatum('KW2', '2026-11-05')).toBe('2027-01-15'); // Woche schon vorbei: nächstes Jahr
+    expect(kwDatum('ohne')).toBe('');
+    expect(zeichnungAus('Zeichnung Z-4711 Rev. B')).toEqual({ zeichnungsnr: 'Z-4711', index: 'B' });
   });
 });

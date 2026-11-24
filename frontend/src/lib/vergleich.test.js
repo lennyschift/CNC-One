@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { vergleich, vorgaenge, imVorgang, vorlagePasst, passendeVorlagen } from './vergleich.js';
+import { vergleich, weiterePositionen, vorgaenge, imVorgang, vorlagePasst, passendeVorlagen } from './vergleich.js';
 
 const pos = [
   { key: 'frei:1', teil: { name: 'Rundstange', material: 'EN AW-6082' }, abmessung: 'Ø 40', einheit: 'Stangen', mengen: [2, 6] },
@@ -33,8 +33,8 @@ describe('vergleich', () => {
     expect(v.zeilen[0].zellen['LA-3']).toBeNull();
   });
   it('Summen je Stufe, der Beste nur unter den vollständigen', () => {
-    expect(v.summen[0].je['LA-1']).toEqual({ betrag: 190, vollstaendig: true });
-    expect(v.summen[0].je['LA-2']).toEqual({ betrag: 96, vollstaendig: false });
+    expect(v.summen[0].je['LA-1']).toEqual({ betrag: 190, vollstaendig: true, mitAlternative: false });
+    expect(v.summen[0].je['LA-2']).toEqual({ betrag: 96, vollstaendig: false, mitAlternative: false });
     expect(v.summen[0].bester).toBe('LA-1');
     expect(v.summen[1].je['LA-1'].betrag).toBe(360); // 6 Stangen + die eine Platte
   });
@@ -56,4 +56,60 @@ describe('Vorlagen', () => {
   it('ISO-Gruppe aus dem Werkstoff', () => expect(vorlagePasst(nicht, { texte: ['AlMgSi1'] })).toBe(true));
   it('inaktive nie', () => expect(vorlagePasst({ ...alu, aktiv: false }, { texte: ['alu'] })).toBe(false));
   it('Liste filtern', () => expect(passendeVorlagen([alu, nicht], { art: 'Material', texte: ['1.4301'] })).toEqual([]));
+});
+
+describe('Nebenkosten und abweichende Mengen aus dem eingelesenen PDF', () => {
+  const mitNeben = anfrage('LA-4', [{ posKey: 'frei:2', menge: 1, proStk: 70, einmalig: 0 }]);
+  mitNeben.antwort = { ...mitNeben.antwort, nebenkosten: 25, daten: { je: { 'frei:2': { abweichung: true, angeboten: 2 } } } };
+  const ohne = anfrage('LA-5', [{ posKey: 'frei:2', menge: 1, proStk: 80, einmalig: 0 }]);
+  const einzeln = (x) => ({ ...x, positionen: [pos[1]] });
+  const v = vergleich([einzeln(mitNeben), einzeln(ohne)]);
+  it('zählt die Nebenkosten einmal in der Summe, auch bei nur einer Position', () => {
+    expect(v.summen[0].je['LA-4'].betrag).toBe(95);
+    expect(v.summen[0].je['LA-5'].betrag).toBe(80);
+    expect(v.summen[0].bester).toBe('LA-5');
+    expect(v.lieferanten[0].nebenkosten).toBe(25);
+  });
+  it('markiert eine andere angebotene Menge', () => {
+    expect(v.zeilen[0].zellen['LA-4'].abweichung).toBe(2);
+    expect(v.zeilen[0].zellen['LA-5'].abweichung).toBeNull();
+  });
+});
+
+describe('Alternativen und weitere Positionen aus dem Angebot', () => {
+  const einzeln = (x) => ({ ...x, positionen: [pos[1]] });
+  const mitAlt = anfrage('LA-6', [{ posKey: 'frei:2', menge: 1, proStk: 435.04, einmalig: 0 }]);
+  mitAlt.antwort = { ...mitAlt.antwort, nebenkosten: 10, daten: { netto: 1390.04, positionen: [
+    { pos: '1', werkstoff: 'EN AW-6082', form: 'Platte', masse: [15, 20, 3020], betrag: 435.04, zuordnung: 'frei:2' },
+    { pos: '2', option: true, werkstoff: 'EN AW-6082', form: 'Platte', masse: [15, 20, 150], betrag: 400, zuordnung: '' },
+    { pos: '3', werkstoff: '1.4301', form: 'Rund', masse: [40], betrag: 50, zuordnung: '' },
+    { pos: '4', werkstoff: '1.4301', form: 'Rund', masse: [30], betrag: 0, zuordnung: '' },
+  ] } };
+  const andere = anfrage('LA-7', [{ posKey: 'frei:2', menge: 1, proStk: 420, einmalig: 0 }]);
+  const liste = [einzeln(mitAlt), einzeln(andere)];
+  it('zeigt nicht zugeordnete Positionen mit Betrag, Optionen mit Bezug zur ersetzten Position', () => {
+    const w = weiterePositionen(liste);
+    expect(w.map((x) => [x.key, x.option, x.bezug])).toEqual([['LA-6|1', true, 'frei:2'], ['LA-6|2', false, '']]);
+    expect(vergleich(liste).lieferanten[0].netto).toBe(1390.04);
+  });
+  it('rechnet gewählte Alternativen statt der Position bzw. zusätzlich in die Summe', () => {
+    expect(vergleich(liste).summen[0].bester).toBe('LA-7');
+    const v = vergleich(liste, { alternativen: ['LA-6|1'] });
+    expect(v.summen[0].je['LA-6']).toEqual({ betrag: 410, vollstaendig: true, mitAlternative: true });
+    expect(v.summen[0].bester).toBe('LA-6');
+    expect(vergleich(liste, { alternativen: ['LA-6|1', 'LA-6|2'] }).summen[0].je['LA-6'].betrag).toBe(460);
+  });
+});
+
+describe('Zuschlag je Position', () => {
+  const x = anfrage('LA-1', [{ posKey: 'frei:1', menge: 2, proStk: 50, einmalig: 0 }, { posKey: 'frei:2', menge: 1, proStk: 80, einmalig: 0 }], { zuschlag: true, zuschlagPositionen: ['frei:1'], zuschlagAlternativen: [1] });
+  x.antwort = { ...x.antwort, daten: { positionen: [{ werkstoff: 'EN AW-6082', form: 'Rund', masse: [40], betrag: 100, zuordnung: 'frei:1' }, { option: true, werkstoff: 'EN AW-6082', form: 'Rund', masse: [40, 500], betrag: 90, zuordnung: '' }] } };
+  const y = anfrage('LA-2', [{ posKey: 'frei:2', menge: 1, proStk: 70, einmalig: 0 }], { zuschlag: true, zuschlagPositionen: ['frei:2'] });
+  const v = vergleich([x, y]);
+  it('kennzeichnet, an wen eine Position geht, auch per Alternative', () => {
+    expect(v.zeilen.map((z) => [z.key, z.vergeben])).toEqual([
+      ['frei:1|2', { id: 'LA-1', perAlternative: true }], ['frei:1|6', { id: 'LA-1', perAlternative: true }], ['frei:2|1', { id: 'LA-2', perAlternative: false }],
+    ]);
+    expect(v.weitere.map((w) => [w.key, w.index, w.bezug, w.zuschlag])).toEqual([['LA-1|1', 1, 'frei:1', true]]);
+  });
 });

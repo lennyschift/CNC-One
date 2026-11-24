@@ -11,6 +11,7 @@
   "telefon",
   "adresse",
   "ust_id",
+  "angebot_vorlage",
   "aktiv"
  ],
  "fields": [
@@ -56,6 +57,12 @@
    "fieldtype": "Data",
    "label": "USt-IdNr.",
    "description": "Ordnet E-Rechnungen dem Lieferanten zu"
+  },
+  {
+   "fieldname": "angebot_vorlage",
+   "fieldtype": "JSON",
+   "label": "Vorlage für Angebots-PDFs",
+   "description": "Angelernt beim Einlesen: Spalten der Tabelle, Preiseinheit"
   },
   {
    "fieldname": "aktiv",

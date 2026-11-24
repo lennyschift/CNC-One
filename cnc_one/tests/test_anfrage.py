@@ -58,7 +58,7 @@ class TestAnfrage(IntegrationTestCase):
 		preise = [{"posKey": "t1:a1", "menge": 10, "proStk": 1.5, "einmalig": 40}, {"posKey": "t1:a1", "menge": 25, "proStk": 1.1, "einmalig": 40}]
 		r = anfrage.antwort_erfassen(a["id"], {"angebotsnr": "AN-5521", "gueltigBis": "2026-12-31", "preise": preise})
 		self.assertEqual(r["status"], "Angebot erhalten")
-		self.assertEqual(r["antwort"], {"angebotsnr": "AN-5521", "gueltigBis": "2026-12-31", "lieferzeit": "", "preise": preise})
+		self.assertEqual(r["antwort"], {"angebotsnr": "AN-5521", "gueltigBis": "2026-12-31", "lieferzeit": "", "preise": preise, "nebenkosten": 0, "nebenkostenText": "", "pdf": "", "daten": None})
 		neu = anfrage.antwort_erfassen(a["id"], {"angebotsnr": "AN-5521b", "gueltigBis": "", "preise": preise[:1]})
 		self.assertEqual(len(neu["antwort"]["preise"]), 1)
 		self.assertEqual(neu["antwort"]["gueltigBis"], "")
@@ -191,6 +191,63 @@ class TestAnfrageMail(IntegrationTestCase):
 		a = anfrage.antwort_erfassen(d.name, {"angebotsnr": "B-1", "lieferzeit": "2 Wochen", "preise": [{"posKey": "frei:1", "menge": 2, "proStk": 88, "einmalig": 0}]})
 		self.assertEqual((a["neueAntwort"], a["antwort"]["lieferzeit"]), (False, "2 Wochen"))
 		self.assertTrue(anfrage.zuschlag(d.name, 1)["zuschlag"])
+
+	def test_zuschlag_fuer_ausgewaehlte_positionen_jede_position_nur_einmal(self):
+		zwei = [*self.pos, {"teil": {"name": "Platte", "material": "EN AW-5083"}, "einheit": "Stk", "mengen": [1]}]
+		a, b = anfrage.anlegen("", ["ZZ Alu A", "ZZ Alu B"], zwei)
+		for x in (a, b):
+			anfrage.antwort_erfassen(x["id"], {"preise": [{"posKey": "frei:1", "menge": 2, "proStk": 50, "einmalig": 0}, {"posKey": "frei:2", "menge": 1, "proStk": 80, "einmalig": 0}]})
+		# ohne Auswahl: alle Positionen mit Preis
+		r = anfrage.zuschlag(a["id"], 1)
+		self.assertEqual((r["zuschlagPositionen"], r["zuschlagAlternativen"], r["geaenderte"]), (["frei:1", "frei:2"], [], []))
+		# B bekommt Position 2 und eine Alternative: bei A bleibt nur Position 1
+		r = anfrage.zuschlag(b["id"], 1, ["frei:2"], [3])
+		self.assertEqual((r["zuschlagPositionen"], r["zuschlagAlternativen"]), (["frei:2"], [3]))
+		self.assertEqual([(x["id"], x["zuschlagPositionen"]) for x in r["geaenderte"]], [(a["id"], ["frei:1"])])
+		# B bekommt jetzt auch Position 1: A hat keinen Zuschlag mehr
+		r = anfrage.zuschlag(b["id"], 1, ["frei:1", "frei:2"])
+		self.assertEqual([(x["zuschlag"], x["zuschlagPositionen"]) for x in r["geaenderte"]], [(False, [])])
+		self.assertEqual(anfrage.zuschlag(b["id"], 0)["zuschlagPositionen"], [])
+		with self.assertRaises(frappe.ValidationError):
+			anfrage.zuschlag(a["id"], 1, [])
+		with self.assertRaises(frappe.ValidationError):
+			anfrage.zuschlag(a["id"], 1, ["frei:9"])
+
+	def test_angebot_aus_pdf_mit_nebenkosten_und_vorlage_des_lieferanten(self):
+		a = anfrage.anlegen("", ["ZZ Alu A"], self.pos)[0]
+		daten = {"kopf": {"angebotsnr": "945914"}, "positionen": [{"pos": "1", "betrag": 435.04, "zuordnung": "frei:1"}]}
+		r = anfrage.antwort_erfassen(a["id"], {
+			"angebotsnr": "945914", "preise": [{"posKey": "frei:1", "menge": 2, "proStk": 24.17, "einmalig": 0}],
+			"nebenkosten": 118.2, "nebenkostenText": "Verpackung 30,00\nFracht 88,20", "pdf": "/private/files/zz.pdf", "daten": daten,
+		})
+		self.assertEqual((r["antwort"]["nebenkosten"], r["antwort"]["pdf"], r["antwort"]["daten"]["kopf"]["angebotsnr"]), (118.2, "/private/files/zz.pdf", "945914"))
+		self.assertIn("Fracht", r["antwort"]["nebenkostenText"])
+		# Vorlage des Lieferanten merken und wieder vergessen
+		anfrage.angebotsvorlage_lernen("ZZ Alu A", {"spalten": {"gew. (kg)": "gewicht"}, "preisJe": "kg"})
+		self.assertEqual(anfrage.angebotsvorlage("ZZ Alu A"), {"spalten": {"gew. (kg)": "gewicht"}, "preisJe": "kg"})
+		anfrage.angebotsvorlage_lernen("ZZ Alu A", {})
+		self.assertEqual(anfrage.angebotsvorlage("ZZ Alu A"), {})
+
+	def test_mail_aus_dem_posteingang_zur_anfrage(self):
+		from cnc_one.api import mail as mail_api
+		from cnc_one.logic import mail
+		from cnc_one.tests.test_dateien import leeres_pdf
+		from cnc_one.tests.test_mail import zz_mail
+
+		a = anfrage.anlegen("", ["ZZ Alu A"], self.pos)[0]
+		vorher = mail_api.anzahl()
+		# Antwort ohne Anfragenummer und nicht im Verlauf: landet im Posteingang beim Lieferanten
+		m = mail.verarbeiten(zz_mail(betreff="Ihr Angebot 945914", von="Verkauf <verkauf@zz-alu-a.de>", mid="<zz-pe1@zz-alu-a.de>", anhaenge=[("zz-angebot.pdf", leeres_pdf("zz-pe1"))]))
+		self.assertEqual((m.doctype, m.lieferant), ("Mail Anfrage", "ZZ Alu A"))
+		r = anfrage.mail_uebernehmen(m.name, a["id"])
+		self.assertFalse(frappe.db.exists("Mail Anfrage", m.name))
+		self.assertTrue(r["neueAntwort"])
+		self.assertEqual(r["nachrichten"][-1]["betreff"], "Ihr Angebot 945914")
+		self.assertEqual(r["nachrichten"][-1]["anhaenge"][0]["name"], "zz-angebot.pdf")
+		self.assertTrue(frappe.db.exists("File", {"attached_to_doctype": "Lieferantenanfrage", "attached_to_name": a["id"], "file_name": "zz-angebot.pdf"}))
+		# die Mail wird nicht erneut geholt, das Abzeichen zählt die neue Antwort des Lieferanten
+		self.assertIsNone(mail.verarbeiten(zz_mail(betreff="Ihr Angebot 945914", von="verkauf@zz-alu-a.de", mid="<zz-pe1@zz-alu-a.de>")))
+		self.assertEqual(mail_api.anzahl(), vorher + 1)
 
 	def test_vorlage_ueber_stammdaten(self):
 		from cnc_one.api import stammdaten

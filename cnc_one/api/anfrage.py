@@ -27,6 +27,10 @@ def anfrage_ui(d):
 			"gueltigBis": datum(d.gueltig_bis),
 			"lieferzeit": d.lieferzeit or "",
 			"preise": [{"posKey": z.position_key, "menge": z.menge, "proStk": z.pro_stk or 0, "einmalig": z.einmalig or 0} for z in d.preise],
+			"nebenkosten": d.nebenkosten or 0,
+			"nebenkostenText": d.nebenkosten_text or "",
+			"pdf": d.angebot_pdf or "",
+			"daten": als_json(d.angebot_daten) if d.angebot_daten else None,
 		}
 	return {
 		"id": d.name,
@@ -37,6 +41,7 @@ def anfrage_ui(d):
 		"versendetAm": iso(d.versendet_am) if d.versendet_am else "",
 		"neueAntwort": bool(d.neue_antwort),
 		"zuschlag": bool(d.zuschlag),
+		**_zuschlag_fuer(d),
 		"nachrichten": [
 			{
 				"richtung": n.richtung, "datum": iso(n.datum) if n.datum else "", "vonEmail": n.von_email or "", "vonName": n.von_name or "",
@@ -175,6 +180,13 @@ def antwort_erfassen(id, antwort):
 	doc.lieferantenangebot_nr = (antwort.get("angebotsnr") or "").strip()
 	doc.gueltig_bis = antwort.get("gueltigBis") or None
 	doc.lieferzeit = (antwort.get("lieferzeit") or "").strip()[:140]
+	doc.nebenkosten = max(float(antwort.get("nebenkosten") or 0), 0)
+	doc.nebenkosten_text = (antwort.get("nebenkostenText") or "").strip()[:1000]
+	# eingelesen aus einem PDF: Datei und erkannte Positionen (mit Zuordnung) bleiben zum Nachvollziehen
+	if "pdf" in antwort:
+		doc.angebot_pdf = (antwort.get("pdf") or "").strip()[:500]
+	if "daten" in antwort:
+		doc.angebot_daten = json.dumps(antwort["daten"], ensure_ascii=False) if antwort.get("daten") else None
 	doc.neue_antwort = 0
 	doc.set("preise", [])
 	for z in preise:
@@ -184,6 +196,49 @@ def antwort_erfassen(id, antwort):
 		})
 	doc.status = "Angebot erhalten"
 	doc.save()
+	return anfrage_ui(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def angebotsvorlage(lieferant):
+	"""Angelernte Vorlage des Lieferanten für seine Angebots-PDFs: { spalten: { kopftext: rolle }, preisJe }."""
+	nur_cnc()
+	return als_json(frappe.db.get_value("Lieferant", lieferant, "angebot_vorlage")) or {}
+
+
+@frappe.whitelist(methods=["POST"])
+def angebotsvorlage_lernen(lieferant, vorlage):
+	"""Merkt sich Spalten und Preiseinheit für die nächsten Angebote dieses Lieferanten (leer = vergessen)."""
+	nur_cnc()
+	if isinstance(vorlage, str):
+		vorlage = frappe.parse_json(vorlage)
+	doc = frappe.get_doc("Lieferant", lieferant)
+	doc.check_permission("write")
+	v = {"spalten": {str(k)[:80]: str(r or "")[:20] for k, r in ((vorlage or {}).get("spalten") or {}).items()}, "preisJe": str((vorlage or {}).get("preisJe") or "")[:5]}
+	doc.db_set("angebot_vorlage", json.dumps(v, ensure_ascii=False) if v["spalten"] or v["preisJe"] else None, update_modified=False)
+	return v
+
+
+@frappe.whitelist(methods=["POST"])
+def mail_uebernehmen(mail, id):
+	"""Eine Mail aus dem Posteingang (Antwort des Lieferanten ohne Anfragenummer) gehört zu dieser Lieferantenanfrage:
+	Nachrichten und Anhänge wandern dorthin, die Mail verschwindet aus dem Posteingang."""
+	nur_cnc()
+	doc = _geladen(id)
+	m = frappe.get_doc("Mail Anfrage", mail)
+	m.check_permission("write")
+	if m.angebot or frappe.get_all("Eingangsrechnung", filters={"mail": m.name}, limit=1):
+		frappe.throw(_("Diese Mail ist schon weiterverarbeitet."))
+	for n in sorted(m.nachrichten, key=lambda x: x.idx):
+		zeile = {f: n.get(f) for f in ("richtung", "datum", "von_email", "von_name", "an", "cc", "betreff", "message_id", "in_reply_to", "referenzen", "text", "html", "anhaenge", "hinweis")}
+		n.message_id = None  # die Kennung gehört jetzt zur Lieferantenanfrage (Mail wird nicht erneut geholt)
+		n.db_update()
+		doc.append("nachrichten", zeile)
+	for f in frappe.get_all("File", filters={"attached_to_doctype": "Mail Anfrage", "attached_to_name": m.name}, pluck="name"):
+		frappe.db.set_value("File", f, {"attached_to_doctype": "Lieferantenanfrage", "attached_to_name": doc.name}, update_modified=False)
+	doc.neue_antwort = 1
+	doc.save()
+	frappe.delete_doc("Mail Anfrage", m.name, ignore_permissions=True)
 	return anfrage_ui(doc)
 
 
@@ -208,14 +263,62 @@ def gelesen(id):
 	return anfrage_ui(doc)
 
 
+def _mit_preis(d):
+	"""Positionen, für die der Lieferant einen Preis genannt hat."""
+	return [k for k in dict.fromkeys(z.position_key for z in d.preise if (z.pro_stk or 0) > 0 or (z.einmalig or 0) > 0)]
+
+
+def _zuschlag_fuer(d):
+	"""Wofür der Zuschlag gilt: Positionen (posKey) und gewählte Alternativen (Index im eingelesenen Angebot).
+	Ohne Auswahl (ältere Zuschläge) gelten alle Positionen mit Preis."""
+	if not d.zuschlag:
+		return {"zuschlagPositionen": [], "zuschlagAlternativen": []}
+	w = als_json(d.zuschlag_positionen) if d.zuschlag_positionen else None
+	if not isinstance(w, dict):
+		return {"zuschlagPositionen": _mit_preis(d), "zuschlagAlternativen": []}
+	return {"zuschlagPositionen": list(w.get("positionen") or []), "zuschlagAlternativen": list(w.get("alternativen") or [])}
+
+
 @frappe.whitelist(methods=["POST"])
-def zuschlag(id, an=1):
-	"""Zuschlag erteilen oder zurücknehmen (Grundlage für die spätere Bestellung)."""
+def zuschlag(id, an=1, positionen=None, alternativen=None):
+	"""Zuschlag erteilen (für alle oder ausgewählte Positionen, auch Alternativen) oder zurücknehmen; Grundlage für die
+	Bestellung. Eine Position geht nur an einen Lieferanten: bei den anderen Anfragen des Vorgangs fällt sie heraus,
+	bleibt dort nichts übrig, ist deren Zuschlag weg. Liefert die Anfrage, unter „geaenderte“ die anderen geänderten."""
 	nur_cnc()
 	doc = _geladen(id)
-	doc.zuschlag = 1 if frappe.utils.cint(an) else 0
-	doc.save()
-	return anfrage_ui(doc)
+	geaenderte = []
+	if not frappe.utils.cint(an):
+		doc.zuschlag = 0
+		doc.zuschlag_positionen = None
+		doc.save()
+	else:
+		pos = als_json(positionen) if isinstance(positionen, str) else positionen
+		alt = als_json(alternativen) if isinstance(alternativen, str) else alternativen
+		pos = list(dict.fromkeys(pos)) if pos is not None else _mit_preis(doc)
+		alt = [int(i) for i in (alt or [])]
+		if not pos and not alt:
+			frappe.throw(_("Bitte mindestens eine Position für den Zuschlag wählen."))
+		gueltig = {p.position_key for p in doc.positionen}
+		if any(k not in gueltig for k in pos):
+			frappe.throw(_("Die Position gibt es in dieser Anfrage nicht."))
+		doc.zuschlag = 1
+		doc.zuschlag_positionen = frappe.as_json({"positionen": pos, "alternativen": alt})
+		doc.save()
+		for andere in vorgang_docs(doc.vorgang or doc.name):
+			if andere.name == doc.name or not andere.zuschlag:
+				continue
+			bisher = _zuschlag_fuer(andere)
+			rest = [k for k in bisher["zuschlagPositionen"] if k not in pos]
+			if rest == bisher["zuschlagPositionen"]:
+				continue
+			if rest or bisher["zuschlagAlternativen"]:
+				andere.zuschlag_positionen = frappe.as_json({"positionen": rest, "alternativen": bisher["zuschlagAlternativen"]})
+			else:
+				andere.zuschlag = 0
+				andere.zuschlag_positionen = None
+			andere.save()
+			geaenderte.append(anfrage_ui(andere))
+	return {**anfrage_ui(doc), "geaenderte": geaenderte}
 
 
 # ----------------------------------------------------------------- per Mail: eine Mail je Vorgang, Lieferanten in BCC

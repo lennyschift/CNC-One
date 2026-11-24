@@ -114,7 +114,48 @@ function spalteVon(zelle, spalten) {
   return beste;
 }
 
-const ENDE = /^(gesamt|summe|zwischensumme|total|nettowert|netto\s*gesamt|gesamtnetto|endbetrag|mwst|ust)/i;
+// Summenzeilen beenden die Tabelle („Ust-IdNr.“ in der Fußzeile nicht)
+const ENDE = /^(gesamt|summe|zwischensumme|total|nettowert|netto\s*gesamt|gesamtnetto|endbetrag|mwst\b|ust\b(?!\s*-?\s*id))/i;
+
+// Liefertermin als Kalenderwoche („KW50“, „KW 3/2027“): Freitag dieser Woche (ISO-Woche). Ohne Jahr das Jahr der
+// Bestellung, liegt die Woche davor, das nächste.
+export function kwDatum(text, bezug = '') {
+  const m = /\bKW\s*(\d{1,2})(?:\s*[/.\-]\s*(\d{2,4}))?/i.exec(text ?? '');
+  if (!m) return '';
+  const woche = Number(m[1]);
+  if (woche < 1 || woche > 53) return '';
+  const start = bezug ? new Date(`${bezug}T00:00:00Z`) : new Date();
+  let jahr = m[2] ? (Number(m[2]) < 100 ? 2000 + Number(m[2]) : Number(m[2])) : start.getUTCFullYear();
+  const freitag = (j) => {
+    const jan4 = new Date(Date.UTC(j, 0, 4));
+    const montag1 = new Date(jan4);
+    montag1.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() + 6) % 7));
+    const f = new Date(montag1);
+    f.setUTCDate(montag1.getUTCDate() + (woche - 1) * 7 + 4);
+    return f;
+  };
+  let d = freitag(jahr);
+  if (!m[2] && d < start) d = freitag(++jahr);
+  return d.toISOString().slice(0, 10);
+}
+const terminAus = (t, bezug) => datumAus(t ?? '') || kwDatum(t, bezug);
+
+// Zeichnungsnummer mit Index/Revision im Positionstext („10241355 IDX: A“, „Zeichnung 4711 Rev. B“)
+export function zeichnungAus(text) {
+  const m = /([A-Z0-9][\w\-./]{3,})\s*(?:IDX|Index|Rev(?:ision)?\.?|Ind\.)\s*[:.]?\s*([A-Z0-9]{1,3}\b|-)/i.exec(text ?? '');
+  return m ? { zeichnungsnr: m[1], index: m[2] === '-' ? '' : m[2].toUpperCase() } : { zeichnungsnr: '', index: '' };
+}
+
+// Gleicher Text auf mehreren Seiten (Fußzeile mit Bank, Anschrift): gehört zu keiner Position
+function wiederholte(zeilen) {
+  const seiten = new Map();
+  for (const z of zeilen) {
+    const t = zeilenText(z).trim();
+    if (!seiten.has(t)) seiten.set(t, new Set());
+    seiten.get(t).add(z.seite);
+  }
+  return new Set([...seiten].filter(([, x]) => x.size > 1).map(([t]) => t));
+}
 
 // Positionen der Bestellung. Liefert { kopf, positionen: [{ bestellposition, teilenummer, bezeichnung, menge, preis,
 // preiseinheit, betrag, termin, text }], spalten (Kopfzeile mit Rollen, zum Anlernen) } oder positionen: [] ohne Tabelle.
@@ -123,12 +164,20 @@ export function positionenAus(zeilen, vorlage = {}) {
   if (!kopf) return { spalten: [], positionen: [] };
   const spalten = kopf.spalten;
   const kopfTexte = new Set(spalten.map((s) => kopfText(s.text)));
+  const istKopf = (z) => z.zellen.filter((c) => kopfTexte.has(kopfText(c.text))).length >= 2;
+  const rand = wiederholte(zeilen);
+  // Folgeseiten: was über der wiederholten Kopfzeile steht (Bestellnummer, „Seite 2 von 2“), gehört nicht dazu
+  const kopfAufSeite = new Map();
+  zeilen.forEach((z, i) => { if (i > kopf.index && istKopf(z) && !kopfAufSeite.has(z.seite)) kopfAufSeite.set(z.seite, i); });
   const bloecke = [];
-  for (const z of zeilen.slice(kopf.index + 1)) {
+  for (const [i, z] of zeilen.entries()) {
+    if (i <= kopf.index) continue;
     const text = zeilenText(z);
+    if (rand.has(text.trim())) continue;
+    if (z.seite !== zeilen[kopf.index].seite && kopfAufSeite.has(z.seite) && i < kopfAufSeite.get(z.seite)) continue;
     if (ENDE.test(text.trim())) { if (bloecke.length) break; else continue; }
     // wiederholte Kopfzeile auf Folgeseiten überspringen
-    if (z.zellen.filter((c) => kopfTexte.has(kopfText(c.text))).length >= 2) continue;
+    if (istKopf(z)) continue;
     const werte = {};
     for (const c of z.zellen) {
       const i = spalteVon(c, spalten);
@@ -166,6 +215,7 @@ function positionAus({ werte, texte }) {
     teilenummer: (werte.teilenummer ?? '').trim().split(/\s+/)[0] ?? '',
     bezeichnung: (werte.bezeichnung ?? '').trim(),
     menge, preis, preiseinheit: pe, betrag, termin, text,
+    ...zeichnungAus(text),
   };
 }
 
@@ -173,8 +223,9 @@ function positionAus({ werte, texte }) {
 const BESTELLNR = /(bestell(?:ung)?(?:s)?\s*-?\s*(?:nr\.?|nummer)|bestellung|auftrags?\s*-?\s*(?:nr\.?|nummer)|order\s*(?:no\.?|number|nr\.?)|purchase\s*order(?:\s*no\.?)?|\bp\.?o\.?\s*(?:no\.?|nr\.?|number|#|:))\s*[:#.]?\s*/i;
 const DATUM = /(bestell\s*-?\s*datum|datum|date|vom)\s*[:.]?\s*/i;
 
+// Wert hinter dem Stichwort in derselben Zeile, sonst darunter (Kästchen: „Bestell-Nr.“ oben, die Nummer darunter)
 function wertNach(zeilen, label, istWert) {
-  for (const z of zeilen) {
+  for (const [zi, z] of zeilen.entries()) {
     for (let i = 0; i < z.zellen.length; i++) {
       const c = z.zellen[i].text;
       const m = label.exec(c);
@@ -183,6 +234,10 @@ function wertNach(zeilen, label, istWert) {
       const kandidaten = [rest, ...z.zellen.slice(i + 1).map((x) => x.text)];
       const w = kandidaten.find((k) => k && istWert(k));
       if (w) return w;
+      const zelle = z.zellen[i];
+      const unten = zeilen.slice(zi + 1, zi + 3).filter((u) => u.seite === z.seite && u.y - z.y < 0.04)
+        .flatMap((u) => u.zellen).filter((u) => u.x < zelle.x2 + 0.01 && u.x2 > zelle.x - 0.02).map((u) => u.text).find((k) => istWert(k));
+      if (unten) return unten;
     }
   }
   return '';
@@ -205,7 +260,12 @@ export function kopfAus(zeilen, vorlage = {}) {
 // Alles in einem Schritt: aus den Seiten (zeichnungText.textAusSeite) Kopf, Positionen und den ganzen Text
 export function bestellungLesen(seiten, vorlage = {}) {
   const zeilen = zeilenAus(seiten);
-  return { kopf: kopfAus(zeilen, vorlage), ...positionenAus(zeilen, vorlage), text: zeilen.map(zeilenText).join('\n') };
+  const kopf = kopfAus(zeilen, vorlage);
+  const r = positionenAus(zeilen, vorlage);
+  // Kalenderwoche in der Position, sonst ein Liefertermin für die ganze Bestellung (z. B. „Liefertermin KW50“ unter der Tabelle)
+  const gesamt = zeilen.map((z) => /liefer(?:termin|datum|woche)\s*[:.]?\s*(.+)/i.exec(zeilenText(z))?.[1]).filter(Boolean).map((t) => terminAus(t, kopf.datum)).find(Boolean) ?? '';
+  const positionen = r.positionen.map((p) => ({ ...p, termin: p.termin || kwDatum(p.text, kopf.datum) || gesamt }));
+  return { kopf: { ...kopf, liefertermin: gesamt }, ...r, positionen, text: zeilen.map(zeilenText).join('\n') };
 }
 
 // Zum Anlernen: Überschriften der Spalten mit der gewählten Rolle
