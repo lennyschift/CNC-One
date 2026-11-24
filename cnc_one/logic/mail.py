@@ -73,6 +73,24 @@ def freemail(s=None):
 	return eigene or FREEMAIL
 
 
+def gesperrte_absender(s=None):
+	"""Adressen und Domains, deren Mails nie geholt werden (auch mit Stichwort im Betreff), klein geschrieben."""
+	s = s or einstellungen()
+	return {z.lower().strip().lstrip("@") for z in _zeilen(s.get("ignorierte_absender")) if z.strip()}
+
+
+def absender_gesperrt(adresse, gesperrt):
+	"""Steht die Adresse oder ihre Domain (auch eine übergeordnete: „kleinanzeigen.de“ sperrt „mail.kleinanzeigen.de“) auf der Liste?"""
+	adresse = (adresse or "").lower()
+	if not adresse or not gesperrt:
+		return False
+	if adresse in gesperrt:
+		return True
+	domain = adresse.rsplit("@", 1)[-1]
+	teile = domain.split(".")
+	return any(".".join(teile[i:]) in gesperrt for i in range(len(teile) - 1))
+
+
 def gesperrte_endungen(s=None):
 	s = s or einstellungen()
 	eigene = {z.lower().lstrip(".") for z in re.split(r"[\s,;]+", s.get("gesperrte_endungen") or "") if z.strip()}
@@ -356,8 +374,9 @@ def abholen(s=None):
 						kandidaten[uid] = kopf
 			bekannt = set(frappe.get_all("Mail Nachricht", filters={"message_id": ["in", [mid for mid, _v in kandidaten.values() if mid] or [""]]}, pluck="message_id"))
 			eigene = (s.benutzer or "").lower()
+			gesperrt = gesperrte_absender(s)
 			for uid, (mid, von) in kandidaten.items():
-				if (mid and mid in bekannt) or von == eigene:
+				if (mid and mid in bekannt) or von == eigene or absender_gesperrt(von, gesperrt):
 					continue
 				roh = laden(m, uid)
 				if roh and verarbeiten(roh):
@@ -768,6 +787,8 @@ def _dateien_ablegen(msg, doc, mid):
 	(Mail Anfrage oder Lieferantenanfrage); vermerkt an der Nachricht `mid`."""
 	anhaenge, hinweise = [], []
 	endungen = gesperrte_endungen()
+	# Gleicher Inhalt kommt nur einmal (z. B. zwei ZIPs mit denselben Dateien): sonst entstehen doppelte Bauteile
+	gesehen = {}
 	for name, inhalt in _anhaenge(msg):
 		grund = gesperrt(name, inhalt, endungen)
 		if grund:
@@ -781,6 +802,12 @@ def _dateien_ablegen(msg, doc, mid):
 			dateien += [(n, x, {"aus": name, "ordner": o}) for n, o, x in ausgepackt]
 		namen = [n.lower() for n, _x, _h in dateien]
 		for dateiname, daten, herkunft in dateien:
+			pruefwert = hashlib.sha256(daten).hexdigest()
+			if pruefwert in gesehen:
+				hinweise.append(_("{0} ist doppelt (gleicher Inhalt wie {1}), nur einmal übernommen").format(
+					f"{herkunft['aus']}: {dateiname}" if herkunft.get("aus") else dateiname, gesehen[pruefwert]))
+				continue
+			gesehen[pruefwert] = f"{herkunft['aus']}: {dateiname}" if herkunft.get("aus") else dateiname
 			# Originalname; nur bei gleichen Namen aus verschiedenen Ordnern mit dem Ordner davor ("4711-A Zeichnung.pdf"),
 			# sonst hängt Frappe eine Zeichenfolge an
 			ordner = herkunft.get("ordner") or ""

@@ -237,13 +237,15 @@ def _dateien_ans_angebot(d, angebot):
 	"""Zeichnungen und Modelle der Anfrage ans Angebot hängen: je Datei ein eigener Dateieintrag, der auf dieselbe Datei
 	auf der Platte zeigt (gleicher Prüfwert, so löscht keiner der beiden Einträge die Datei des anderen). Die Einträge
 	wandern später ans Bauteil, die Mail behält ihre."""
-	out = []
+	out, urls = [], set()
 	for n in d.nachrichten:
 		if n.richtung != "Eingang":
 			continue
 		for a in json.loads(n.anhaenge) if isinstance(n.anhaenge, str) and n.anhaenge else n.anhaenge or []:
-			if _art(a.get("name")) not in ("Zeichnung", "STEP"):
+			# gleiche Datei zweimal (Frappe legt gleichen Inhalt nur einmal ab, z. B. aus zwei ZIPs): nur einmal ans Angebot
+			if _art(a.get("name")) not in ("Zeichnung", "STEP") or a.get("url") in urls:
 				continue
+			urls.add(a.get("url"))
 			quelle = frappe.db.get_value("File", {"file_url": a["url"], "attached_to_doctype": "Mail Anfrage", "attached_to_name": d.name}, "name")
 			if not quelle:
 				continue
@@ -290,9 +292,9 @@ def zu_angebot(angebot):
 
 
 @frappe.whitelist(methods=["POST"])
-def keine_anfrage(id):
+def keine_anfrage(id, sperren=0):
 	"""Keine Anfrage: Text und Anhänge werden aus Frappe gelöscht, im Postfach bleibt die Mail. Gemerkt wird nur ihre
-	Kennung, damit sie nicht wieder geholt wird."""
+	Kennung, damit sie nicht wieder geholt wird. Mit `sperren` kommt der Absender auf die Liste „Absender nie abholen“."""
 	nur_cnc()
 	d = _geladen(id)
 	if d.angebot:
@@ -310,7 +312,18 @@ def keine_anfrage(id):
 	d.status = "Keine Anfrage"
 	d.neue_antwort = 0
 	d.save()
+	if frappe.utils.cint(sperren) and d.von_email:
+		absender_sperren(d.von_email)
 	return {"id": d.name, "status": d.status}
+
+
+def absender_sperren(adresse):
+	"""Adresse auf die Liste „Absender nie abholen“ in den Mail-Einstellungen setzen (falls noch nicht gesperrt)."""
+	adresse = (adresse or "").strip().lower()
+	if not adresse or mail.absender_gesperrt(adresse, mail.gesperrte_absender()):
+		return
+	alt = (frappe.db.get_single_value("Mail Einstellungen", "ignorierte_absender") or "").rstrip()
+	frappe.db.set_single_value("Mail Einstellungen", "ignorierte_absender", f"{alt}\n{adresse}" if alt else adresse)
 
 
 # ----------------------------------------------------------------- Einstellungen
@@ -320,6 +333,7 @@ FELDER = {
 	"stichwoerter": "stichwoerter", "abholenAb": "abholen_ab", "postfachOrdner": "postfach_ordner", "gesendetOrdner": "gesendet_ordner",
 	"antwortVorlage": "antwort_vorlage", "bekannteAbsender": "bekannte_absender", "freemailDomains": "freemail_domains",
 	"woerterBestellung": "woerter_bestellung", "woerterRechnung": "woerter_rechnung", "gesperrteEndungen": "gesperrte_endungen",
+	"ignorierteAbsender": "ignorierte_absender",
 }
 
 

@@ -684,6 +684,7 @@ DOCTYPES += [
         Text("stichwoerter", "Stichwörter im Betreff", default="Anfrage", description="Eines je Zeile, Groß-/Kleinschreibung egal; holt auch Mails unbekannter Absender (neue Kunden)"),
         Check("bekannte_absender", "Mails bekannter Absender abholen", default="1", description="Kontakte der Kunden, Lieferanten und deren Domains (ohne Freemail-Anbieter)"),
         Text("freemail_domains", "Freemail-Anbieter", description="Eine Domain je Zeile; dort zählt nur die genaue Adresse, nicht die Domain. Leer = Standardliste"),
+        Text("ignorierte_absender", "Absender nie abholen", description="Eine Adresse oder Domain je Zeile; diese Mails werden nie geholt, auch nicht mit Stichwort im Betreff"),
         Section("sb_einordnen", "Einordnen"),
         Text("woerter_bestellung", "Stichwörter für Bestellungen", default="Bestellung\nOrder\nAbruf", description="im Betreff oder Dateinamen eines Anhangs"),
         Text("woerter_rechnung", "Stichwörter für Rechnungen", default="Rechnung\nInvoice\nGutschrift", description="im Betreff oder Dateinamen; E-Rechnungen (ZUGFeRD, XRechnung) werden immer erkannt"),

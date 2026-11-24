@@ -69,6 +69,23 @@ class TestBauteilDateien(IntegrationTestCase):
 			self.assertEqual(frappe.db.count("File", {"file_url": url}), 1, url)  # umgehängt, nicht kopiert
 		self.assertEqual(frappe.db.count("File", {"attached_to_doctype": "Bauteil", "attached_to_name": b.name}), 3)
 
+	def test_zusammengefuehrt_kommt_die_datei_des_anderen_bauteils_mit(self):
+		# Zeichnung und Modell lagen in zwei gespeicherten Bauteilen; in der Workbench zusammengeführt fällt das zweite weg
+		a = self.entwurf()
+		pdf = self.hochladen(a["id"], "zz-datei-zus.pdf", leeres_pdf("zz-zusammen"))
+		step = self.hochladen(a["id"], "zz-datei-zus.step")
+		t1, t2 = teil("t1", "Flansch", "ZZ-D5"), teil("t2", "Flansch Modell", "ZZ-D6")
+		t1["dateien"] = [{"name": "zus.pdf", "art": "Zeichnung", "url": pdf}]
+		t2["dateien"] = [{"name": "zus.step", "art": "STEP", "url": step}]
+		a = angebot.entwurf_speichern({"id": a["id"], "kopf": {"kundeId": self.kunde}, "teile": [t1, t2]})
+		b1, b2 = (p["bauteilId"] for p in a["positionen"])
+		t1["dateien"] += t2["dateien"]
+		angebot.entwurf_speichern({"id": a["id"], "kopf": {"kundeId": self.kunde}, "teile": [t1]})
+		self.assertFalse(frappe.db.exists("Bauteil", b2))
+		self.assertEqual(frappe.db.get_value("Bauteil", b1, ["zeichnung", "step_datei"]), (pdf, step))
+		self.assertTrue(frappe.db.exists("File", {"file_url": step, "attached_to_doctype": "Bauteil", "attached_to_name": b1}))
+		self.assertTrue(os.path.exists(frappe.get_site_path(step.lstrip("/"))))
+
 	def test_dateien_bleiben_wenn_das_angebot_geloescht_wird(self):
 		a, (step, _pdf, _bild) = self.mit_dateien(self.entwurf())
 		b = a["positionen"][0]["bauteilId"]

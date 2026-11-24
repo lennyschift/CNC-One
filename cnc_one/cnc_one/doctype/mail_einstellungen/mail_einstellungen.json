@@ -18,6 +18,7 @@
   "stichwoerter",
   "bekannte_absender",
   "freemail_domains",
+  "ignorierte_absender",
   "sb_einordnen",
   "woerter_bestellung",
   "woerter_rechnung",
@@ -115,6 +116,12 @@
    "fieldtype": "Small Text",
    "label": "Freemail-Anbieter",
    "description": "Eine Domain je Zeile; dort zählt nur die genaue Adresse, nicht die Domain. Leer = Standardliste"
+  },
+  {
+   "fieldname": "ignorierte_absender",
+   "fieldtype": "Small Text",
+   "label": "Absender nie abholen",
+   "description": "Eine Adresse oder Domain je Zeile; diese Mails werden nie geholt, auch nicht mit Stichwort im Betreff"
   },
   {
    "fieldname": "sb_einordnen",

@@ -338,8 +338,9 @@ export const useAngebot = defineStore('angebot', () => {
     ui.toast(`„${weg.name}“ entfernt`);
   }
 
-  // Zeichnung und Modell lagen in zwei Bauteilen (Namen passten nicht zusammen): die Dateien von „quelle“ kommen zu „ziel“,
-  // leere Angaben wie Teilenummer werden ergänzt, „quelle“ entfällt
+  // Zwei Bauteile gehören zusammen (z. B. Zeichnung und Modell wurden nicht zusammen erkannt): die Dateien von „quelle“
+  // kommen zu „ziel“, leere Angaben wie Teilenummer werden ergänzt, „quelle“ entfällt. Kalkulation, Menge und Arbeitsgänge
+  // bleiben die von „ziel“.
   function zusammenfuehren(zielId, quelleId) {
     if (gesperrt()) return null;
     const ziel = teile.value.find((t) => t.id === zielId);
@@ -418,7 +419,8 @@ export const useAngebot = defineStore('angebot', () => {
     await ausAngebot(angebot);
     if (!dateien.length) return;
     const [{ gruppieren, mengenAusText, dateiPfad }, { passtZu }] = await Promise.all([import('../lib/mailanfrage.js'), import('../lib/mailtabelle.js')]);
-    const gruppen = gruppieren(dateien);
+    // dieselbe Datei nur einmal (ältere Anfragen mit zwei gleichen ZIPs liefern sie doppelt)
+    const gruppen = gruppieren(dateien.filter((d, i) => !d.url || dateien.findIndex((x) => x.url === d.url) === i));
     for (const g of gruppen) {
       const id = hinzufuegen(g.basis).id;
       const t = teile.value.find((x) => x.id === id);

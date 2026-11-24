@@ -196,10 +196,10 @@ async function alsRechnung(a) {
 
 // ---- Keine Anfrage (mit Rückfrage im Knopf)
 const bestaetigen = ref(false);
-async function verwerfen() {
+async function verwerfen(sperren = false) {
   if (!bestaetigen.value) { bestaetigen.value = true; return; }
   const naechste = zeilen.value[zeilen.value.findIndex((x) => x.id === d.value.id) + 1]?.id;
-  if (await mail.keineAnfrage(d.value.id)) router.replace(naechste ? `/posteingang/${naechste}` : '/posteingang');
+  if (await mail.keineAnfrage(d.value.id, sperren)) router.replace(naechste ? `/posteingang/${naechste}` : '/posteingang');
 }
 
 // ---- Anhänge
@@ -329,8 +329,12 @@ const kurzZeit = (iso) => {
             <RouterLink v-if="d.auftragId" :to="`/auftraege/${d.auftragId}`" class="btn !py-1.5 text-sm"><ArrowRight :size="15" /> Auftrag {{ d.auftragId }}</RouterLink>
             <button v-if="d.kategorie !== 'Anfrage' && d.status !== 'Erledigt'" class="btn !py-1.5 text-sm" title="Erledigt: verschwindet aus „Offen“, der Inhalt bleibt" @click="naechsteNachErledigt"><CheckCircle2 :size="15" /> Erledigt</button>
             <button v-else-if="d.status === 'Erledigt'" class="btn !py-1.5 text-sm" @click="mail.erledigt(d.id, 0)"><RotateCcw :size="15" /> Wieder öffnen</button>
-            <button v-if="!d.angebotId && !d.eingangsrechnungen?.length" class="btn !py-1.5 text-sm" :class="bestaetigen ? '!border-accent !text-accent' : '!text-mute'" :title="'Aus CNC One entfernen, im Postfach bleibt die Mail'" @click="verwerfen" @blur="bestaetigen = false">
+            <button v-if="!d.angebotId && !d.eingangsrechnungen?.length" class="btn !py-1.5 text-sm" :class="bestaetigen ? '!border-accent !text-accent' : '!text-mute'" :title="'Aus CNC One entfernen, im Postfach bleibt die Mail'" @click="verwerfen(false)" @blur="bestaetigen = false">
               <Ban :size="15" /> {{ bestaetigen ? 'Wirklich entfernen?' : d.kategorie === 'Anfrage' ? 'Keine Anfrage' : 'Entfernen' }}
+            </button>
+            <!-- mousedown.prevent: der erste Knopf behält den Fokus, sonst verschwindet dieser vor dem Klick -->
+            <button v-if="bestaetigen && d.vonEmail" class="btn !border-accent !py-1.5 text-sm !text-accent" :title="`${d.vonEmail} kommt in den Mail-Einstellungen auf die Liste „Absender nie abholen“`" @mousedown.prevent @click="verwerfen(true)">
+              <Ban :size="15" /> Entfernen und Absender sperren
             </button>
           </div>
 

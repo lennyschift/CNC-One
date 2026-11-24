@@ -189,6 +189,14 @@ def _an_bauteil_haengen(url, bauteil, feld):
 	)
 	if name:
 		frappe.db.set_value("File", name, {"attached_to_doctype": "Bauteil", "attached_to_name": bauteil, "attached_to_field": feld}, update_modified=False)
+		return
+	# Die Datei hängt schon an einem anderen Bauteil (in der Workbench zusammengeführt): eigener Eintrag auf dieselbe Datei,
+	# so bleibt sie erhalten, wenn das andere Bauteil wieder entfällt
+	if frappe.db.exists("File", {"file_url": url, "attached_to_doctype": "Bauteil", "attached_to_name": bauteil}):
+		return
+	andere = frappe.db.get_value("File", {"file_url": url, "attached_to_doctype": "Bauteil"}, "name")
+	if andere:
+		frappe.get_doc("File", andere).create_attachment_copy("Bauteil", bauteil, feld, ignore_permissions=True)
 
 
 def revision_verwendet(bauteil, revision, ausser_angebot=None):

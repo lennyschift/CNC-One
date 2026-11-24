@@ -156,6 +156,9 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
           <label class="block"><span class="label mb-1 block">Freemail-Anbieter</span>
             <textarea v-model="e.freemailDomains" rows="4" class="field resize-y text-sm" :placeholder="e.standardFreemail" />
             <span class="mt-1 block text-xs text-mute">Eine Domain je Zeile. Dort zählt nur die genaue Adresse eines Kontakts, nicht die ganze Domain. Leer = Standardliste.</span></label>
+          <label class="block sm:col-span-2"><span class="label mb-1 block">Absender nie abholen</span>
+            <textarea v-model="e.ignorierteAbsender" rows="3" class="field resize-y text-sm" placeholder="noreply@mail.kleinanzeigen.de&#10;newsletter.example.com" />
+            <span class="mt-1 block text-xs text-mute">Eine Adresse oder Domain je Zeile. Diese Mails werden nie geholt, auch nicht mit Stichwort im Betreff; eine Domain sperrt auch ihre Unterdomains. Im Posteingang geht es auch über „Keine Anfrage“ → „Entfernen und Absender sperren“.</span></label>
           <label class="block"><span class="label mb-1 block">Gesperrte Dateiendungen</span>
             <textarea v-model="e.gesperrteEndungen" rows="4" class="field resize-y text-sm" :placeholder="e.standardGesperrt" />
             <span class="mt-1 block text-xs text-mute">Anhänge mit diesen Endungen (Programme, Office-Dateien mit Makros) und getarnte Programme werden nie übernommen. Leer = Standardliste.</span></label>

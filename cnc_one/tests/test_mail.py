@@ -149,6 +149,29 @@ class TestMailAnfragen(IntegrationTestCase):
 		self.assertFalse(frappe.db.exists("Mail Nachricht", {"message_id": "<zz-r@zz>"}))
 		self.assertTrue(frappe.get_single("Mail Einstellungen").letzter_abruf)
 
+	def test_gesperrte_absender_werden_nie_geholt(self):
+		gesperrt = {"noreply@mail.kleinanzeigen.de", "spam.example"}
+		self.assertTrue(mail.absender_gesperrt("NoReply@mail.kleinanzeigen.de", gesperrt))
+		self.assertTrue(mail.absender_gesperrt("x@news.spam.example", gesperrt))  # Unterdomain
+		self.assertFalse(mail.absender_gesperrt("info@mail.kleinanzeigen.de", gesperrt))
+		self.assertFalse(mail.absender_gesperrt("a@nospam.example", gesperrt))
+		frappe.db.set_single_value("Mail Einstellungen", "ignorierte_absender", "spam.example")
+		postfach = FakeImap([
+			zz_mail(betreff="Re: Nutzer-Anfrage zu deiner Anzeige", von="Kleinanzeigen <noreply@mail.kleinanzeigen.de>", mid="<zz-k@zz>"),
+			zz_mail(betreff="Anfrage Welle", mid="<zz-w@zz>"),
+		])
+		with patch.object(mail, "imap_verbinden", return_value=postfach), patch.object(frappe.db, "commit"):
+			self.assertEqual(mail.abholen(), 2)
+		# „Entfernen und Absender sperren“: die Adresse kommt dazu, danach wird ihre nächste Mail nicht mehr geholt
+		k = frappe.db.get_value("Mail Nachricht", {"message_id": "<zz-k@zz>"}, "parent")
+		mail_api.keine_anfrage(k, sperren=1)
+		self.assertEqual(frappe.get_single("Mail Einstellungen").ignorierte_absender, "spam.example\nnoreply@mail.kleinanzeigen.de")
+		mail_api.keine_anfrage(frappe.db.get_value("Mail Nachricht", {"message_id": "<zz-w@zz>"}, "parent"))
+		postfach = FakeImap([zz_mail(betreff="Re: Nutzer-Anfrage", von="noreply@mail.kleinanzeigen.de", mid="<zz-k2@zz>")])
+		with patch.object(mail, "imap_verbinden", return_value=postfach), patch.object(frappe.db, "commit"):
+			self.assertEqual(mail.abholen(), 0)
+		self.assertEqual(postfach.geladen, [])
+
 	def test_abholen_ab_als_datum_oder_text(self):
 		from datetime import date
 
@@ -539,6 +562,15 @@ class TestZipAnhang(IntegrationTestCase):
 		doc = frappe.get_doc("Dokument", {"datei": ["in", [url, r["dateien"][0]["url"]]]})
 		self.assertEqual(doc.herkunft, "aus zz-anfrage.zip")
 		self.assertEqual(frappe.db.get_value("Dokument", {"titel": "zz-anfrage.zip"}, ["art", "herkunft"]), ("Mail-Anhang", ""))
+
+	def test_zwei_gleiche_zips_ergeben_jede_datei_nur_einmal(self):
+		inhalt = [("Zeichnung.pdf", leeres_pdf("zz-doppelt")), ("Modell.stp", b"ISO-10303-21; zz-doppelt")]
+		d = mail.verarbeiten(zz_mail(von="einkauf@zz-zip.de", mid="<zz-zip-3@zz>", anhaenge=[("zz-a.zip", zz_zip(inhalt)), ("zz-b.zip", zz_zip(inhalt))]))
+		n = mail_api.anfrage_ui(frappe.get_doc("Mail Anfrage", d.name))["nachrichten"][0]
+		self.assertEqual([(a["name"], a.get("aus", "")) for a in n["anhaenge"]], [("zz-a.zip", ""), ("Zeichnung.pdf", "zz-a.zip"), ("Modell.stp", "zz-a.zip")])
+		self.assertIn("zz-b.zip: Zeichnung.pdf ist doppelt (gleicher Inhalt wie zz-a.zip: Zeichnung.pdf)", n["hinweis"])
+		r = mail_api.angebot_anlegen(d.name)
+		self.assertEqual([x["name"] for x in r["dateien"]], ["Zeichnung.pdf", "Modell.stp"])
 
 	def test_kaputte_oder_zu_grosse_zip_kommt_trotzdem_als_anhang(self):
 		d = mail.verarbeiten(zz_mail(von="einkauf@zz-zip.de", mid="<zz-zip-2@zz>", anhaenge=[("zz-kaputt.zip", b"PK kein zip")]))

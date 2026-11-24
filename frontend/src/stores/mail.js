@@ -75,12 +75,12 @@ export const useMail = defineStore('mail', () => {
     }
   }
 
-  async function keineAnfrage(id) {
+  async function keineAnfrage(id, sperren = false) {
     try {
-      await call('cnc_one.api.mail.keine_anfrage', { id });
+      await call('cnc_one.api.mail.keine_anfrage', { id, sperren: sperren ? 1 : 0 });
       liste.value = liste.value.filter((x) => x.id !== id);
       zaehlen();
-      ui.toast('Aus CNC One entfernt, im Postfach bleibt die Mail', 'ok');
+      ui.toast(sperren ? 'Entfernt; Mails dieses Absenders werden nicht mehr geholt' : 'Aus CNC One entfernt, im Postfach bleibt die Mail', 'ok');
       return true;
     } catch (e) {
       ui.toast(e.message, 'warn');
