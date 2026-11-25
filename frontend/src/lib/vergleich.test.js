@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { vergleich, weiterePositionen, vorgaenge, imVorgang, vorlagePasst, passendeVorlagen } from './vergleich.js';
+import { vergleich, weiterePositionen, vorgaenge, imVorgang, vorlagePasst, passendeVorlagen, schnellsterTermin } from './vergleich.js';
 
 const pos = [
   { key: 'frei:1', teil: { name: 'Rundstange', material: 'EN AW-6082' }, abmessung: 'Ø 40', einheit: 'Stangen', mengen: [2, 6] },
@@ -138,5 +138,13 @@ describe('Liefertermine je Position', () => {
   it('rechnet gewählte Alternativen in den Gesamttermin ein', () => {
     const v = vergleich([x, y], { alternativen: ['LA-7|2'] });
     expect(v.lieferanten.find((l) => l.id === 'LA-7').spaetester).toBe('2027-01-15');
+  });
+});
+
+describe('schnellster Liefertermin je Position', () => {
+  it('grün nur, wenn sich die Termine unterscheiden', () => {
+    expect(schnellsterTermin({ a: { datum: '2026-12-07' }, b: { datum: '2026-11-26' }, c: { datum: '2026-11-26' }, d: null, e: { datum: '' } })).toEqual(['b', 'c']);
+    expect(schnellsterTermin({ a: { datum: '2026-12-07' }, b: { datum: '2026-12-07' } })).toBeNull();
+    expect(schnellsterTermin({ a: { datum: '2026-12-07' }, b: { datum: '' } })).toBeNull();
   });
 });

@@ -1,8 +1,10 @@
 <script setup>
 // Lieferantenanfrage per Mail: eine Mail für den ganzen Vorgang, die Lieferanten stehen in BCC und sehen sich nicht.
 // An, CC, BCC, Betreff und Text sind frei änderbar; {tabelle} im Text wird zur Tabelle der Positionen.
-import { ref, onMounted, watch, onBeforeUnmount } from 'vue';
-import { X, Send, AlertTriangle, Loader, EyeOff, Table2, Eye } from '@lucide/vue';
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
+import { X, Send, AlertTriangle, Loader, EyeOff, Table2, Eye, ShieldCheck, ShieldAlert, FileText } from '@lucide/vue';
+import SchwaerzenDialog from './SchwaerzenDialog.vue';
+import { useSchwaerzen } from '../stores/schwaerzen.js';
 import { call } from '../data/api.js';
 import Toggle from './Toggle.vue';
 import MailHtml from './MailHtml.vue';
@@ -23,8 +25,23 @@ const textfeld = ref(null);
 const istAdmin = (benutzer()?.rollen ?? []).some((x) => ['CNC Admin', 'System Manager'].includes(x));
 
 onMounted(async () => {
-  try { v.value = await call('cnc_one.api.anfrage.mail_vorschlag', { vorgang: props.vorgang }); } catch (e) { ui.toast(e.message, 'warn'); emit('schliessen'); }
+  try { v.value = await call('cnc_one.api.anfrage.mail_vorschlag', { vorgang: props.vorgang }); } catch (e) { ui.toast(e.message, 'warn'); emit('schliessen'); return; }
+  // Zeichnungen gehen nur geschwärzt und geprüft an Partner: fehlende Fassungen jetzt im Hintergrund erzeugen
+  if (v.value.zeichnungenListe?.length) sw.automatisch(v.value.zeichnungenListe);
 });
+
+// ---- Geschwärzte Zeichnungen
+const sw = useSchwaerzen();
+const pruefen = ref(null);
+const zStatus = (z) => {
+  const s = sw.stand[z.url];
+  const a = sw.arbeit[z.url];
+  if (s?.status === 'Freigegeben') return { ok: true, text: `geprüft von ${s.geprueftVon}`, farbe: 'text-ok' };
+  if (a) return { ok: false, text: a.text, farbe: a.phase === 'fehler' ? 'text-accent' : 'text-mute', laeuft: a.phase !== 'fehler' };
+  if (s?.status === 'Ungeprüft') return { ok: false, text: s.pruefungBestanden ? 'geschwärzt, bitte prüfen' : 'Prüfung nicht bestanden', farbe: 'text-warn' };
+  return { ok: false, text: 'noch nicht geschwärzt', farbe: 'text-mute' };
+};
+const zeichnungenOk = computed(() => !zeichnungen.value || !(v.value?.zeichnungenListe?.length) || v.value.zeichnungenListe.every((z) => zStatus(z).ok));
 
 // Vorschau: die Mail genau so, wie sie verschickt wird (HTML vom Server, Tabelle an der Stelle {tabelle})
 const html = ref('');
@@ -68,7 +85,7 @@ async function senden() {
   }
 }
 const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
-const bereit = () => v.value && v.value.bereit && (v.value.an.trim() || v.value.cc.trim() || v.value.bcc.trim()) && v.value.betreff.trim();
+const bereit = () => v.value && v.value.bereit && (v.value.an.trim() || v.value.cc.trim() || v.value.bcc.trim()) && v.value.betreff.trim() && zeichnungenOk.value;
 </script>
 
 <template>
@@ -114,9 +131,20 @@ const bereit = () => v.value && v.value.bereit && (v.value.an.trim() || v.value.
               <span class="mt-1 block text-[11px] text-mute">An der Stelle <code class="rounded bg-surface2 px-1">{tabelle}</code> steht in der Mail die Tabelle der Positionen (siehe Vorschau).</span>
             </label>
             <div v-if="v.zeichnungen" class="flex flex-wrap gap-5">
-              <Toggle v-model="zeichnungen" klein label="Zeichnungen anhängen" />
+              <Toggle v-model="zeichnungen" klein label="Zeichnungen anhängen (nur geschwärzt)" />
               <Toggle v-model="modelle" klein label="3D-Modelle anhängen" />
             </div>
+            <p v-if="modelle" class="flex items-start gap-1.5 rounded-xl bg-warn/10 px-3 py-2 text-xs text-warn"><AlertTriangle :size="13" class="mt-0.5 shrink-0" /> 3D-Modelle gehen im Original hinaus. Im Dateikopf einer STEP-Datei können Firma, Bearbeiter und Teilenamen des Kunden stehen.</p>
+            <section v-if="zeichnungen && v.zeichnungenListe?.length" class="rounded-xl border border-line">
+              <div class="flex items-center gap-1.5 border-b border-line px-3 py-2 text-xs font-medium"><ShieldCheck :size="13" class="text-accent" /> Zeichnungen für die Partner — nur geschwärzt und von Ihnen geprüft</div>
+              <div v-for="z in v.zeichnungenListe" :key="z.url" class="flex items-center gap-2 border-b border-line px-3 py-2 text-xs last:border-0">
+                <FileText :size="14" class="shrink-0 text-mute" />
+                <span class="min-w-0 flex-1 truncate"><span class="font-medium">{{ z.teilenummer || z.dateiname }}</span> <span class="text-mute">{{ z.name }}</span></span>
+                <span class="flex items-center gap-1" :class="zStatus(z).farbe"><Loader v-if="zStatus(z).laeuft" :size="12" class="animate-spin" /><ShieldCheck v-else-if="zStatus(z).ok" :size="12" /><ShieldAlert v-else :size="12" />{{ zStatus(z).text }}</span>
+                <button type="button" class="btn !px-2.5 !py-1 text-xs" :class="zStatus(z).ok ? '' : 'btn-primary'" :disabled="zStatus(z).laeuft" @click="pruefen = z">{{ zStatus(z).ok ? 'Ansehen' : 'Prüfen' }}</button>
+              </div>
+              <p v-if="!zeichnungenOk" class="px-3 py-2 text-xs text-warn">Senden geht erst, wenn alle Zeichnungen geprüft und freigegeben sind — oder ohne Zeichnungen.</p>
+            </section>
            </div>
            <div class="min-w-0">
             <div class="label mb-1 flex items-center gap-1.5"><Eye :size="12" /> So kommt die Mail beim Lieferanten an</div>
@@ -141,5 +169,6 @@ const bereit = () => v.value && v.value.bereit && (v.value.an.trim() || v.value.
         </div>
       </Transition>
     </div>
+    <SchwaerzenDialog v-if="pruefen" :eintrag="pruefen" @schliessen="pruefen = null" @freigegeben="pruefen = null" />
   </Teleport>
 </template>

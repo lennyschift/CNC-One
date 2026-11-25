@@ -5,15 +5,12 @@ import { imVorgang } from '../lib/vergleich.js';
 import { call } from '../data/api.js';
 import { stammdatenRoh } from '../data/repo.js';
 import { useUi } from './ui.js';
-import { artikelText } from '../lib/werkstoffbaum.js';
+import { artikelText, anforderungenVon, anforderungenText as anfText } from '../lib/werkstoffbaum.js';
 
 const kopie = (o) => JSON.parse(JSON.stringify(o));
 // Rohmaterial mit Zustand, Abmessung und Ausführung (z. B. „EN AW-7075 T7351 · Rund Ø40 · gezogen h11“), damit der Lieferant es kennt
 const kopf = (t) => ({ name: t.name, teilenummer: t.teilenummer, zeichnungsnr: t.zeichnungsnr, material: artikelText(t.material, t.roh) || t.material || '' });
-const anforderungenText = (t) => {
-  const a = t?.roh?.anforderungen ?? { zeugnis: t?.roh?.zeugnis || '', pruefungen: [] };
-  return [a.zeugnis && `Zeugnis ${a.zeugnis}`, ...(a.pruefungen ?? [])].filter(Boolean).join(', ');
-};
+const anforderungenText = (t) => (t?.roh ? anfText(anforderungenVon(t.roh)) : '');
 
 // Lieferantenanfragen (Fremdvergabe aus der Workbench oder frei, z. B. Material) liegen in Frappe. Eine Anfrage geht an einen Lieferanten und enthält mehrere Positionen.
 export const useAnfragen = defineStore('anfragen', () => {
@@ -74,6 +71,13 @@ export const useAnfragen = defineStore('anfragen', () => {
     return r.neu;
   }
 
+  // Ein Angebot kommt später dazu: Lieferant im selben Vorgang mit denselben Positionen (ohne Mail)
+  async function lieferantDazu(vorgang, lieferant) {
+    const rec = await sicher(() => call('cnc_one.api.anfrage.lieferant_dazu', { vorgang, lieferant }));
+    if (rec) einsetzen(rec);
+    return rec;
+  }
+
   async function antwortErfassen(id, antwort) {
     const rec = await sicher(() => call('cnc_one.api.anfrage.antwort_erfassen', { id, antwort: kopie(antwort) }));
     if (rec) { einsetzen(rec); ui.toast(`Angebot zu ${id} erfasst`, 'ok'); }
@@ -132,5 +136,5 @@ export const useAnfragen = defineStore('anfragen', () => {
     return rec;
   }
 
-  return { liste, anfrage, fuerArbeitsgang, fuerAngebot, vorgang, anlegen, freiAnlegen, aendern, antwortErfassen, absagen, alleEinsetzen, zuschlag, gelesen, neuLaden, neueAntworten, angebotsvorlage, angebotsvorlageLernen, mailUebernehmen };
+  return { liste, anfrage, fuerArbeitsgang, fuerAngebot, vorgang, anlegen, freiAnlegen, aendern, lieferantDazu, antwortErfassen, absagen, alleEinsetzen, zuschlag, gelesen, neuLaden, neueAntworten, angebotsvorlage, angebotsvorlageLernen, mailUebernehmen };
 });

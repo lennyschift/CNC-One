@@ -11,7 +11,7 @@ import RohmaterialWahl from './RohmaterialWahl.vue';
 import { isoGruppe } from '../lib/iso.js';
 import { leeresRoh, rohGewicht, rohText, vollstaendig } from '../lib/rohmaterial.js';
 import {
-  ZEUGNISSE, artikelText, anforderungenMit, chargePruefen, reichtFuer, rohAusAbmessung, vorschlagAbmessung, abmessungAusAltemRoh, kgJeMeter, kgJeQm,
+  ZEUGNISSE, zeugnisKurz, anforderungenVon, artikelText, anforderungenMit, chargePruefen, reichtFuer, rohAusAbmessung, vorschlagAbmessung, abmessungAusAltemRoh, kgJeMeter, kgJeQm,
 } from '../lib/werkstoffbaum.js';
 import { dichteSchaetzen } from '../lib/erkennung.js';
 import { materialProStueck } from '../lib/calc.js';
@@ -40,7 +40,7 @@ const dichte = computed(() => stamm.value?.dichte || dichteSchaetzen(props.teil.
 const dichteGeschaetzt = computed(() => !stamm.value?.dichte && !!dichte.value);
 const berechnet = computed(() => (vollstaendig(roh.value) && dichte.value ? rohGewicht(roh.value, dichte.value) : 0));
 const artikel = computed(() => artikelText(props.teil.material, roh.value));
-const anf = computed(() => roh.value.anforderungen ?? { zeugnis: roh.value.zeugnis || '', pruefungen: [] });
+const anf = computed(() => (props.teil.roh ? anforderungenVon(props.teil.roh) : { zeugnis: '', pruefungen: [] }));
 
 // Gewicht aus den Maßen ins Bauteil schreiben (das rechnet die Kalkulation)
 watch(berechnet, (kg) => {
@@ -128,7 +128,7 @@ function oeffnen() {
   if (!props.nurAnsicht && props.teil.roh) {
     const r = props.teil.roh;
     if (r.saege === undefined) r.saege = 3;
-    const neu = anforderungenMit(r.anforderungen ?? { zeugnis: r.zeugnis || '', pruefungen: [] }, vorgabe.value);
+    const neu = anforderungenMit(anforderungenVon(r), vorgabe.value);
     if (JSON.stringify(neu) !== JSON.stringify(r.anforderungen)) anforderungenSetzen(neu);
   }
   wahlLaden();
@@ -156,7 +156,7 @@ const proStueck = computed(() => materialProStueck(props.teil));
           <div class="flex items-center gap-1.5"><span class="truncate font-medium" :class="teil.material ? '' : 'text-mute'">{{ artikel || 'Werkstoff wählen' }}</span><Pencil :size="12" class="shrink-0 text-mute opacity-0 transition group-hover:opacity-100" /></div>
           <div class="truncate text-xs text-mute tnum">{{ rohText(roh) ? rohText(roh) + ' mm' : 'Abmessung und Zuschnitt fehlen' }} · {{ kg(teil.gewichtKg || 0) }} × {{ eur(teil.materialPreisKg || 0) }}/kg</div>
           <div v-if="anf.zeugnis || anf.pruefungen?.length || roh.ausLager" class="mt-1 flex flex-wrap gap-1">
-            <span v-if="anf.zeugnis" class="chip !text-[10px]"><FileBadge :size="11" /> {{ anf.zeugnis }}</span>
+            <span v-if="anf.zeugnis" class="chip !text-[10px]"><FileBadge :size="11" /> {{ zeugnisKurz(anf.zeugnis) }}</span>
             <span v-for="p in anf.pruefungen" :key="p" class="chip !text-[10px]"><ShieldCheck :size="11" /> {{ p }}</span>
             <span v-if="roh.ausLager" class="chip !text-[10px]"><Warehouse :size="11" /> {{ roh.charge || 'Lager' }}</span>
           </div>
@@ -252,7 +252,7 @@ const proStueck = computed(() => materialProStueck(props.teil));
                 <section>
                   <div class="label mb-1.5">Werkszeugnis (EN 10204)</div>
                   <div class="flex gap-1 rounded-xl border border-line bg-surface2 p-1 text-xs" role="radiogroup" aria-label="Werkszeugnis">
-                    <button v-for="z in ZEUGNISSE" :key="z" type="button" role="radio" :aria-checked="anf.zeugnis === z" :disabled="zeugnisGesperrt(z)" class="flex-1 rounded-lg py-1.5 transition disabled:cursor-not-allowed disabled:opacity-35" :class="anf.zeugnis === z ? 'bg-surface font-medium text-ink shadow-sm' : 'text-mute hover:text-ink'" @click="zeugnisSetzen(z)">{{ z || 'keins' }}</button>
+                    <button v-for="z in ZEUGNISSE" :key="z" type="button" role="radio" :aria-checked="anf.zeugnis === z" :disabled="zeugnisGesperrt(z)" class="flex-1 rounded-lg py-1.5 transition disabled:cursor-not-allowed disabled:opacity-35" :class="anf.zeugnis === z ? 'bg-surface font-medium text-ink shadow-sm' : 'text-mute hover:text-ink'" @click="zeugnisSetzen(z)">{{ zeugnisKurz(z) }}</button>
                   </div>
                   <div class="label mb-1.5 mt-3">Prüfungen und Nachweise</div>
                   <div class="flex flex-wrap gap-1.5">

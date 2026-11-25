@@ -6,6 +6,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { X, Send, Plus, Trash2, Layers, ShieldCheck, PencilLine } from '@lucide/vue';
 import RohmaterialPopup from './RohmaterialPopup.vue';
+import { anforderungenText } from '../lib/werkstoffbaum.js';
 import FormSymbol from './FormSymbol.vue';
 import MailMuster from './MailMuster.vue';
 import { isoGruppe } from '../lib/iso.js';
@@ -44,8 +45,7 @@ function materialText(p) {
   if (!r) return;
   p.material = [r.werkstoff, r.zustand].filter(Boolean).join(' ');
   p.abmessung = materialAbmessung(r, p.einheit, p.laenge, p.breite);
-  const a = r.anforderungen ?? {};
-  p.anforderungen = [a.zeugnis && `Zeugnis ${a.zeugnis}`, ...(a.pruefungen ?? [])].filter(Boolean).join(', ');
+  p.anforderungen = anforderungenText(r.anforderungen);
 }
 function rohUebernehmen(p, r) {
   const vorher = p.roh?.artikel;

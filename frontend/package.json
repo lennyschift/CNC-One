@@ -1,7 +1,7 @@
 {
   "name": "cnc-one-frontend",
   "private": true,
-  "version": "1.12.0",
+  "version": "1.13.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
@@ -14,8 +14,10 @@
     "@fontsource-variable/inter": "latest",
     "@formkit/auto-animate": "latest",
     "@lucide/vue": "latest",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@vueuse/core": "latest",
     "occt-import-js": "^0.0.23",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
     "pinia": "latest",
     "three": "^0.187.0",
@@ -23,6 +25,7 @@
     "vue-router": "latest"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.2.0",
     "@tailwindcss/vite": "latest",
     "@vitejs/plugin-vue": "latest",
     "tailwindcss": "latest",

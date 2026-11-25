@@ -25,6 +25,11 @@ class TestBenutzerMail(IntegrationTestCase):
 		self.assertEqual(einstellung.absender_fuer("ZZ Firma GmbH", "ZZ CNC"), ("ZZ CNC", "ZZ CNC"))
 		self.assertEqual(einstellung.absender_fuer("ZZ Firma GmbH", ""), ("ZZ Firma GmbH", "ZZ Firma GmbH"))
 
+	def test_ohne_einstellungen_unterschreibt_der_benutzer_mit_seinem_namen(self):
+		if not frappe.db.exists("User", "zz-sig@zz-cnc.de"):
+			frappe.get_doc({"doctype": "User", "email": "zz-sig@zz-cnc.de", "first_name": "Zora", "last_name": "Zett", "send_welcome_email": 0}).insert(ignore_permissions=True)
+		self.assertEqual(einstellung.absender_fuer("ZZ Firma GmbH", "ZZ CNC", user="zz-sig@zz-cnc.de"), ("Zora Zett\nZZ Firma GmbH\nzz-sig@zz-cnc.de", "ZZ CNC"))
+
 	def test_signatur_und_absendername_je_benutzer(self):
 		frappe.db.delete("Benutzereinstellung", {"benutzer": "Administrator"})
 		p = einstellung.profil_speichern({"anzeigename": "Max Zett", "funktion": "Vertrieb", "telefon": "07903 3678-12", "mobil": "0171 000", "email": "max@zz-cnc.de", "nameAlsAbsender": True})

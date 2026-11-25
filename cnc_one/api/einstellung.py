@@ -79,11 +79,17 @@ def ohne_gruss(signatur):
 
 def absender_fuer(firma, absender_name="", user=None):
 	"""(Signatur, Absendername) für Mails des angemeldeten Benutzers. `firma`: Absendername der Mail-Einstellungen bzw.
-	Firmenname. Ohne eigene Einstellungen bleibt es beim gemeinsamen Absender (Signatur = Firmenname)."""
+	Firmenname. Ohne eigene Einstellungen unterschreibt der Benutzer mit Name, Firma und Login-Adresse; nur für
+	Systemkonten (Administrator, Guest) bleibt es beim gemeinsamen Absender (Signatur = Firmenname)."""
 	basis = absender_name or firma
 	p = _profil(user)
 	if not p:
-		return basis, basis
+		user = user or frappe.session.user
+		voll = (frappe.db.get_value("User", user, "full_name") or "").strip() if user not in ("Administrator", "Guest") else ""
+		if not voll:
+			return basis, basis
+		mail = user if "@" in (user or "") else frappe.db.get_value("User", user, "email") or ""
+		return signatur_erzeugen({"anzeigename": voll, "email": mail}, firma), basis
 	user = p.benutzer
 	name = (p.anzeigename or "").strip() or frappe.db.get_value("User", user, "full_name") or ""
 	d = {"anzeigename": name, "funktion": p.funktion or "", "telefon": p.telefon or "", "mobil": p.mobil or "", "email": (p.email or "").strip() or user}

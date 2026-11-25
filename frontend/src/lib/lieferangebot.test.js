@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
-import { angebotLesen, masseAus, werkstoffAus, zustandAus, zuordnen, preiseFuer, abgleich, spaltenVorlage, lieferantErkennen, lieferantVorschlag, positionsGruppen } from './lieferangebot.js';
+import { angebotLesen, masseAus, werkstoffAus, zustandAus, zuordnen, preiseFuer, abgleich, spaltenVorlage, lieferantErkennen, lieferantVorschlag, positionsGruppen, betragAus, gleicheWare, abweichungen, merkmaleAus, toleranzenAus } from './lieferangebot.js';
 
 // Text mit Lage aus echten Angeboten (Fußzeilen mit Bankverbindung entfernt)
 const DATEN = JSON.parse(fs.readFileSync(new URL('./testdaten/lieferangebote.json', import.meta.url), 'utf8'));
@@ -103,6 +103,77 @@ describe('Zuordnung zur Anfrage und Preise', () => {
     expect(a).toEqual({ Werkstoff: true, Zustand: true, Form: true, 'Maße': true, Anforderungen: null });
     const b = Object.fromEntries(abgleich(o, anfrage.positionen[1]).map((x) => [x.feld, x.ok]));
     expect(b.Werkstoff).toBe(false);
+  });
+});
+
+describe('Angebote vom 25.11.2026 (dieselbe Anfrage an vier Lieferanten)', () => {
+  const kurz2 = (p) => ({ pos: p.pos, werkstoff: p.werkstoff, form: p.form, masse: p.masse, stueck: p.stueck, kg: p.kg, preis: p.preis, preisJe: p.preisJe, betrag: p.betrag });
+  it('Bikar: ohne Mengenspalte, Position über der Betragszeile, Nebenkosten neben- und untereinander, Endbetrag rechts', () => {
+    const r = angebotLesen(DATEN.bikar);
+    expect(r.kopf.angebotsnr).toBe('3133031');
+    expect(r.positionen.map(kurz2)).toEqual([
+      { pos: '1.1', werkstoff: 'EN AW-7075', form: 'Platte', masse: [20, 50, 3020], stueck: 8, kg: 67.65, preis: 8.45, preisJe: 'kg', betrag: 571.9 },
+      { pos: '2.1', werkstoff: 'EN AW-7075', form: 'Platte', masse: [30, 75, 3020], stueck: 5, kg: 95.13, preis: 8.45, preisJe: 'kg', betrag: 804.02 },
+      { pos: '3.1', werkstoff: 'EN AW-5083', form: 'Platte', masse: [8, 92, 225], stueck: 3, kg: 1.32, preis: 12.65, preisJe: 'Stk', betrag: 37.95 },
+      { pos: '4.1', werkstoff: 'EN AW-6082', form: 'Flach', masse: [20, 90, 3000], stueck: 1, kg: 14.58, preis: 4.85, preisJe: 'kg', betrag: 70.71 },
+      { pos: '5.1', werkstoff: 'EN AW-6082', form: 'Flach', masse: [15, 20, 3000], stueck: 18, kg: 43.74, preis: 4.85, preisJe: 'kg', betrag: 212.14 },
+    ]);
+    expect(r.nebenkosten.map((n) => [n.text, n.betrag])).toEqual([['Frachtkostenanteil', 49.5], ['Verpackungskostenanteil', 28.5], ['Maut', 20.41], ['Dieselfloater', 8], ['Handlingskosten', 15]]);
+    expect([r.netto, r.stimmt]).toEqual([1818.13, true]);
+  });
+  it('AMCO: „Nr.“ unter „Angebot“, Maße ohne mm, Termin-Spalte, Nebenkosten als kleine Tabelle, Kopfnummer ist kein Betrag', () => {
+    const r = angebotLesen(DATEN.amco);
+    expect(r.kopf.angebotsnr).toBe('VAN00561434');
+    expect(r.positionen.map((p) => [p.pos, p.masse.join('x'), p.stueck, p.preis, p.preisJe, p.betrag, p.lieferdatum])).toEqual([
+      ['10', '20x50x3020', 8, 79.5, 'Stk', 636, '2026-12-07'], ['20', '30x75x3020', 5, 175, 'Stk', 875, '2026-12-07'],
+      ['30', '8x92x225', 3, 18.5, 'Stk', 55.5, '2026-12-07'], ['40', '20x90x3020', 1, 107, 'Stk', 107, '2026-12-07'],
+      ['50', '15x20x3020', 18, 18.5, 'Stk', 333, '2026-12-07'],
+    ]);
+    expect(r.nebenkosten.map((n) => [n.text, n.betrag])).toEqual([['Frachtkostenanteil', 56.99], ['Maut', 19.99], ['Verpackung', 23.99], ['Werkzeugnis', 25]]);
+    expect([r.netto, r.stimmt]).toEqual([2132.47, true]);
+  });
+  it('Weinmann: „Seite 2/2“ ist kein Betrag, Verpackung zwischen den Positionen', () => {
+    const r = angebotLesen(DATEN.weinmann2);
+    expect(r.positionen.map((p) => p.pos)).toEqual(['10', '20', '30', '40', '50']);
+    expect([r.netto, r.stimmt]).toEqual([1764.75, true]);
+  });
+  it('Mastel: unverändert sauber', () => {
+    const r = angebotLesen(DATEN.mastel2);
+    expect(r.positionen).toHaveLength(5);
+    expect([r.netto, r.stimmt]).toEqual([2366.9, true]);
+  });
+  it('fasst die vier Angebote je Abmessung zusammen und zeigt, was abweicht (Werkstoff, Flach statt Platte, Länge)', () => {
+    const a = ['weinmann2', 'bikar', 'amco', 'mastel2'].map((k) => angebotLesen(DATEN[k]));
+    const { gruppen, zuordnung } = positionsGruppen(a);
+    expect(zuordnung).toEqual([[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]]);
+    expect(gruppen).toHaveLength(5);
+    // Pos. 3: drei bieten Gussplatte EN AW-5083, Weinmann EN AW-7075
+    expect(gruppen[2]).toMatchObject({ werkstoff: 'EN AW-5083', masse: [8, 92, 225] });
+    expect(abweichungen(a[0].positionen[2], gruppen[2]).map((x) => x.feld)).toEqual(['Werkstoff']);
+    expect(abweichungen(a[1].positionen[2], gruppen[2])).toEqual([]);
+    // Pos. 4: Flachstange 3000 mm gegen Platte 3020 mm
+    const flach = abweichungen(a[1].positionen[3], { ...gruppen[3], form: 'Platte', masse: [20, 90, 3020] });
+    expect(flach.map((x) => x.feld)).toEqual(['Form', 'Maße']);
+  });
+  it('Herstellung, Oberfläche und Toleranzen je Position', () => {
+    const [w, b, am, m] = ['weinmann2', 'bikar', 'amco', 'mastel2'].map((k) => angebotLesen(DATEN[k]).positionen);
+    expect(w[2].merkmale).toEqual(['gewalzt', 'beidseitig plangefräst', 'foliert']);
+    expect(w[2].toleranzen).toEqual(['Dickentoleranz: +/- 0,10 mm']);
+    expect(w[3].merkmale).toEqual(['gepresst']);
+    expect(b[0].merkmale).toEqual(['gewalzt']);
+    expect(b[0].toleranzen).toEqual(['Tol./Dicke: +1,6 / -0,0 mm']);
+    expect(b[2].merkmale).toEqual(['Gussplatte', 'plangefräst', 'foliert']);
+    expect(am[2].merkmale).toEqual(['Gussplatte', 'plangefräst', 'foliert']);
+    expect(am[0].merkmale).toEqual(['gewalzt']);
+    expect(m[2].merkmale).toContain('Gussplatte');
+    expect(merkmaleAus('Gussplatte beids.\nplangefräst 8x92x225')).toEqual(['Gussplatte', 'beidseitig plangefräst']);
+    expect(toleranzenAus('Längentoleranz:\nDickentoleranz: +/- 0,10 mm')).toEqual(['Dickentoleranz: +/- 0,10 mm']);
+  });
+  it('Beträge und gleiche Ware', () => {
+    expect([betragAus('ca. 571,90 €'), betragAus('1.234,56'), betragAus('(945,00)'), betragAus('1,234.50'), betragAus('Seite 2/2'), betragAus('Nr. VAN00561434')]).toEqual([571.9, 1234.56, 945, 1234.5, null, null]);
+    expect(gleicheWare({ werkstoff: 'EN AW-6082', form: 'Flach', masse: [20, 90, 3000] }, { werkstoff: 'EN AW-6082 T651', form: 'Platte', masse: [20, 90, 3020] })).toBe(true);
+    expect(gleicheWare({ werkstoff: 'EN AW-6082', form: 'Flach', masse: [20, 90, 3000] }, { werkstoff: 'EN AW-6082', form: 'Rund', masse: [20, 90, 3000] })).toBe(false);
+    expect(gleicheWare({ werkstoff: 'EN AW-6082', form: 'Platte', masse: [20, 90, 1000] }, { werkstoff: 'EN AW-6082', form: 'Platte', masse: [20, 90, 3020] })).toBe(false);
   });
 });
 

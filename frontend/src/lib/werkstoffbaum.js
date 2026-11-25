@@ -15,6 +15,16 @@ export const FORM_IDS = FORMEN.map((f) => f.id);
 // Werkszeugnis nach EN 10204, aufsteigend: 3.2 erfüllt auch 3.1 usw.
 export const ZEUGNISSE = ['', '2.2', '3.1', '3.2'];
 export const zeugnisMax = (a, b) => (ZEUGNISSE.indexOf(a || '') >= ZEUGNISSE.indexOf(b || '') ? a || '' : b || '');
+// Standard für neues Rohmaterial: Abnahmeprüfzeugnis 3.1, im Haus „WAZ“ genannt. „keins“ bleibt wählbar und gespeichert.
+export const STANDARD_ZEUGNIS = '3.1';
+// Beschriftung der Knöpfe
+export const zeugnisKurz = (z) => (!z ? 'keins' : z === '3.1' ? '3.1 WAZ' : z);
+// Bezeichnung für den Lieferanten (Anfrage-Mail): die Begriffe der EN 10204
+export const zeugnisText = (z) => (!z ? '' : `${z === '2.2' ? 'Werkszeugnis' : 'Abnahmeprüfzeugnis'} ${z} (EN 10204)`);
+// Anforderungen eines Rohteils; ohne eigene Angabe (neu angelegt) gilt der Standard, ein gespeichertes „keins“ bleibt
+export const anforderungenVon = (roh) => roh?.anforderungen ?? { zeugnis: roh?.zeugnis ?? STANDARD_ZEUGNIS, pruefungen: [] };
+// „Abnahmeprüfzeugnis 3.1 (EN 10204), RoHS/REACH“
+export const anforderungenText = (a) => [zeugnisText(a?.zeugnis), ...(a?.pruefungen ?? [])].filter(Boolean).join(', ');
 
 const n = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 0);
 const z = (v) => String(Math.round(n(v) * 100) / 100).replace('.', ',');
@@ -182,7 +192,7 @@ export function materialBedarf(teile, chargen = []) {
     g.bedarfMax += je * m1;
     g.kg += n(t.gewichtKg) * m0;
     g.kgMax += n(t.gewichtKg) * m1;
-    g.anforderungen = anforderungenMit(g.anforderungen, r.anforderungen ?? { zeugnis: r.zeugnis || '', pruefungen: [] });
+    g.anforderungen = anforderungenMit(g.anforderungen, anforderungenVon(r));
     g.teile.push({ id: t.id, name: t.name, teilenummer: t.teilenummer, menge: m0, mengeMax: m1, zuschnitt: r.form === 'Platte' ? `${z(r.breite)} × ${z(r.laenge)}` : z(r.laenge) });
   }
   const liste = [...gruppen.values()].map((g) => {

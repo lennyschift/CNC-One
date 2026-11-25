@@ -225,6 +225,36 @@ class TestAnfrageMail(IntegrationTestCase):
 		self.assertIn("Zuschnitt 500 × 300 mm", m["html"])
 		self.assertIn("Hinweis: mit Zeugnis", m["html"])
 
+	def test_angebot_kommt_spaeter_dazu(self):
+		neu = anfrage.anlegen("", ["ZZ Alu A"], self.pos)
+		vorgang = neu[0]["vorgang"]
+		b = anfrage.lieferant_dazu(vorgang, "ZZ Alu B")
+		self.assertEqual((b["vorgang"], b["lieferantId"]), (vorgang, "ZZ Alu B"))
+		self.assertEqual([p["key"] for p in b["positionen"]], [p["key"] for p in neu[0]["positionen"]])
+		self.assertEqual(len(anfrage.vorgang_docs(vorgang)), 2)
+		# zweimal derselbe Lieferant: keine zweite Anfrage
+		self.assertEqual(anfrage.lieferant_dazu(vorgang, "ZZ Alu B")["id"], b["id"])
+		self.assertEqual(len(anfrage.vorgang_docs(vorgang)), 2)
+		# Preise wie bei jedem anderen Lieferanten
+		r = anfrage.antwort_erfassen(b["id"], {"angebotsnr": "B-9", "preise": [{"posKey": b["positionen"][0]["key"], "menge": 2, "proStk": 80, "einmalig": 0}]})
+		self.assertEqual(r["antwort"]["angebotsnr"], "B-9")
+
+	def test_tabelle_ohne_doppelungen_mit_anforderungen(self):
+		pos = lambda **k: frappe._dict({"bezeichnung": "", "teilenummer": "", "zeichnungsnr": "", "material": "", "ag_name": "", "abmessung": "", "anforderungen": "", "einheit": "Stangen", "mengen": "[20]", **k})
+		doc = frappe._dict(positionen=[pos(
+			bezeichnung="EN AW-6082 · Flach 20 × 10 · gezogen h11", material="EN AW-6082 T6",
+			abmessung="Flach 20 × 10 · gezogen h11 · Stangenlänge 3000 mm", anforderungen="Abnahmeprüfzeugnis 3.1 (EN 10204), RoHS/REACH",
+		)])
+		t = anfrage.tabelle(doc)
+		self.assertEqual(t["kopf"], ["Pos", "Werkstoff", "Abmessung", "Anforderungen", "Menge"])
+		self.assertEqual(t["zeilen"][0], ["1", "EN AW-6082 T6", "Flach 20 × 10 · gezogen h11 · Stangenlänge 3000 mm", "Abnahmeprüfzeugnis 3.1 (EN 10204), RoHS/REACH", "20 Stangen"])
+		# eine eigene Bezeichnung bleibt stehen; die Vorschau vor dem Anlegen zeigt die Anforderungen auch
+		doc.positionen.append(pos(bezeichnung="Rundstange", material="S235", abmessung="Ø 40"))
+		self.assertEqual(anfrage.tabelle(doc)["kopf"], ["Pos", "Bezeichnung", "Werkstoff", "Abmessung", "Anforderungen", "Menge"])
+		m = anfrage.mail_muster("Material", "", [{"teil": {"name": "x", "material": "S235"}, "abmessung": "Ø 40", "anforderungen": "RoHS/REACH", "einheit": "Stk", "mengen": [1]}])
+		self.assertIn("RoHS/REACH", m["html"])
+		self.assertIn("Anforderungen", anfrage.tabelle_text(anfrage.tabelle(doc)))
+
 	def test_aendern_legt_neue_fassung_an_und_ersetzt_die_alte(self):
 		r = [{**self.pos[0], "roh": {"werkstoff": "EN AW-6082", "form": "Rund", "abmessung": "Ø40", "laenge": 3000, "unbekannt": "x"}}]
 		neu = anfrage.anlegen("", ["ZZ Alu A", "ZZ Alu B"], r, notiz="alt", art="Material")

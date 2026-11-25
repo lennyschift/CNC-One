@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   querschnitt, kgJeMeter, kgJeQm, masText, artikelText, chargePruefen, reichtFuer, ausfuehrungenFuer, formenVon, rohAusAbmessung,
-  abmessungVorschlag, anforderungenMit, zeugnisMax, materialBedarf,
+  abmessungVorschlag, anforderungenMit, zeugnisMax, materialBedarf, anforderungenVon, anforderungenText, zeugnisKurz,
 } from './werkstoffbaum.js';
 import { rohVolumen, rohText } from './rohmaterial.js';
 
@@ -87,5 +87,20 @@ describe('Materialbedarf eines Angebots', () => {
     expect(materialBedarf(teile, [c('a', 3000, '3.1', ['RoHS/REACH'])]).liste[0]).toMatchObject({ status: 'lager', vorrat: 3000, fehlt: 0 });
     expect(materialBedarf(teile, [c('a', 1000, '3.1', ['RoHS/REACH'])]).liste[0]).toMatchObject({ status: 'teilweise', fehlt: 250 });
     expect(materialBedarf(teile, [c('a', 3000, '2.2', [])]).liste[0]).toMatchObject({ status: 'bestellen', ohneNachweis: 1 });
+  });
+});
+
+describe('Werkszeugnis', () => {
+  it('neues Rohmaterial bekommt 3.1 (WAZ), ein gespeichertes „keins“ bleibt', () => {
+    expect(anforderungenVon({ form: 'Rund' })).toEqual({ zeugnis: '3.1', pruefungen: [] });
+    expect(anforderungenVon({ zeugnis: '' }).zeugnis).toBe('');
+    expect(anforderungenVon({ anforderungen: { zeugnis: '2.2', pruefungen: ['A'] } })).toEqual({ zeugnis: '2.2', pruefungen: ['A'] });
+    expect(zeugnisKurz('3.1')).toBe('3.1 WAZ');
+    expect(zeugnisKurz('')).toBe('keins');
+  });
+  it('Text für den Lieferanten mit den Begriffen der EN 10204', () => {
+    expect(anforderungenText({ zeugnis: '3.1', pruefungen: ['RoHS/REACH'] })).toBe('Abnahmeprüfzeugnis 3.1 (EN 10204), RoHS/REACH');
+    expect(anforderungenText({ zeugnis: '2.2', pruefungen: [] })).toBe('Werkszeugnis 2.2 (EN 10204)');
+    expect(anforderungenText({ zeugnis: '', pruefungen: [] })).toBe('');
   });
 });

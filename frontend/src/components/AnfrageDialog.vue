@@ -9,7 +9,7 @@ import VorlagenChips from './VorlagenChips.vue';
 import AnfrageMailDialog from './AnfrageMailDialog.vue';
 import { repo } from '../data/repo.js';
 import { fremdPositionen, mailText } from '../lib/anfrage.js';
-import { artikelText } from '../lib/werkstoffbaum.js';
+import { artikelText, anforderungenVon, anforderungenText } from '../lib/werkstoffbaum.js';
 import { useAnfragen } from '../stores/anfragen.js';
 
 const props = defineProps({
@@ -46,7 +46,7 @@ onMounted(async () => {
 
 const aktiv = computed(() => positionen.filter((p) => p.an));
 // Anforderungen ans Rohmaterial (Werkszeugnis, Prüfungen) für die Vorschau
-const anforderungen = (t) => { const a = t?.roh?.anforderungen ?? { zeugnis: t?.roh?.zeugnis || '', pruefungen: [] }; return [a.zeugnis && `Zeugnis ${a.zeugnis}`, ...(a.pruefungen ?? [])].filter(Boolean).join(', '); };
+const anforderungen = (t) => (t?.roh ? anforderungenText(anforderungenVon(t.roh)) : '');
 const kontext = computed(() => ({ art: 'Fremdvergabe', texte: aktiv.value.flatMap((p) => [p.ag.name, p.teil.material]) }));
 const mailVorgang = ref('');
 const auswahl = computed(() => lieferanten.value.filter((l) => gewaehlt[l.id]));

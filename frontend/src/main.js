@@ -27,6 +27,7 @@ import StammHubView from './views/StammHubView.vue';
 import KundenView from './views/KundenView.vue';
 import BauteileView from './views/BauteileView.vue';
 import TeilefamilienView from './views/TeilefamilienView.vue';
+import SchwaerzregelnView from './views/SchwaerzregelnView.vue';
 import AnfragevorlagenView from './views/AnfragevorlagenView.vue';
 import LieferantenView from './views/LieferantenView.vue';
 import MaschinenView from './views/MaschinenView.vue';
@@ -76,6 +77,7 @@ const router = createRouter({
     { path: '/stammdaten', component: StammHubView, meta: { titel: 'Stammdaten', bereich: 'stammdaten' } },
     { path: '/stammdaten/kunden', component: KundenView, meta: { titel: 'Stammdaten: Kunden', bereich: 'stammdaten' } },
     { path: '/stammdaten/bauteile', component: BauteileView, meta: { titel: 'Stammdaten: Bauteile', bereich: 'stammdaten' } },
+    { path: '/stammdaten/schwaerzen', component: SchwaerzregelnView, meta: { titel: 'Stammdaten: Schwärzen', bereich: 'stammdaten' } },
     { path: '/stammdaten/teilefamilien', component: TeilefamilienView, meta: { titel: 'Stammdaten: Teilefamilien', bereich: 'stammdaten' } },
     { path: '/stammdaten/anfragevorlagen', component: AnfragevorlagenView, meta: { titel: 'Stammdaten: Anfragevorlagen', bereich: 'stammdaten' } },
     { path: '/stammdaten/lieferanten', component: LieferantenView, meta: { titel: 'Stammdaten: Lieferanten', bereich: 'stammdaten' } },

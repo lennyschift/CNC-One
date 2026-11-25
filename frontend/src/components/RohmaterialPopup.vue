@@ -5,7 +5,7 @@
 import { reactive, computed } from 'vue';
 import { X, Check, ShieldCheck } from '@lucide/vue';
 import RohmaterialWahl from './RohmaterialWahl.vue';
-import { ZEUGNISSE, artikelText } from '../lib/werkstoffbaum.js';
+import { ZEUGNISSE, STANDARD_ZEUGNIS, zeugnisKurz, artikelText } from '../lib/werkstoffbaum.js';
 import { useWerkstoff } from '../stores/werkstoff.js';
 
 const props = defineProps({ wert: { type: Object, default: null } });
@@ -14,7 +14,7 @@ const ws = useWerkstoff();
 
 const w = props.wert ?? {};
 const wahl = reactive({ werkstoff: w.werkstoff || '', zustand: w.zustand || '', form: w.form || 'Rund', ausfuehrung: w.ausfuehrung || '', abmessungId: w.abmessungId || '' });
-const anf = reactive({ zeugnis: w.anforderungen?.zeugnis || '', pruefungen: [...(w.anforderungen?.pruefungen ?? [])] });
+const anf = reactive({ zeugnis: w.anforderungen ? w.anforderungen.zeugnis || '' : STANDARD_ZEUGNIS, pruefungen: [...(w.anforderungen?.pruefungen ?? [])] });
 const abm = computed(() => ws.baum.abmessungen.find((a) => a.id === wahl.abmessungId) ?? null);
 const artikel = computed(() => artikelText(wahl.werkstoff, { ...wahl, abmessung: abm.value?.text ?? '' }));
 const pruefung = (p) => { anf.pruefungen = anf.pruefungen.includes(p) ? anf.pruefungen.filter((x) => x !== p) : [...anf.pruefungen, p]; };
@@ -36,7 +36,7 @@ function uebernehmen() {
           <section class="flex flex-wrap items-start gap-5 border-t border-line pt-4">
             <div><div class="label mb-1">Werkszeugnis (EN 10204)</div>
               <div class="flex gap-1 rounded-xl border border-line bg-surface2 p-1 text-xs">
-                <button v-for="z in ZEUGNISSE" :key="z" type="button" class="rounded-lg px-3 py-1.5" :class="anf.zeugnis === z ? 'bg-surface font-medium shadow-sm' : 'text-mute hover:text-ink'" @click="anf.zeugnis = z">{{ z || 'keins' }}</button>
+                <button v-for="z in ZEUGNISSE" :key="z" type="button" class="rounded-lg px-3 py-1.5" :class="anf.zeugnis === z ? 'bg-surface font-medium shadow-sm' : 'text-mute hover:text-ink'" @click="anf.zeugnis = z">{{ zeugnisKurz(z) }}</button>
               </div>
             </div>
             <div class="min-w-0 flex-1"><div class="label mb-1">Prüfungen und Nachweise</div>

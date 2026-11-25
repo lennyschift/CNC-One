@@ -30,7 +30,7 @@ function zelle(a, posKey, menge) {
   const je = a.antwort?.daten?.je?.[posKey];
   // Liefertermin dieser Position laut PDF (Text wie im Angebot und, wenn lesbar, als Datum)
   const o = (a.antwort?.daten?.positionen ?? []).find((x) => x.zuordnung === posKey);
-  return { proStk, einmalig, gesamt: r2(proStk * menge + einmalig), abweichung: je?.abweichung ? je.angeboten : null, termin: o?.liefertermin ?? '', datum: o?.lieferdatum ?? '' };
+  return { proStk, einmalig, gesamt: r2(proStk * menge + einmalig), abweichung: je?.abweichung ? je.angeboten : null, termin: o?.liefertermin ?? '', datum: o?.lieferdatum ?? '', o: o ?? null };
 }
 
 // Gesamtliefertermin eines Lieferanten: der späteste Termin seiner zugeordneten Positionen (und der gewählten
@@ -44,6 +44,14 @@ function termine(a, gewaehlt) {
     verschieden: new Set(daten).size > 1,
     ohneDatum: relevant.filter((o) => !o.lieferdatum && o.liefertermin).map((o) => o.liefertermin),
   };
+}
+
+// Frühester Liefertermin einer Zeile (nur wenn mindestens zwei Lieferanten ein Datum nennen und nicht alle dasselbe)
+export function schnellsterTermin(zellen) {
+  const mit = Object.entries(zellen).filter(([, z]) => z?.datum);
+  if (mit.length < 2 || new Set(mit.map(([, z]) => z.datum)).size < 2) return null;
+  const frueh = mit.map(([, z]) => z.datum).sort()[0];
+  return mit.filter(([, z]) => z.datum === frueh).map(([id]) => id);
 }
 
 const guenstigster = (zellen) => {
@@ -113,7 +121,7 @@ export function vergleich(anfragen, { alternativen = [] } = {}) {
       const zellen = Object.fromEntries(anfragen.map((a) => [a.id, zelle(a, p.key, m)]));
       zeilen.push({
         key: `${p.key}|${m}`, posKey: p.key, nr: i + 1, stufe, teil: p.teil, agName: p.agName, abmessung: p.abmessung ?? '', einheit: p.einheit || 'Stk',
-        menge: m, ersteZeile: stufe === 0, stufen: p.mengen.length, zellen, bester: guenstigster(zellen), vergeben: vergabe(p.key),
+        menge: m, ersteZeile: stufe === 0, stufen: p.mengen.length, zellen, bester: guenstigster(zellen), schnellste: schnellsterTermin(zellen) ?? [], vergeben: vergabe(p.key),
       });
     });
   });

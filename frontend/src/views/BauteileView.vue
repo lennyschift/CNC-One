@@ -1,7 +1,7 @@
 <script setup>
 import FilterLeiste from '../components/FilterLeiste.vue';
 import ListenTabelle from '../components/ListenTabelle.vue';
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { Plus, Search, Workflow, Hash, FileText, Box, History } from '@lucide/vue';
 import Toggle from '../components/Toggle.vue';
 import NumField from '../components/NumField.vue';
@@ -15,6 +15,9 @@ import ArbeitsplanEditor from '../components/ArbeitsplanEditor.vue';
 import BauteilHistorie from '../components/BauteilHistorie.vue';
 import AehnlicheBauteile from '../components/AehnlicheBauteile.vue';
 import TeilefamilieKarte from '../components/TeilefamilieKarte.vue';
+import SchwaerzenDialog from '../components/SchwaerzenDialog.vue';
+import { useSchwaerzen } from '../stores/schwaerzen.js';
+import { ShieldCheck, ShieldAlert } from '@lucide/vue';
 import { repo } from '../data/repo.js';
 import { useStammdaten } from '../stores/stammdaten.js';
 
@@ -63,6 +66,15 @@ async function speichern() {
   if (rec) b.value = null;
 }
 async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.value = null; }
+// Geschwärzte Fassung der aktuellen Zeichnung (für Partner und Fertigung)
+const sw = useSchwaerzen();
+const schwaerzen = ref(null);
+const zeichnungPdf = computed(() => (/\.pdf$/i.test(b.value?.zeichnung ?? '') ? b.value.zeichnung : ''));
+watch(zeichnungPdf, (u) => { if (u) sw.statusLaden([u]); });
+const swStand = computed(() => sw.stand[zeichnungPdf.value] ?? null);
+function schwaerzenOeffnen() {
+  schwaerzen.value = { url: zeichnungPdf.value, bauteil: b.value.id, kunde: b.value.kundeId, revision: b.value.revision, teilenummer: b.value.teilenummer, name: b.value.name, dateiname: decodeURIComponent(zeichnungPdf.value.split('/').pop()) };
+}
 </script>
 
 <template>
@@ -115,6 +127,12 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
       </div>
       <!-- Frühere Angebote, Aufträge und Fertigungen (aus den Belegen gelesen) -->
       <BauteilHistorie v-if="b.id" :bauteil-id="b.id" />
+      <div v-if="b.id && zeichnungPdf" class="flex flex-wrap items-center gap-2 rounded-2xl border border-line px-4 py-3 text-sm">
+        <ShieldCheck v-if="swStand?.status === 'Freigegeben'" :size="16" class="text-ok" /><ShieldAlert v-else :size="16" class="text-warn" />
+        <span class="font-semibold">Zeichnung ohne Kundendaten</span>
+        <span class="text-xs text-mute">{{ swStand?.status === 'Freigegeben' ? `freigegeben von ${swStand.geprueftVon}` : swStand ? 'geschwärzt, noch nicht geprüft' : 'noch nicht geschwärzt' }}</span>
+        <button type="button" class="btn ml-auto !px-2.5 !py-1 text-xs" @click="schwaerzenOeffnen">{{ swStand?.status === 'Freigegeben' ? 'Ansehen' : 'Schwärzen und prüfen' }}</button>
+      </div>
       <TeilefamilieKarte v-if="b.id && b.teilefamilie" :bauteil-id="b.id" :aktionen="darf" />
       <AehnlicheBauteile v-if="b.id" :bauteil-id="b.id" :kunde-id="b.kundeId" :teil="{ teilenummer: b.teilenummer, name: b.name, zeichnungsnr: b.zeichnungsnr, material: b.material, vorschaubild: b.vorschaubild }" :aktionen="darf" />
       <section v-if="b.revisionen?.length">
@@ -143,5 +161,6 @@ async function loeschen() { if (await store.loeschen('bauteil', b.value.id)) b.v
         <ArbeitsplanEditor :arbeitsgaenge="b.arbeitsgaenge" :kunde-id="b.kundeId" :teilenummer="b.teilenummer" ohne-speichern />
       </section>
     </StammDialog>
+    <SchwaerzenDialog v-if="schwaerzen" :eintrag="schwaerzen" @schliessen="schwaerzen = null" @freigegeben="schwaerzen = null" />
   </div>
 </template>

@@ -11,7 +11,8 @@ import { call, hochladen } from '../data/api.js';
 import { repo, stammdatenRoh } from '../data/repo.js';
 import { pdfjs } from '../lib/pdf.js';
 import { textAusSeite } from '../lib/zeichnungText.js';
-import { angebotLesen, lieferantErkennen, lieferantVorschlag, positionsGruppen, preiseFuer } from '../lib/lieferangebot.js';
+import { angebotLesen, lieferantErkennen, lieferantVorschlag, positionsGruppen, preiseFuer, abweichungen } from '../lib/lieferangebot.js';
+import AngebotZelle from './AngebotZelle.vue';
 import { eur, zahl } from '../lib/format.js';
 import { useAnfragen } from '../stores/anfragen.js';
 import { useUi } from '../stores/ui.js';
@@ -82,6 +83,12 @@ const benutzt = computed(() => gruppen.value.map((g, i) => i).filter((i) => zu.v
 const zelle = (ai, gi) => {
   const os = (angebote.value[ai]?.r.positionen ?? []).filter((_o, k) => zu.value[ai]?.[k] === gi);
   return os.length ? { betrag: os.reduce((s, o) => s + (o.betrag ?? 0), 0), o: os[0], n: os.length } : null;
+};
+// frühester Liefertermin je Zeile: Angebote mit diesem Datum werden grün (nur wenn sich die Termine unterscheiden)
+const schnell = (ai, gi) => {
+  const d = angebote.value.map((_a, i) => zelle(i, gi)?.o.lieferdatum).filter(Boolean);
+  const eigenes = zelle(ai, gi)?.o.lieferdatum;
+  return !!eigenes && d.length > 1 && new Set(d).size > 1 && eigenes === [...d].sort()[0];
 };
 const mengen = (o) => [o.stueck != null && `${zahl(o.stueck, 0)} Stk`, o.kg != null && `${zahl(o.kg, 2)} kg`, o.meter != null && `${zahl(o.meter, 3)} m`].filter(Boolean).join(' · ');
 const lieferantText = (a) => (a.lieferantId ? lieferanten.value.find((l) => l.id === a.lieferantId)?.name ?? a.lieferantId : a.neuName ? `${a.neuName} (neu)` : 'Lieferant fehlt');
@@ -216,14 +223,18 @@ async function anlegen() {
                         <select v-model="gruppen[gi].einheit" class="field !w-20 !py-1 text-sm"><option>Stk</option><option>kg</option><option>m</option></select>
                       </div>
                     </td>
-                    <td v-for="(a, ai) in angebote" :key="ai" class="px-2 py-1.5 text-right tnum">
-                      <template v-if="zelle(ai, gi)"><div class="font-medium">{{ eur(zelle(ai, gi).betrag) }}</div><div class="text-[11px] text-mute">{{ mengen(zelle(ai, gi).o) }}</div></template>
+                    <td v-for="(a, ai) in angebote" :key="ai" class="min-w-[150px] px-2 py-1.5 text-right align-top tnum">
+                      <template v-if="zelle(ai, gi)">
+                        <div class="font-medium">{{ eur(zelle(ai, gi).betrag) }}</div>
+                        <AngebotZelle :o="zelle(ai, gi).o" :abw="abweichungen(zelle(ai, gi).o, gruppen[gi])" :schnell="schnell(ai, gi)" />
+                      </template>
                       <span v-else class="text-mute">–</span>
                     </td>
                   </tr>
                 </tbody>
               </table>
-              <p class="px-3 py-2 text-xs text-mute">Der Vergleich rechnet je Lieferant den Preis je Einheit (Betrag ÷ angebotene Menge) auf die Menge hier hoch; abweichende Mengen werden markiert.</p>
+              <p class="px-3 pt-2 text-xs text-mute"><span class="font-semibold text-warn">Orange</span> = weicht von der Zeile ab (anderer Werkstoff, Flach statt Platte, andere Länge …). Die kg sind die theoretischen Gewichte des Lieferanten; berechnet wird meist das tatsächliche Gewicht.</p>
+              <p class="px-3 pb-2 text-xs text-mute">Der Vergleich rechnet je Lieferant den Preis je Einheit (Betrag ÷ angebotene Menge) auf die Menge hier hoch; abweichende Mengen werden markiert.</p>
             </section>
           </div>
 

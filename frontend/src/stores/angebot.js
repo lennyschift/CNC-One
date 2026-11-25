@@ -5,6 +5,7 @@ import { uid } from '../lib/format.js';
 import { eur } from '../lib/format.js';
 import { useUi } from './ui.js';
 import { useBelege } from './belege.js';
+import { useSchwaerzen } from './schwaerzen.js';
 import { einstellung, einstellungSpeichern } from '../data/einstellungen.js';
 import { call, hochladen } from '../data/api.js';
 import { repo } from '../data/repo.js';
@@ -733,6 +734,17 @@ export const useAngebot = defineStore('angebot', () => {
     }
   }
   watch(() => teile.value.map((t) => `${t.id}|${modellUrl(t)}|${t.vorschaubild ? 1 : 0}`).join(';'), () => { modelleVorladen(); });
+
+  // ---- Zeichnungen im Hintergrund schwärzen, sobald sie zu einem gespeicherten Bauteil gehören (für Anfragen an
+  // Partner und die Fertigung). Freigegeben wird erst nach der Gegenprüfung durch einen Menschen.
+  const zeichnungUrl = (t) => t.dateien.find((d) => d.art === 'Zeichnung' && d.url && /\.pdf$/i.test(d.url))?.url ?? '';
+  watch(() => [nurAnsicht.value, kopf.value.kundeId, teile.value.map((t) => `${zeichnungUrl(t)}|${zuordnung.value[t.id]?.bauteilId ?? ''}`).join(';')], () => {
+    if (nurAnsicht.value) return;
+    const liste = teile.value
+      .map((t) => ({ url: zeichnungUrl(t), bauteil: zuordnung.value[t.id]?.bauteilId ?? '', kunde: kopf.value.kundeId, revision: t.revision ?? '', teilenummer: t.teilenummer, name: t.name }))
+      .filter((e) => e.url && e.bauteil);
+    if (liste.length) useSchwaerzen().automatisch(liste).catch(() => {});
+  });
 
   function beispieleEinfuegen() {
     if (gesperrt()) return null;

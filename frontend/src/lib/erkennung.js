@@ -219,6 +219,31 @@ const ISO2768 = /ISO\s?2768[\s-]*[fmcv][HKL]?/i;
 const ergebnis = (wert, sicherheit, quelle, e = null) => ({ wert, sicherheit, quelle, lage: e ? { x: e.x, y: e.y, b: e.b, h: e.h } : null });
 
 // ---- Kundenvorlage: angelernte Regeln je Feld, { stichwort } oder { bereich: { x, y, b, h } }
+// Seit 2026-11: Abstände und Stellen zusätzlich in mm. Das Schriftfeld ist auf A4, A3 und A1 gleich groß (genormt, in
+// mm), ein Anteil der Blattgröße aber nicht: eine auf A4 gelernte Stelle lag auf A3 daneben. Gemessen wird deshalb vom
+// Label aus in mm (Versatz) bzw. von der nächsten Blattecke aus in mm (Stelle). Alte Regeln ohne mm gelten weiter.
+const PT_MM = 25.4 / 72;
+function blattMm(seite) {
+  return seite?.breite > 0 && seite?.hoehe > 0 ? { x: seite.breite * PT_MM, y: seite.hoehe * PT_MM } : null;
+}
+// Bereich (Anteile) → von der nächsten Ecke aus in mm: { ecke: 'ur' | 'ul' | 'or' | 'ol', dx, dy, b, h }
+function bereichInMm(b, m) {
+  const cx = b.x + b.b / 2;
+  const cy = b.y + b.h / 2;
+  const rechts = cx >= 0.5;
+  const unten = cy >= 0.5;
+  return {
+    ecke: `${unten ? 'u' : 'o'}${rechts ? 'r' : 'l'}`,
+    dx: runden((rechts ? 1 - b.x : b.x) * m.x), dy: runden((unten ? 1 - b.y : b.y) * m.y),
+    b: runden(b.b * m.x), h: runden(b.h * m.y),
+  };
+}
+// … und zurück in Anteile des Blatts, auf dem gerade erkannt wird
+function bereichAusMm(mm, m) {
+  const x = mm.ecke.endsWith('r') ? 1 - mm.dx / m.x : mm.dx / m.x;
+  const y = mm.ecke.startsWith('u') ? 1 - mm.dy / m.y : mm.dy / m.y;
+  return { x, y, b: mm.b / m.x, h: mm.h / m.y };
+}
 // Passt ein Textstück zum gelernten Stichwort? Gleich (ohne abschließende Satzzeichen) oder Stichwort plus Wortgrenze.
 function labelPasst(e, stichwort) {
   const t = norm(e.text);
@@ -228,7 +253,7 @@ function labelPasst(e, stichwort) {
 
 // Wert zu einer Stichwort-Regel. Mit gelerntem Versatz (dx, dy) steht der Wert genau dort, wo er beim Anlernen stand;
 // ältere Regeln ohne Versatz suchen rechts daneben oder darunter.
-function nachStichwort(regel, elemente, feld) {
+function nachStichwort(regel, elemente, feld, m = null) {
   const stichwort = norm(regel.stichwort);
   const labels = elemente.filter((e) => labelPasst(e, stichwort));
   labels.sort((x, y) => (norm(x.text) === stichwort ? 0 : 1) - (norm(y.text) === stichwort ? 0 : 1));
@@ -240,11 +265,15 @@ function nachStichwort(regel, elemente, feld) {
       continue;
     }
     if (regel.dx !== undefined) {
-      const zx = label.x + regel.dx;
-      const zy = label.y + regel.dy;
+      const inMm = m && regel.dxMm !== undefined;
+      const zx = label.x + (inMm ? regel.dxMm / m.x : regel.dx);
+      const zy = label.y + (inMm ? regel.dyMm / m.y : regel.dy);
+      // Toleranz: 8 mm waagrecht, 4 mm senkrecht (bzw. wie früher als Anteil des Blatts)
+      const tx = inMm ? 8 / m.x : 0.03;
+      const ty = inMm ? 4 / m.y : 0.015;
       let best = null;
       for (const e of elemente) {
-        if (e === label || Math.abs(e.x - zx) > 0.03 || Math.abs(e.y - zy) > 0.015) continue;
+        if (e === label || Math.abs(e.x - zx) > tx || Math.abs(e.y - zy) > ty) continue;
         const d = Math.abs(e.x - zx) + Math.abs(e.y - zy) * 1.5;
         if (!best || d < best.d) best = { e, d };
       }
@@ -258,8 +287,10 @@ function nachStichwort(regel, elemente, feld) {
 }
 
 // Wert, den eine einzelne Regel auf dieser Seite liefert (oder null)
-function regelWert(regel, elemente, feld) {
-  return regel.stichwort ? nachStichwort(regel, elemente, feld) : regel.bereich ? imBereich(regel.bereich, elemente, feld) : null;
+function regelWert(regel, elemente, feld, m = null) {
+  if (regel.stichwort) return nachStichwort(regel, elemente, feld, m);
+  if (!regel.bereich) return null;
+  return imBereich(m && regel.bereich.mm ? bereichAusMm(regel.bereich.mm, m) : regel.bereich, elemente, feld);
 }
 
 // Textstück an der angelernten Stelle: Anfang links im Bereich (längere Werte ragen nach rechts hinaus), Mitte in der Höhe
@@ -272,12 +303,12 @@ function imBereich(bereich, elemente, feld) {
   return treffer[0] ? { el: treffer[0], wert: treffer[0].text.trim() } : null;
 }
 
-function nachVorlage(vorlage, elemente) {
+function nachVorlage(vorlage, elemente, m = null) {
   const felder = {};
   for (const [feld, regeln] of Object.entries(vorlage?.felder ?? {})) {
     if (!FELDER[feld]) continue;
     for (const r of regeln) {
-      const t = regelWert(r, elemente, feld);
+      const t = regelWert(r, elemente, feld, m);
       if (t) { felder[feld] = ergebnis(t.wert, 'hoch', 'Kundenvorlage', t.el); break; }
     }
   }
@@ -323,8 +354,11 @@ export function lernregel(seite, el) {
       versatz = { dx: runden(el.x - best.e.x), dy: runden(el.y - best.e.y) };
     }
   }
+  const m = blattMm(seite);
+  if (versatz && m) Object.assign(versatz, { dxMm: runden(versatz.dx * m.x), dyMm: runden(versatz.dy * m.y) });
   const lage = { x: el.x, y: el.y, b: el.b, h: el.h };
   const bereich = { x: Math.max(0, el.x - 0.005), y: Math.max(0, el.y - 0.004), b: Math.min(1 - el.x, Math.max(el.b + 0.01, 0.15)), h: el.h + 0.008 };
+  if (m) bereich.mm = bereichInMm(bereich, m);
   return { wert, lage, stichwort, versatz, bereich };
 }
 
@@ -353,7 +387,7 @@ export function regelnZusammenfuehren(alte, neue, seite, feld, wert) {
   const gleich = (x, y) => JSON.stringify(x) === JSON.stringify(y);
   const bleiben = (alte ?? []).filter((r) => {
     if (neue.some((n) => gleich(n, r))) return false;
-    const t = regelWert(r, elemente, feld);
+    const t = regelWert(r, elemente, feld, blattMm(seite));
     return !t || norm(t.wert) === norm(wert);
   });
   return [...neue, ...bleiben].slice(0, 4);
@@ -371,7 +405,7 @@ export function kundeFinden(name, kunden) {
 // { felder: { feld: { wert, sicherheit: 'hoch' | 'mittel' | 'niedrig', quelle, lage } }, werkstoffNr }.
 export function erkennen(seite, dateiname = '', vorlage = null) {
   const elemente = seite?.elemente ?? [];
-  const felder = nachVorlage(vorlage, elemente);
+  const felder = nachVorlage(vorlage, elemente, blattMm(seite));
   for (const e of elemente) {
     const s = stichwortIn(e.text);
     if (!s?.feld || felder[s.feld]) continue;

@@ -252,3 +252,46 @@ describe('zweisprachige Labels', () => {
   });
 });
 
+
+// Schriftfeld in mm: gleicher Abstand vom Blattrand unten rechts auf A4 und A3 (genormt), anderer Anteil der Blattgröße
+describe('Anlernen unabhängig von der Blattgröße (mm statt Anteil)', () => {
+  const MM = 72 / 25.4;
+  // Elemente in mm vom Blattrand unten rechts: { text, r (rechts bis Textanfang), u (unten bis Textoberkante), b, h }
+  const blatt = (wPt, hPt, liste) => ({
+    breite: wPt, hoehe: hPt,
+    elemente: liste.map(({ text, r, u, b = 20, h = 3 }) => ({ text, x: 1 - (r * MM) / wPt, y: 1 - (u * MM) / hPt, b: (b * MM) / wPt, h: (h * MM) / hPt })),
+  });
+  const A4 = [842, 595];
+  const A3 = [1191, 842];
+  const schriftfeld = (wert, ident) => [
+    { text: 'Werkstoff', r: 120, u: 30, b: 14, h: 2.5 },
+    { text: wert, r: 95, u: 30.3 },
+    { text: 'Zeichnungsnummer', r: 120, u: 15, b: 25, h: 2.5 },
+    { text: ident, r: 60, u: 15 },
+  ];
+
+  it('Versatz vom Label: auf A4 gelernt, greift auf A3', () => {
+    const a4 = blatt(...A4, schriftfeld('S355J2', 'ZZ-100'));
+    const regeln = regelnAus(lernregel(a4, elementMitWert(a4, 'S355J2')));
+    expect(regeln[0]).toMatchObject({ stichwort: 'werkstoff' });
+    expect(regeln[0].dxMm).toBeCloseTo(25, 0);
+    // auf A3: an der Stelle, wo der alte Anteil-Versatz hinzeigen würde, steht etwas anderes
+    const a3 = blatt(...A3, [...schriftfeld('1.4301', 'ZZ-200'), { text: 'Falle', r: 104, u: 30.3 }]);
+    expect(erkennen(a3, '', { felder: { werkstoff: regeln } }).felder.werkstoff).toMatchObject({ wert: '1.4301', quelle: 'Kundenvorlage' });
+  });
+
+  it('Stelle ohne Label: von der nächsten Ecke aus in mm', () => {
+    const a4 = blatt(...A4, [{ text: 'ZZ-777-A', r: 50, u: 8 }]);
+    const r = lernregel(a4, a4.elemente[0]);
+    expect(r.bereich.mm).toMatchObject({ ecke: 'ur' });
+    const a3 = blatt(...A3, [{ text: 'ZZ-888-B', r: 50, u: 8 }, { text: 'ZZ-999-C', r: 70, u: 11 }]);
+    expect(erkennen(a3, '', { felder: { teilenummer: [{ bereich: r.bereich }] } }).felder.teilenummer.wert).toBe('ZZ-888-B');
+  });
+
+  it('alte Regeln ohne mm gelten weiter wie bisher', () => {
+    const a4 = blatt(...A4, schriftfeld('S355J2', 'ZZ-100'));
+    const alt = regelnAus(lernregel({ elemente: a4.elemente }, elementMitWert(a4, 'S355J2')));
+    expect(alt[0].dxMm).toBeUndefined();
+    expect(erkennen(a4, '', { felder: { werkstoff: alt } }).felder.werkstoff.wert).toBe('S355J2');
+  });
+});

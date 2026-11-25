@@ -21,6 +21,7 @@ export const ROLLEN = [
   { id: 'preiseinheit', label: 'Preiseinheit' },
   { id: 'rabatt', label: 'Rabatt %' },
   { id: 'betrag', label: 'Betrag' },
+  { id: 'termin', label: 'Liefertermin' },
 ];
 export const PREIS_JE = [
   { id: '', label: 'automatisch' },
@@ -29,12 +30,13 @@ export const PREIS_JE = [
   { id: 'm', label: 'je Meter' },
 ];
 
-// Reihenfolge zählt: „Preis Rabatt %“ ist der Preis, „Gew. (kg)“ das Gewicht, „Menge Einheit“ die Menge
+// Reihenfolge zählt: „Preis Rabatt %“ ist der Preis, „Gew. (kg)“ und „Gesamtgewicht“ das Gewicht, „Menge Einheit“ die Menge
 const STICHWORT = [
   ['pos', /^(pos\.?|position|pos\.?\s*-?\s*nr\.?|item|lfd\.?\s*nr\.?)(\s|$)/i],
-  ['betrag', /betrag|total|gesamt|amount|summe|^wert/i],
-  ['preiseinheit', /^pe$|^p\.?e\.?$|preiseinheit|price\s*unit|^per$/i],
   ['gewicht', /^gew|gewicht|weight/i],
+  ['betrag', /betrag|total|gesamt|amount|summe|^wert/i],
+  ['termin', /termin|versand|lieferdatum|liefer\s*-?\s*zeit|lieferwoche|delivery/i],
+  ['preiseinheit', /^pe$|^p\.?e\.?$|preiseinheit|price\s*unit|^per$/i],
   ['preis', /preis|price/i],
   ['rabatt', /rabatt|discount/i],
   ['menge', /menge|quantity|^qty|anzahl/i],
@@ -63,7 +65,8 @@ export function kopfzeileFinden(zeilen, vorlage = {}) {
   zeilen.forEach((z, i) => {
     const spalten = z.zellen.map((c) => ({ ...c, ...(rolleFuer(c.text, vorlage) ?? { rolle: '', quelle: '' }) }));
     const rollen = new Set(spalten.map((s) => s.rolle).filter(Boolean));
-    if (!rollen.has('menge') || !(rollen.has('preis') || rollen.has('betrag')) || rollen.size < 3) return;
+    // ohne Mengenspalte (Menge steht im Text, z. B. „8 Stk“) genügt eine Gewichtsspalte
+    if (!(rollen.has('menge') || rollen.has('gewicht')) || !(rollen.has('preis') || rollen.has('betrag')) || rollen.size < 3) return;
     const wert = spalten.reduce((n, s) => n + (s.quelle === 'vorlage' ? 10 : s.quelle ? 1 : 0), 0);
     if (!beste || wert > beste.wert) beste = { index: i, wert, spalten };
   });
@@ -83,12 +86,13 @@ function spalteVon(zelle, spalten) {
 }
 
 // ------------------------------------------------------------------ Einheiten, Werkstoff, Form, Maße
-const EINHEIT = /(\d[\d.,]*)\s*(kg|stück|stueck|stck\.?|stk\.?|st\.?|pcs\.?|pc|pieces|lfm|mtr\.?|m)(?![a-zäöüß])/gi;
+// „Hl“ = Herstelllänge (eine Stange)
+const EINHEIT = /(\d[\d.,]*)\s*(kg|stück|stueck|stck\.?|stk\.?|st\.?|pcs\.?|pc|pieces|hl|lfm|mtr\.?|m)(?![a-zäöüß])/gi;
 export function einheitNorm(e) {
   const t = (e ?? '').toLowerCase().replace(/\.$/, '');
   if (t === 'kg') return 'kg';
   if (['m', 'lfm', 'mtr'].includes(t)) return 'm';
-  if (/^(stück|stueck|stck|stk|st|pcs|pc|pieces|platten?|stangen?|zuschnitte?)$/.test(t)) return 'Stk';
+  if (/^(stück|stueck|stck|stk|st|pcs|pc|pieces|hl|platten?|stangen?|zuschnitte?)$/.test(t)) return 'Stk';
   return '';
 }
 function mengenAus(text) {
@@ -141,21 +145,54 @@ export function masseAus(text) {
   const dazu = (...xs) => { for (const x of xs) { const n = zahlAus(x); if (n != null && n > 0 && n < 100000) werte.push(n); } };
   const kette = new RegExp(String.raw`${zahlMm}\s*[x×*]\s*${zahlMm}(?:\s*[x×*]\s*${zahlMm})?\s*mm`, 'gi');
   for (const m of t.matchAll(kette)) { dazu(m[1], m[2], m[3]); anzeige ||= m[0]; }
+  // drei Maße auch ohne „mm“ („Platte 20x50x3020“, „plangefräst 8x92x225“)
+  for (const m of t.matchAll(new RegExp(String.raw`(?<![\d.,])${zahlMm}\s*[x×*]\s*${zahlMm}\s*[x×*]\s*${zahlMm}(?![\d.,]|\s*mm)`, 'gi'))) { dazu(m[1], m[2], m[3]); anzeige ||= `${m[0]} mm`; }
   for (const m of t.matchAll(new RegExp(String.raw`(?:[ØøΦ⌀]|rund|dia\.?|durchmesser)\s*${zahlMm}\s*mm`, 'gi'))) { dazu(m[1]); anzeige ||= m[0]; }
   for (const m of t.matchAll(new RegExp(String.raw`a['’´]?\s*${zahlMm}\s*mm`, 'gi'))) dazu(m[1]);
   for (const m of t.matchAll(new RegExp(String.raw`(?<![x×*]\s*)(?<![\d.,])${zahlMm}\s*mm\b(?!\s*[x×*])`, 'gi'))) { dazu(m[1]); anzeige ||= m[0]; }
   return { masse: [...new Set(werte.map(r4))].sort((a, b) => a - b), anzeige: anzeige.replace(/\s+/g, ' ').trim() };
 }
 
+// Herstellung und Oberfläche, wie der Lieferant sie nennt: wichtig für Verzug und Bearbeitung (Walzplatte ≠ Gussplatte ≠
+// gepresste Flachstange). Reihenfolge = Anzeige; spezielle Begriffe vor den allgemeinen.
+const MERKMALE = [
+  ['Gussplatte', /guss\s*platte|gussplatte|\(guss\)|präzisionsguss|\bgegossen\b|formodal|g\.al\b/i],
+  ['gewalzt', /gewalzt|walzplatte|warmgewalzt/i],
+  ['gepresst', /gepresst|strangpress/i],
+  ['gezogen', /gezogen/i],
+  ['geschmiedet', /geschmiedet/i],
+  ['beidseitig plangefräst', /beidseitig\s*(plan|fein|feinst)?\s*-?\s*gefräst|beids\.?\s*(\n|\s)*plangefräst|beidseitig\s*(\n|\s)*plangefräst/i],
+  ['plangefräst', /plan\s*-?\s*gefräst|feinst?gefräst/i],
+  ['foliert', /foliert/i],
+  ['gesägt', /gesägt|sägeschnitt/i],
+];
+export function merkmaleAus(text) {
+  const t = String(text ?? '');
+  const out = MERKMALE.filter(([, re]) => re.test(t)).map(([m]) => m);
+  return out.includes('beidseitig plangefräst') ? out.filter((m) => m !== 'plangefräst') : out;
+}
+// Toleranzangaben mit Wert („Tol./Dicke: +1,6 / -0,0 mm“, „Dickentoleranz: +/- 0,10 mm“); leere („Längentoleranz:“) fallen weg
+export function toleranzenAus(text) {
+  return String(text ?? '').split('\n').map((z) => z.trim())
+    .filter((z) => /toleranz|\btol\.|tolerance/i.test(z) && /\d/.test(z.replace(/^[^:]*:/, '')))
+    .map((z) => z.replace(/\s+/g, ' '));
+}
+
 // ------------------------------------------------------------------ Zeilenarten
 const SUMME = /^(gesamt|summe|zwischensumme|total|netto|nettobetrag|mehrwertsteuer|mwst|\d+\s*%\s*mwst|endbetrag|sub\s*total)/i;
 const ENDE = /^(gesamtwert|gesamtbetrag|nettobetrag|netto\s*gesamt|gesamt\s*netto|total\s*eur|endbetrag|summe\s*netto|net\s*total|total\s*net)/i;
-const NEBEN = /verpackung|transport|fracht|maut|treibstoff|versand|porto|carrier|freight|packing|shipping|zuschlag|mindermenge|zeugnis|surcharge|anlieferung|delivery\s*charge|sägekosten|schnittkosten/i;
+const NEBEN = /verpackung|transport|fracht|maut|treibstoff|diesel|versand|porto|carrier|freight|packing|shipping|zuschlag|mindermenge|zeugnis|surcharge|anlieferung|delivery\s*charge|sägekosten|schnittkosten|handling/i;
+// Ein Betrag sieht aus wie ein Betrag („1.234,56“, „ca. 571,90 €“, „(945,00)“) — nicht „Seite 2/2“ oder „Nr. VAN00561434“
+export function betragAus(text) {
+  const t = String(text ?? '').replace(/[()]/g, '').replace(/^\s*ca\.?\s*/i, '').replace(/\s*(€|eur)\s*$/i, '').trim();
+  return /^-?\d[\d.]*(,\d+)?$|^-?\d[\d,]*\.\d{1,2}$/.test(t) ? zahlAus(t) : null;
+}
+const nurZahlen = (z) => z.zellen.length > 0 && z.zellen.every((c) => betragAus(c.text) != null);
 const BOILER = /\biban\b|\bbic\b|hrb|ust[.-]?id|steuernummer|handelsregister|amtsgericht|geschäftsführ|vorstand|aufsichtsrat|registergericht|telefax/i;
 
 // Texte, die auf mehreren Seiten an derselben Stelle stehen (Kopf- und Fußzeilen). Gleiche Texte an anderer Stelle
 // (z. B. derselbe Liefertermin in zwei Positionen) zählen nicht.
-const SEITENZAHL = /\d+\s*(\/|of|von)\s*\d+|seite\s*\d+|page\s*\d+/g;
+const SEITENZAHL = /(seite|page|blatt)\s*:?\s*\d+(\s*(\/|of|von)\s*\d+)?|\d+\s*(\/|of|von)\s*\d+/g;
 const boilerSchluessel = (z) => `${Math.round(z.y * 100)}|${norm(zeilenText(z)).replace(SEITENZAHL, '')}`;
 function wiederholt(zeilen) {
   const seiten = new Map();
@@ -188,6 +225,8 @@ const istBelegnr = (t) => /^[A-Z0-9][\w\-/.]{3,}$/i.test(t.trim().split(/\s+/)[0
 const NR_LABELS = [
   /^(angebots?\s*-?\s*(?:nr\.?|nummer)|belegnummer|beleg\s*-?\s*nr\.?|quotation\s*(?:no\.?|number|nr\.?)|quote\s*(?:no\.?|number)|order\s*number)/i,
   /^(angebot|quotation|offer)\b(?!s?\s*-?\s*g[üu]ltig)/i,
+  // zuletzt: „Nr. VAN00561434“ unter der Überschrift „Angebot“
+  /^(nr\.?|no\.?|nummer)(?=\s)/i,
 ];
 const DATUM_LABEL = /^(beleg\s*-?\s*datum|angebots\s*-?\s*datum|datum|date)\b/i;
 const GUELTIG = /(g[üu]ltig\s*bis|angebotsg[üu]ltigkeit|g[üu]ltigkeit|bindefrist|valid\s*(?:until|to|till))\s*[:.]?\s*/i;
@@ -222,7 +261,8 @@ export function kopfAus(zeilen, vorlage = {}) {
 
 // ------------------------------------------------------------------ Positionen
 function positionAus(b, vorlage, vorige) {
-  const volltext = b.zeilen.join('\n');
+  // Zeilen über der Betragszeile (Positionsnummer und Werkstoff, Betrag erst darunter) gehören dazu
+  const volltext = [...(b.mitVorspann ? b.vorspann : []), ...b.zeilen].join('\n');
   const text = [...b.vorspann, ...b.texte].filter(Boolean).join('\n');
   const posText = (b.werte.pos ?? '').trim();
   const option = /^\(\s*\d+\s*\)$/.test(posText) || /\b(option|alternativ)/i.test(b.zeilen[0] ?? '') || /^\(.*\)$/.test((b.werte.betrag ?? '').trim());
@@ -239,9 +279,13 @@ function positionAus(b, vorlage, vorige) {
   if (gewicht != null) mengen.push({ wert: gewicht, einheit: 'kg' });
   const anzahl = /(?:anzahl|stückzahl)\s*:?\s*(\d+)(?!\s*[.,]\d)/i.exec(volltext);
   if (anzahl) mengen.push({ wert: Number(anzahl[1]), einheit: 'Stk' });
+  // ohne Mengenspalte: „8 Stk“, „18 Hl“ im Text; weitere Gewichte (je Stück und gesamt) aus allen Zeilen der Position
+  const imText = mengenAus(volltext);
+  if (!mengen.some((m) => m.einheit === 'Stk')) mengen.push(...imText.filter((m) => m.einheit === 'Stk').slice(0, 1));
+  const kgWerte = [...mengen, ...(b.gewichtTexte ?? []).flatMap((t) => mengenAus(/kg/i.test(t) ? t : `${t} kg`)), ...imText].filter((m) => m.einheit === 'kg').map((m) => m.wert);
   const erste = (e) => mengen.find((m) => m.einheit === e)?.wert ?? null;
   let stueck = erste('Stk');
-  const kg = erste('kg');
+  let kg = erste('kg') ?? kgWerte[0] ?? null;
   const { masse, anzeige } = masseAus(volltext);
   let werkstoff = werkstoffAus(volltext);
   let zustand = zustandAus(volltext);
@@ -257,7 +301,7 @@ function positionAus(b, vorlage, vorige) {
   if (meter == null && stueck && laenge && ['Rund', 'Flach', 'Vierkant', 'Sechskant', 'Rohr'].includes(form)) meter = r4((stueck * zahlAus(laenge[1])) / 1000);
 
   // Preis, Rabatt und Preiseinheit
-  const betrag = zahlAus(b.werte.betrag);
+  const betrag = betragAus(b.werte.betrag);
   let preis = zahlAus(String(b.werte.preis ?? '').split(/\s+/).find((t) => /\d/.test(t)));
   const rabatt = zahlAus(b.werte.rabatt);
   if (preis != null && rabatt) preis = r4(preis * (1 - rabatt / 100));
@@ -272,6 +316,13 @@ function positionAus(b, vorlage, vorige) {
   }
   if (/^\d[\d.,]*$/.test(peText) && (zahlAus(peText) ?? 1) > 1) pe = zahlAus(peText);
   if (preis != null && pe > 1) preis = r4(preis / pe);
+  // mehrere Gewichte (je Stück, gesamt): das, mit dem Preis je kg den Betrag ergibt
+  if (preis != null && betrag != null && kgWerte.length > 1 && (preisJe === 'kg' || !preisJe)) {
+    const k = kgWerte.find((w) => Math.abs(preis * w - betrag) <= Math.max(0.05, betrag * 0.01));
+    if (k != null) kg = k;
+  }
+  // Preis je Stück und mehrere Gewichte („0,44 kg“ je Stück, „1,32 kg“ gesamt): das Gesamtgewicht
+  if (kgWerte.length > 1 && preisJe && preisJe !== 'kg' && erste('kg') == null) kg = Math.max(...kgWerte);
   const menge = { kg, Stk: stueck, m: meter };
   const passt = (e) => preis != null && betrag != null && menge[e] != null && Math.abs(preis * menge[e] - betrag) <= Math.max(0.05, betrag * 0.01);
   // nicht genannt oder passt nicht zum Betrag: die Einheit, mit der Preis × Menge den Betrag ergibt
@@ -283,11 +334,12 @@ function positionAus(b, vorlage, vorige) {
   if (preis == null && betrag != null && menge[preisJe]) preis = r4(betrag / menge[preisJe]);
   if (stueck == null && preisJe === 'Stk' && mengen[0]?.einheit === 'Stk') stueck = mengen[0].wert;
 
-  const lt = /liefer(?:termin|zeit|datum)\s*:?\s*([^\n]+)/i.exec(volltext);
+  // „Liefertermin: …“ im Text, sonst die Terminspalte („vrs. Versand“)
+  const lt = /liefer(?:termin|zeit|datum)\s*:?\s*([^\n]+)/i.exec(volltext) ?? (datumAus(b.werte.termin ?? '') ? [null, b.werte.termin.trim()] : null);
   const artikelnr = (/(?:artikel\s*-?\s*nr\.?|art\.?\s*-?\s*nr\.?|unsere\s*nr\.?)\s*:?\s*([\w\-/.]+)/i.exec(volltext)?.[1])
     || (/^\d{4,}$/.test((b.werte.artikel ?? '').trim()) ? b.werte.artikel.trim() : '');
   return {
-    pos, option, text, werkstoff, zustand, form, masse, abmessung: anzeige,
+    pos, option, text, werkstoff, zustand, form, masse, abmessung: anzeige, merkmale: merkmaleAus(volltext), toleranzen: toleranzenAus(volltext),
     stueck, kg, meter, preis, preisJe, betrag: betrag ?? (preis != null && menge[preisJe] ? r2(preis * menge[preisJe]) : null),
     liefertermin: lt ? lt[1].trim() : '', lieferdatum: lt ? datumAus(lt[1]) : '', artikelnr,
   };
@@ -306,8 +358,12 @@ export function angebotLesen(seiten, vorlage = {}) {
   const kopfTexte = new Set(spalten.map((s) => kopfText(s.text)).filter(Boolean));
   const boiler = wiederholt(zeilen);
   const bloecke = [], nebenkosten = [];
-  let aktuell = null, vorspann = [], netto = null, ende = false, nachKopf = true;
+  let aktuell = null, vorspann = [], vorspannPos = '', netto = null, ende = false, nachKopf = true;
+  let nebenKopf = null; // Nebenkosten als kleine Tabelle: Überschriften („Fracht | Maut | Verpackung“), Beträge darunter
+  let nebenText = ''; // Nebenkosten-Text, dessen Betrag allein in der Zeile darunter steht („Dieselfloater:“ / „8,00 €“)
   const rest = [];
+  const istPos = (x) => /^\(?\d{1,4}(\.\d{1,3})?\)?$/.test(String(x ?? '').trim());
+  const ohneBetrag = (t) => t.replace(/\s+[\d.,]+\s*€?\s*(pa\.?|\/\s*\w+\.?)?\s*[\d.,]*\s*$/i, '').replace(/\s+\d+\s*st(ü|ue)ck.*$/i, '').trim();
   for (const z of zeilen.slice(k.index + 1)) {
     const t = zeilenText(z).trim();
     if (ende) { rest.push(t); continue; }
@@ -321,29 +377,68 @@ export function angebotLesen(seiten, vorlage = {}) {
     const werte = {};
     const roh = {};
     for (const c of z.zellen) {
-      const r = spalten[spalteVon(c, spalten)]?.rolle;
+      let r = spalten[spalteVon(c, spalten)]?.rolle;
+      // in der Positionsspalte steht nur eine Positionsnummer („8 Stk“ ganz links ist Text)
+      if (r === 'pos' && !istPos(c.text)) r = '';
       if (!r) continue;
       werte[r] = werte[r] ? `${werte[r]} ${c.text}` : c.text;
       (roh[r] ??= []).push(c.text);
     }
-    const betrag = zahlAus(String(werte.betrag ?? '').replace(/[()]/g, ''));
-    if (SUMME.test(t)) {
-      if (ENDE.test(t) && !/inkl|incl|brutto|mwst/i.test(t)) {
-        const n = zahlAus(String(werte.betrag ?? t.split(/\s+/).at(-1)));
+    const betrag = betragAus(werte.betrag);
+    // Summen- und Endzeilen, auch wenn links daneben noch anderer Text steht („10 Tage netto | Endbetrag ca.: | 1.818,13 €“)
+    const endeZelle = z.zellen.find((c) => ENDE.test(c.text.trim()));
+    if (SUMME.test(t) || endeZelle) {
+      const tt = endeZelle ? z.zellen.slice(z.zellen.indexOf(endeZelle)).map((c) => c.text).join(' ') : t;
+      if (ENDE.test(tt) && !/inkl|incl|brutto|mwst/i.test(tt)) {
+        const n = betrag ?? betragAus(tt.split(/\s+/).at(-1) === '€' ? tt.split(/\s+/).at(-2) : tt.split(/\s+/).at(-1));
         if (n != null) netto = n;
         ende = true;
       }
-      aktuell = null;
+      aktuell = null; nebenKopf = null; nebenText = '';
       continue;
     }
+    // Beträge unter einer Nebenkosten-Überschriftszeile
+    if (nebenKopf && nurZahlen(z)) {
+      for (const c of z.zellen) {
+        const kz = nebenKopf[spalteVon(c, nebenKopf)];
+        nebenkosten.push({ text: kz.text.replace(/[:\s]+$/, ''), betrag: betragAus(c.text) });
+      }
+      nebenKopf = null; aktuell = null;
+      continue;
+    }
+    nebenKopf = null;
+    if (z.zellen.length >= 2 && !/\d/.test(t) && z.zellen.filter((c) => NEBEN.test(c.text)).length >= 2) { nebenKopf = z.zellen; aktuell = null; continue; }
+    // Betrag allein in der Zeile unter dem Nebenkosten-Text
+    if (nebenText && betrag != null && nurZahlen(z)) { nebenkosten.push({ text: nebenText, betrag }); nebenText = ''; continue; }
+    nebenText = '';
     if (betrag != null && NEBEN.test(t) && !/^\d+$/.test((werte.pos ?? '').trim())) {
-      nebenkosten.push({ text: t.replace(/\s+[\d.,]+\s*€?\s*(pa\.?|\/\s*\w+\.?)?\s*[\d.,]*\s*$/i, '').replace(/\s+\d+\s*st(ü|ue)ck.*$/i, '').trim() || t, betrag });
+      // steht vor dem Nebenkosten-Text noch etwas anderes („Termin: | Frachtkostenanteil: | 49,50 €“), nur dieser Text
+      const nz = z.zellen.find((c) => NEBEN.test(c.text));
+      const txt = nz && nz !== z.zellen[0] && betragAus(nz.text) == null ? nz.text.replace(/[:\s]+$/, '') : ohneBetrag(t);
+      nebenkosten.push({ text: txt.replace(/[:\s]+$/, '') || t, betrag });
       aktuell = null;
       continue;
     }
-    const textZellen = z.zellen.filter((c) => ['beschreibung', 'artikel', ''].includes(spalten[spalteVon(c, spalten)]?.rolle ?? '')).map((c) => c.text);
+    if (!aktuell && betrag == null && bloecke.length) {
+      const nz = z.zellen.find((c) => NEBEN.test(c.text) && /:\s*$/.test(c.text));
+      if (nz) { nebenText = nz.text.replace(/[:\s]+$/, ''); continue; }
+    }
+    const textZellen = z.zellen.filter((c) => {
+      const r = spalten[spalteVon(c, spalten)]?.rolle ?? '';
+      return ['beschreibung', 'artikel', ''].includes(r) || (r === 'pos' && !istPos(c.text));
+    }).map((c) => c.text);
+    // Positionsnummer ohne Betrag: hier beginnt eine Position, ihr Betrag steht weiter unten
+    if (betrag == null && istPos(werte.pos) && textZellen.length) {
+      aktuell = null;
+      vorspann = [t];
+      vorspannPos = werte.pos.trim();
+      continue;
+    }
     if (betrag != null) {
-      aktuell = { werte, zeilen: [t], texte: [], vorspann, mengeTexte: [...(roh.menge ?? []), ...(roh.einheit ?? [])], preisTexte: [] };
+      const mitVorspann = !!vorspannPos && !werte.pos;
+      if (mitVorspann) werte.pos = vorspannPos;
+      vorspannPos = '';
+      aktuell = { werte, zeilen: [t], texte: [], vorspann, mitVorspann, mengeTexte: [...(roh.menge ?? []), ...(roh.einheit ?? [])], preisTexte: [], gewichtTexte: [...(roh.gewicht ?? [])] };
       // Artikelnummer allein in der Artikelspalte ist kein Text
       let beschr = textZellen.filter((x) => !(werte.artikel && x === werte.artikel && /^\d{4,}$/.test(x)));
       // ohne eigene Positionsspalte: eine kleine Zahl ganz links ist die Position
@@ -353,12 +448,13 @@ export function angebotLesen(seiten, vorlage = {}) {
       bloecke.push(aktuell);
       continue;
     }
-    if (!aktuell) { if (bloecke.length === 0 || textZellen.length) vorspann.push(t); continue; }
+    if (!aktuell) { if (bloecke.length === 0 || textZellen.length || vorspannPos) vorspann.push(t); continue; }
     aktuell.zeilen.push(t);
     if (textZellen.length) aktuell.texte.push(textZellen.join(' '));
     aktuell.mengeTexte.push(...(roh.menge ?? []), ...(roh.einheit ?? []));
+    aktuell.gewichtTexte.push(...(roh.gewicht ?? []));
     if (roh.preis) aktuell.preisTexte.push(...roh.preis);
-    for (const [r, w] of Object.entries(werte)) if (!aktuell.werte[r] && ['artikel', 'preiseinheit'].includes(r)) aktuell.werte[r] = w;
+    for (const [r, w] of Object.entries(werte)) if (!aktuell.werte[r] && ['artikel', 'preiseinheit', 'termin'].includes(r)) aktuell.werte[r] = w;
   }
   // Nebenkosten im Fließtext unter der Tabelle („zzgl. Transportkostenanteil 89,90 € / Anlieferung“)
   for (const t of rest) {
@@ -392,10 +488,14 @@ export function passung(o, p) {
   let w = 0;
   const ws = werkstoffSchluessel(angefragt);
   if (ws && o.werkstoff) w += werkstoffSchluessel(o.werkstoff) === ws ? 3 : -3;
-  const zahlen = new Set(zahlenIn(angefragt));
-  w += (o.masse ?? []).filter((m) => zahlen.has(m)).length;
+  // Maße bis 1 % bzw. 1 mm gleich (Stange 3000 statt 3020 mm), genau gleiche zählen etwas mehr
+  const zahlen = zahlenIn(angefragt);
+  for (const m of o.masse ?? []) {
+    if (zahlen.includes(m)) w += 1;
+    else if (zahlen.some((x) => Math.abs(x - m) <= Math.max(1, m * 0.01))) w += 0.8;
+  }
   const f = formAus(angefragt);
-  if (f && o.form) w += f === o.form ? 1 : -1;
+  if (f && o.form) w += f === o.form ? 1 : FLACH.has(f) && FLACH.has(o.form) ? 0.5 : -1;
   return w;
 }
 
@@ -450,8 +550,8 @@ export function abgleich(o, p) {
   if (f || o.form) out.push({ feld: 'Form', angefragt: f || '–', angeboten: o.form || '–', ok: !f || !o.form ? null : f === o.form });
   const zahlen = new Set(zahlenIn(p.abmessung ?? ''));
   if (o.masse?.length) {
-    const treffer = o.masse.filter((m) => zahlen.has(m)).length;
-    out.push({ feld: 'Maße', angefragt: (p.abmessung ?? '').split(' · ')[0] || '–', angeboten: o.abmessung || o.masse.join(' × '), ok: zahlen.size ? treffer > 0 : null });
+    // jedes angebotene Maß muss in der Anfrage stehen (3000 statt 3020 mm Länge fällt auf)
+    out.push({ feld: 'Maße', angefragt: (p.abmessung ?? '').split(' · ')[0] || '–', angeboten: o.masse.join(' × '), ok: zahlen.size ? o.masse.every((m) => zahlen.has(m)) : null });
   }
   const anf = (p.anforderungen ?? '').trim();
   if (anf) {
@@ -495,26 +595,66 @@ export function lieferantVorschlag(text, ausser = []) {
   return String(text ?? '').split('\n').map((z) => z.trim()).find((z) => z.length > 2 && !eigen.some((e) => z.toLowerCase().includes(e))) ?? '';
 }
 
-const gruppenSchluessel = (o) => `${werkstoffSchluessel(o.werkstoff)}|${o.form}|${(o.masse ?? []).join('x')}`;
+// Gleiche Ware bei verschiedenen Lieferanten? Gleicher Werkstoff (ohne Zustand), verträgliche Form (Flachstange und
+// Plattenstreifen mit gleichem Querschnitt sind dasselbe), gleich viele Maße, jedes bis 1 % bzw. 1 mm gleich
+// (Stangenlänge 3000 oder 3020 mm).
+const FLACH = new Set(['Flach', 'Platte']);
+export function gleicheAbmessung(a, b) {
+  if (a.form !== b.form && !(FLACH.has(a.form) && FLACH.has(b.form))) return false;
+  const ma = a.masse ?? [], mb = b.masse ?? [];
+  if (ma.length !== mb.length) return false;
+  return ma.every((x, i) => Math.abs(x - mb[i]) <= Math.max(1, Math.max(x, mb[i]) * 0.01));
+}
+export const gleicheWare = (a, b) => werkstoffSchluessel(a.werkstoff) === werkstoffSchluessel(b.werkstoff) && gleicheAbmessung(a, b);
 
-// Gemeinsame Positionen aus mehreren Angeboten: gleicher Werkstoff, gleiche Form und gleiche Maße = eine Position.
+// Was weicht an einer Angebotsposition von der Vergleichszeile ab? [{ feld, angeboten, erwartet }] — anderer Werkstoff,
+// anderer Zustand, Flach statt Platte, andere Maße (auch 3000 statt 3020 mm)
+export function abweichungen(o, ref) {
+  const out = [];
+  if (ref.werkstoff && o.werkstoff && werkstoffSchluessel(o.werkstoff) !== werkstoffSchluessel(ref.werkstoff)) out.push({ feld: 'Werkstoff', angeboten: o.werkstoff, erwartet: ref.werkstoff });
+  if (ref.zustand && o.zustand && !o.zustand.startsWith(ref.zustand) && !ref.zustand.startsWith(o.zustand)) out.push({ feld: 'Zustand', angeboten: o.zustand, erwartet: ref.zustand });
+  if (ref.form && o.form && o.form !== ref.form) out.push({ feld: 'Form', angeboten: o.form, erwartet: ref.form });
+  const a = (o.masse ?? []).join('×'), b = (ref.masse ?? []).join('×');
+  if (a && b && a !== b) out.push({ feld: 'Maße', angeboten: a, erwartet: b });
+  return out;
+}
+const modus = (xs) => {
+  const n = new Map();
+  for (const x of xs.filter(Boolean)) n.set(x, (n.get(x) ?? 0) + 1);
+  return [...n.entries()].sort((p, q) => q[1] - p[1])[0]?.[0] ?? '';
+};
+
+// Gemeinsame Positionen aus mehreren Angeboten: gleiche Abmessung = eine Position, auch wenn ein Lieferant einen anderen
+// Werkstoff anbietet (das zeigt abweichungen()); gleicher Werkstoff geht vor. Die Zeile nimmt Werkstoff, Zustand, Form
+// und Maße, die die meisten Lieferanten anbieten.
 // angebote: [{ positionen }]. Liefert { gruppen: [{ werkstoff, zustand, form, masse, abmessung, einheit, menge, name,
 // material, abmessungText }], zuordnung: [[gruppenIndex|-1 je Position] je Angebot] }. Optionen bleiben außen vor.
 export function positionsGruppen(angebote) {
   const gruppen = [];
-  const index = new Map();
-  const zuordnung = (angebote ?? []).map((a) => (a.positionen ?? []).map((o) => {
-    if (o.option || o.betrag == null) return -1;
-    const k = gruppenSchluessel(o);
-    if (!index.has(k)) { index.set(k, gruppen.length); gruppen.push({ ...o, offers: [] }); }
-    const i = index.get(k);
-    gruppen[i].offers.push(o);
-    gruppen[i].zustand ||= o.zustand;
-    return i;
-  }));
+  const zuordnung = (angebote ?? []).map((a) => {
+    const belegt = new Set(); // je Angebot jede Gruppe höchstens einmal (zwei gleiche Positionen eines Lieferanten bleiben getrennt)
+    return (a.positionen ?? []).map((o) => {
+      if (o.option || o.betrag == null) return -1;
+      const frei = (gi) => !belegt.has(gi);
+      let i = gruppen.findIndex((g, gi) => frei(gi) && gleicheWare(g, o));
+      if (i < 0 && (o.masse ?? []).length) i = gruppen.findIndex((g, gi) => frei(gi) && (g.masse ?? []).length && gleicheAbmessung(g, o));
+      if (i < 0) { i = gruppen.length; gruppen.push({ ...o, offers: [] }); }
+      belegt.add(i);
+      gruppen[i].offers.push(o);
+      gruppen[i].zustand ||= o.zustand;
+      return i;
+    });
+  });
   return {
     zuordnung,
-    gruppen: gruppen.map((g) => {
+    gruppen: gruppen.map((g0) => {
+      const os = g0.offers;
+      const masseKey = modus(os.map((o) => (o.masse ?? []).join('x')));
+      const werkstoff = modus(os.map((o) => o.werkstoff));
+      const g = {
+        ...g0, werkstoff, form: modus(os.map((o) => o.form)), masse: os.find((o) => (o.masse ?? []).join('x') === masseKey)?.masse ?? g0.masse,
+        zustand: modus(os.filter((o) => werkstoffSchluessel(o.werkstoff) === werkstoffSchluessel(werkstoff)).map((o) => o.zustand)),
+      };
       const einheit = g.offers.every((o) => o.stueck != null) ? 'Stk' : g.offers.every((o) => o.kg != null) ? 'kg' : 'Stk';
       const menge = Math.max(1, Math.ceil(Math.max(...g.offers.map((o) => mengeIn(o, einheit) ?? 0))));
       // aus allen erkannten Maßen (der erste Maßausdruck im Text lässt z. B. die Dicke weg); Rundmaterial mit Ø

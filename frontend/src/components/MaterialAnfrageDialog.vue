@@ -12,7 +12,7 @@ import AnfrageMailDialog from './AnfrageMailDialog.vue';
 import MailMuster from './MailMuster.vue';
 import { repo } from '../data/repo.js';
 import { EINHEITEN } from '../lib/anfrage.js';
-import { materialBedarf, artikelText } from '../lib/werkstoffbaum.js';
+import { materialBedarf, artikelText, anforderungenText } from '../lib/werkstoffbaum.js';
 import { isoGruppe } from '../lib/iso.js';
 import { zahl } from '../lib/format.js';
 import { useAnfragen } from '../stores/anfragen.js';
@@ -34,7 +34,7 @@ onMounted(async () => {
 
 const bedarf = computed(() => materialBedarf(props.teile, chargen.value));
 const iso = (g) => isoGruppe(g.werkstoff, ws.werkstoff(g.werkstoff)?.isoGruppe ?? '');
-const anfText = (a) => [a.zeugnis && `Zeugnis ${a.zeugnis}`, ...(a.pruefungen ?? [])].filter(Boolean).join(', ');
+const anfText = anforderungenText;
 const artikel = (g) => artikelText(g.werkstoff, g);
 // schon zu diesem Angebot angefragt (Material-Anfrage mit gleicher Bezeichnung)
 const schon = (g) => anfragen.fuerAngebot({ angebotId: props.angebotId }).filter((x) => x.art === 'Material' && x.positionen.some((p) => p.teil.name === artikel(g)));

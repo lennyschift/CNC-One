@@ -5,11 +5,15 @@
 // in die Summe einrechnen. Das PDF des Angebots geht im Belegfenster auf (gern auf dem zweiten Bildschirm).
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { ArrowLeft, Award, Crown, Inbox, Pencil, Scale, AlertTriangle, FileText, Shuffle, CornerDownRight, Truck } from '@lucide/vue';
+import { ArrowLeft, Award, Crown, Inbox, Pencil, Scale, AlertTriangle, FileText, Shuffle, CornerDownRight, Truck, FilePlus2 } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import BelegLink from '../components/BelegLink.vue';
 import ZuschlagDialog from '../components/ZuschlagDialog.vue';
+import AngebotDazuDialog from '../components/AngebotDazuDialog.vue';
+import LieferangebotDialog from '../components/LieferangebotDialog.vue';
+import AngebotZelle from '../components/AngebotZelle.vue';
+import { abgleich } from '../lib/lieferangebot.js';
 import { useAnfragen } from '../stores/anfragen.js';
 import { vergleich } from '../lib/vergleich.js';
 import { eur, zahl } from '../lib/format.js';
@@ -40,6 +44,16 @@ const von = computed(() => (route.query.von === 'posteingang' ? { von: 'posteing
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '–');
 // Liefertermin einer Position: als Datum, wenn lesbar, sonst der Text aus dem PDF
 const termin = (datum, text) => (datum ? de(datum) : (text || '').slice(0, 40));
+// Angebote kommen zeitlich versetzt: weiteres PDF einlesen, auch von einem Lieferanten, der noch nicht im Vergleich ist
+const dazu = ref(false);
+const einlesen = ref(null); // { anfrage, datei }
+const ersetzt = computed(() => anfragen.value.some((a) => a.status === 'Ersetzt'));
+function dazuWeiter(x) { dazu.value = false; einlesen.value = x; }
+// was der Lieferant anders anbietet als angefragt (Werkstoff, Zustand, Form, Maße)
+const abwVon = (o, posKey) => {
+  const p = erste.value?.positionen.find((x) => x.key === posKey);
+  return o && p ? abgleich(o, p).filter((x) => x.ok === false).map((x) => ({ feld: x.feld, angeboten: x.angeboten, erwartet: x.angefragt })) : [];
+};
 </script>
 
 <template>
@@ -55,6 +69,7 @@ const termin = (datum, text) => (datum ? de(datum) : (text || '').slice(0, 40));
         <h2 class="text-lg font-semibold">Angebotsvergleich <span class="tnum">{{ route.params.vorgang }}</span></h2>
         <p class="text-sm text-mute">{{ erste.art }} · {{ erste.positionen.length }} Position{{ erste.positionen.length === 1 ? '' : 'en' }} · {{ v.lieferanten.length }} Lieferanten, {{ mitPreisen }} mit Preisen</p>
       </div>
+      <button v-if="!ersetzt" class="btn btn-primary" @click="dazu = true"><FilePlus2 :size="15" /> Weiteres Angebot einlesen</button>
       <p class="max-w-md text-xs text-mute">Preise erfasst du bei der Anfrage des Lieferanten (Stift), am schnellsten mit „Angebot aus PDF einlesen“. Grün ist je Zeile der günstigste Gesamtpreis; die Summe enthält die Nebenkosten. Das PDF-Symbol öffnet das Angebot im Belegfenster.</p>
     </section>
 
@@ -91,7 +106,8 @@ const termin = (datum, text) => (datum ? de(datum) : (text || '').slice(0, 40));
                   <div class="font-semibold" :class="z.bester === l.id ? 'text-ok' : ''"><Award v-if="z.vergeben?.id === l.id && !z.vergeben.perAlternative" :size="13" class="mr-1 inline text-ok" /><Crown v-else-if="z.bester === l.id && Object.values(z.zellen).filter(Boolean).length > 1" :size="12" class="mr-1 inline" />{{ eur(z.zellen[l.id].gesamt) }}</div>
                   <div class="text-[11px] text-mute">{{ eur(z.zellen[l.id].proStk) }} / {{ z.einheit }}<template v-if="z.zellen[l.id].einmalig"> + {{ eur(z.zellen[l.id].einmalig) }} einmalig</template></div>
                   <div v-if="z.zellen[l.id].abweichung != null" class="mt-0.5 inline-flex items-center gap-1 rounded-full bg-warn/15 px-1.5 text-[10px] text-warn" :title="`Der Lieferant bietet ${z.zellen[l.id].abweichung} ${z.einheit} an; der Preis je ${z.einheit} gilt hier für die angefragte Menge`"><AlertTriangle :size="10" /> angeboten {{ z.zellen[l.id].abweichung }} {{ z.einheit }}</div>
-                  <div v-if="z.zellen[l.id].termin" class="mt-0.5 flex items-center justify-end gap-1 text-[10px]" :class="z.zellen[l.id].datum && z.zellen[l.id].datum === l.spaetester && l.verschieden ? 'font-semibold text-warn' : 'text-mute'" :title="`Liefertermin laut Angebot: ${z.zellen[l.id].termin}`"><Truck :size="10" /> {{ termin(z.zellen[l.id].datum, z.zellen[l.id].termin) }}</div>
+                  <AngebotZelle v-if="z.zellen[l.id].o && z.ersteZeile" :o="z.zellen[l.id].o" :abw="abwVon(z.zellen[l.id].o, z.posKey)" :termin="false" class="mt-1" />
+                  <div v-if="z.zellen[l.id].termin" class="mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold" :class="z.schnellste.includes(l.id) ? 'bg-ok/15 text-ok' : z.zellen[l.id].datum && z.zellen[l.id].datum === l.spaetester && l.verschieden ? 'bg-warn/15 text-warn' : 'bg-surface2 text-ink'" :title="`Liefertermin laut Angebot: ${z.zellen[l.id].termin}${z.schnellste.includes(l.id) ? ' (schnellster)' : ''}`"><Truck :size="12" /> {{ termin(z.zellen[l.id].datum, z.zellen[l.id].termin) }}</div>
                 </template>
                 <span v-else class="text-mute">–</span>
               </td>
@@ -193,6 +209,8 @@ const termin = (datum, text) => (datum ? de(datum) : (text || '').slice(0, 40));
       </table>
     </section>
     <ZuschlagDialog v-if="zuschlagFuer" :anfrage="zuschlagFuer" :andere="anfragen" @schliessen="zuschlagFuer = null" />
+    <AngebotDazuDialog v-if="dazu" :vorgang="String(route.params.vorgang)" :anfragen="anfragen" @schliessen="dazu = false" @weiter="dazuWeiter" />
+    <LieferangebotDialog v-if="einlesen" :anfrage="einlesen.anfrage" :datei="einlesen.datei" @schliessen="einlesen = null" @erfasst="einlesen = null" />
   </div>
   <div v-else class="card mx-auto grid max-w-lg place-items-center p-14 text-center">
     <p class="font-medium">Zu diesem Vorgang gibt es keine Anfragen</p>

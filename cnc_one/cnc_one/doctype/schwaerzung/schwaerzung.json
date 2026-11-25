@@ -1,0 +1,221 @@
+{
+ "actions": [],
+ "creation": "2026-10-18 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "bauteil",
+  "revision",
+  "kunde",
+  "status",
+  "automatisch",
+  "sb_original",
+  "original_url",
+  "original_name",
+  "original_sha",
+  "sb_ergebnis",
+  "ergebnis_url",
+  "ergebnis_sha",
+  "regelsatz",
+  "seiten",
+  "bereiche_anzahl",
+  "pruefung_bestanden",
+  "bereiche",
+  "protokoll",
+  "sb_freigabe",
+  "geprueft_von",
+  "geprueft_am"
+ ],
+ "fields": [
+  {
+   "fieldname": "bauteil",
+   "fieldtype": "Link",
+   "label": "Bauteil",
+   "options": "Bauteil",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Data",
+   "label": "Revision"
+  },
+  {
+   "fieldname": "kunde",
+   "fieldtype": "Link",
+   "label": "Kunde",
+   "options": "Kunde",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Ungeprüft\nFreigegeben\nVerworfen",
+   "default": "Ungeprüft",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "automatisch",
+   "fieldtype": "Check",
+   "label": "Automatisch erstellt",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sb_original",
+   "fieldtype": "Section Break",
+   "label": "Original"
+  },
+  {
+   "fieldname": "original_url",
+   "fieldtype": "Data",
+   "label": "Original (Datei)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "original_name",
+   "fieldtype": "Data",
+   "label": "Dateiname des Originals",
+   "read_only": 1
+  },
+  {
+   "fieldname": "original_sha",
+   "fieldtype": "Data",
+   "label": "SHA-256 des Originals",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sb_ergebnis",
+   "fieldtype": "Section Break",
+   "label": "Geschwärzte Fassung"
+  },
+  {
+   "fieldname": "ergebnis_url",
+   "fieldtype": "Data",
+   "label": "Geschwärzte Datei",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ergebnis_sha",
+   "fieldtype": "Data",
+   "label": "SHA-256 der geschwärzten Datei",
+   "read_only": 1
+  },
+  {
+   "fieldname": "regelsatz",
+   "fieldtype": "Link",
+   "label": "Regelsatz",
+   "options": "Schwaerzregelsatz",
+   "read_only": 1
+  },
+  {
+   "fieldname": "seiten",
+   "fieldtype": "Int",
+   "label": "Seiten",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bereiche_anzahl",
+   "fieldtype": "Int",
+   "label": "Bereiche",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pruefung_bestanden",
+   "fieldtype": "Check",
+   "label": "Prüfung bestanden",
+   "read_only": 1,
+   "description": "Automatische Prüfung im Browser und auf dem Server"
+  },
+  {
+   "fieldname": "bereiche",
+   "fieldtype": "JSON",
+   "label": "Bereiche",
+   "read_only": 1,
+   "description": "Geschwärzte Bereiche (Seite, Lage 0…1, Art) zum erneuten Bearbeiten"
+  },
+  {
+   "fieldname": "protokoll",
+   "fieldtype": "JSON",
+   "label": "Prüfprotokoll",
+   "read_only": 1,
+   "description": "Ohne Inhalte: nur Kennzahlen und Prüfergebnisse"
+  },
+  {
+   "fieldname": "sb_freigabe",
+   "fieldtype": "Section Break",
+   "label": "Gegenprüfung"
+  },
+  {
+   "fieldname": "geprueft_von",
+   "fieldtype": "Link",
+   "label": "Geprüft von",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "geprueft_am",
+   "fieldtype": "Datetime",
+   "label": "Geprüft am",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-10-18 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CNC One",
+ "name": "Schwaerzung",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Admin",
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "write": 1,
+   "export": 1,
+   "print": 1,
+   "report": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Vertrieb",
+   "create": 1,
+   "read": 1,
+   "write": 1,
+   "share": 1
+  },
+  {
+   "role": "CNC Fertigung",
+   "read": 1
+  },
+  {
+   "role": "CNC Buchhaltung",
+   "read": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "SW-.#####",
+ "naming_rule": "Expression (old style)",
+ "track_changes": 1,
+ "allow_rename": 0,
+ "icon": "eraser",
+ "search_fields": "bauteil,original_name"
+}
