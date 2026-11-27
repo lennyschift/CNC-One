@@ -2,7 +2,8 @@
 import FilterLeiste from '../components/FilterLeiste.vue';
 import { ref, computed, onMounted } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, Search, Building2, Trash2, MapPin, UserRound, Phone, X, ShieldCheck } from '@lucide/vue';
+import { Plus, Search, Building2, Trash2, MapPin, UserRound, Phone, X, ShieldCheck, FileScan, Landmark } from '@lucide/vue';
+import KundeSchwaerzen from '../components/KundeSchwaerzen.vue';
 import { ZEUGNISSE, zeugnisKurz } from '../lib/werkstoffbaum.js';
 import { useWerkstoff } from '../stores/werkstoff.js';
 import StammNav from '../components/StammNav.vue';
@@ -35,10 +36,21 @@ const leerKontakt = () => ({ anrede: '', vorname: '', nachname: '', email: '', t
 const leer = () => ({ id: '', name: '', kuerzel: '', aktiv: true, ustId: '', steuernummer: '', zahlungsbedingung: '', leitwegId: '', lieferantennr: '', zahlungszielTage: 0, materialZeugnis: '', materialPruefungen: [], telefonnummern: [], adressen: [leerAdresse()], kontakte: [leerKontakt()] });
 
 const k = ref(null);
+const schwaerzen = ref(null); // Reiter „Zeichnungen“: speichert beim Speichern des Kunden mit
 const speichert = ref(false);
 const neu = computed(() => !k.value?.id);
 const darf = computed(() => store.darf('kunde'));
+// Reiter der Kundenmaske
+const tab = ref('allgemein');
+const TABS = [
+  { id: 'allgemein', label: 'Allgemein', icon: Landmark },
+  { id: 'adressen', label: 'Adressen', icon: MapPin, anzahl: () => k.value?.adressen.length },
+  { id: 'kontakte', label: 'Ansprechpartner', icon: UserRound, anzahl: () => k.value?.kontakte.length },
+  { id: 'material', label: 'Material-Vorgaben', icon: ShieldCheck },
+  { id: 'zeichnungen', label: 'Zeichnungen: Schwärzen & Erkennung', icon: FileScan, nurGespeichert: true },
+];
 function oeffnen(x) {
+  tab.value = 'allgemein';
   k.value = x ? JSON.parse(JSON.stringify(x)) : leer();
   k.value.telefonnummern ??= [];
   for (const c of k.value.kontakte) c.telefonnummern ??= c.telefon ? [{ art: 'Arbeit', nummer: c.telefon }] : [];
@@ -52,6 +64,7 @@ function standardAdresse(i) { k.value.adressen.forEach((a, j) => { a.standard = 
 function rechnungsKontakt(i) { k.value.kontakte.forEach((c, j) => { c.rechnungskontakt = j === i && !c.rechnungskontakt; }); }
 async function speichern() {
   speichert.value = true;
+  if (schwaerzen.value && !(await schwaerzen.value.speichernWennGeaendert())) { speichert.value = false; return; }
   const rec = await store.speichern('kunde', k.value);
   speichert.value = false;
   if (rec) k.value = null;
@@ -89,7 +102,15 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
       <p v-if="!zeilen.length" class="px-6 py-12 text-center text-sm text-mute">{{ store.listen.kunde === null ? 'Lädt …' : liste.length ? 'Keine Treffer.' : 'Noch keine Kunden.' }}</p>
     </div>
 
-    <StammDialog v-if="k" :titel="neu ? 'Neuer Kunde' : k.name" :untertitel="neu ? '' : k.id" breite="760px" :neu="neu" :schreibgeschuetzt="!darf" :speichert="speichert" :gueltig="!!k.name.trim()" @schliessen="k = null" @speichern="speichern" @loeschen="loeschen">
+    <StammDialog v-if="k" :titel="neu ? 'Neuer Kunde' : k.name" :untertitel="neu ? '' : k.id" breite="1180px" :neu="neu" :schreibgeschuetzt="!darf" :speichert="speichert" :gueltig="!!k.name.trim()" @schliessen="k = null" @speichern="speichern" @loeschen="loeschen">
+      <nav class="-mt-1 flex flex-wrap gap-1 border-b border-line pb-2" role="tablist">
+        <button v-for="t in TABS" :key="t.id" type="button" role="tab" :aria-selected="tab === t.id" class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition disabled:opacity-40"
+          :class="tab === t.id ? 'bg-accent-soft font-medium text-accent' : 'text-mute hover:bg-surface2 hover:text-ink'" :disabled="t.nurGespeichert && neu" :title="t.nurGespeichert && neu ? 'Erst den Kunden speichern' : ''" @click="tab = t.id">
+          <component :is="t.icon" :size="14" /> {{ t.label }}<span v-if="t.anzahl?.()" class="rounded-full bg-surface2 px-1.5 text-[10px] tnum">{{ t.anzahl() }}</span>
+        </button>
+      </nav>
+      <div class="min-h-[58vh] space-y-5">
+      <template v-if="tab === 'allgemein'">
       <div class="grid gap-3 sm:grid-cols-[1fr_140px]">
         <label class="block"><span class="label mb-1 block">Name der Firma</span><input v-model="k.name" class="field" autofocus /></label>
         <label class="block"><span class="label mb-1 block">Kürzel</span><input v-model="k.kuerzel" class="field" placeholder="z. B. MUM" /></label>
@@ -102,18 +123,6 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
         <label class="block"><span class="label mb-1 block">Unsere Lieferantennummer beim Kunden</span><input v-model="k.lieferantennr" class="field" /></label>
         <label class="block"><span class="label mb-1 block">Zahlungsziel (Tage)</span><input v-model.number="k.zahlungszielTage" type="number" min="0" class="field" placeholder="leer oder 0 = Standard der Firma" /></label>
       </div>
-
-      <section>
-        <h3 class="mb-1 flex items-center gap-2 text-sm font-semibold"><ShieldCheck :size="15" class="text-accent" /> Material-Vorgaben</h3>
-        <p class="mb-2 text-xs text-mute">Gilt als Mindestanforderung für jedes Rohmaterial dieses Kunden (Workbench, Auftrag, Fertigung).</p>
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="flex gap-1 rounded-xl border border-line bg-surface2 p-1 text-xs" role="radiogroup" aria-label="Werkszeugnis">
-            <button v-for="z in ZEUGNISSE" :key="z" type="button" class="rounded-lg px-3 py-1" :class="(k.materialZeugnis || '') === z ? 'bg-surface font-medium shadow-sm' : 'text-mute hover:text-ink'" @click="k.materialZeugnis = z">{{ z ? `Zeugnis ${zeugnisKurz(z)}` : 'kein Zeugnis' }}</button>
-          </div>
-          <button v-for="a in ws.baum.anforderungen" :key="a.name" type="button" class="rounded-full border px-2.5 py-1 text-xs transition" :class="(k.materialPruefungen ?? []).includes(a.name) ? 'border-accent bg-accent-soft text-accent' : 'border-line text-mute hover:text-ink'" @click="pruefungUmschalten(k, a.name)">{{ a.name }}</button>
-        </div>
-      </section>
-
       <section>
         <div class="mb-2 flex items-center justify-between"><h3 class="flex items-center gap-2 text-sm font-semibold"><Phone :size="15" class="text-accent" /> Telefon der Firma</h3><button type="button" class="btn !py-1 !text-xs" @click="nummerDazu(k.telefonnummern, 'Zentrale')"><Plus :size="13" /> Nummer</button></div>
         <div class="space-y-1.5">
@@ -125,8 +134,23 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
           <p v-if="!k.telefonnummern.length" class="text-xs text-mute">Noch keine Nummer, z. B. Zentrale oder Fax.</p>
         </div>
       </section>
+      <Toggle v-model="k.aktiv" label="Aktiv (in Auswahllisten sichtbar)" />
+      </template>
 
-      <section>
+      <section v-if="tab === 'material'">
+        <h3 class="mb-1 flex items-center gap-2 text-sm font-semibold"><ShieldCheck :size="15" class="text-accent" /> Material-Vorgaben</h3>
+        <p class="mb-2 text-xs text-mute">Gilt als Mindestanforderung für jedes Rohmaterial dieses Kunden (Workbench, Auftrag, Fertigung).</p>
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex gap-1 rounded-xl border border-line bg-surface2 p-1 text-xs" role="radiogroup" aria-label="Werkszeugnis">
+            <button v-for="z in ZEUGNISSE" :key="z" type="button" class="rounded-lg px-3 py-1" :class="(k.materialZeugnis || '') === z ? 'bg-surface font-medium shadow-sm' : 'text-mute hover:text-ink'" @click="k.materialZeugnis = z">{{ z ? `Zeugnis ${zeugnisKurz(z)}` : 'kein Zeugnis' }}</button>
+          </div>
+          <button v-for="a in ws.baum.anforderungen" :key="a.name" type="button" class="rounded-full border px-2.5 py-1 text-xs transition" :class="(k.materialPruefungen ?? []).includes(a.name) ? 'border-accent bg-accent-soft text-accent' : 'border-line text-mute hover:text-ink'" @click="pruefungUmschalten(k, a.name)">{{ a.name }}</button>
+        </div>
+      </section>
+
+
+
+      <section v-if="tab === 'adressen'">
         <div class="mb-2 flex items-center justify-between"><h3 class="flex items-center gap-2 text-sm font-semibold"><MapPin :size="15" class="text-accent" /> Adressen</h3><button type="button" class="btn !py-1 !text-xs" @click="k.adressen.push(leerAdresse())"><Plus :size="13" /> Adresse</button></div>
         <div class="space-y-2">
           <div v-for="(a, i) in k.adressen" :key="i" class="rounded-xl border border-line p-3">
@@ -144,7 +168,7 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
         </div>
       </section>
 
-      <section>
+      <section v-if="tab === 'kontakte'">
         <div class="mb-2 flex items-center justify-between"><h3 class="flex items-center gap-2 text-sm font-semibold"><UserRound :size="15" class="text-accent" /> Ansprechpartner</h3><button type="button" class="btn !py-1 !text-xs" @click="k.kontakte.push(leerKontakt())"><Plus :size="13" /> Kontakt</button></div>
         <div class="space-y-2">
           <div v-for="(c, i) in k.kontakte" :key="i" class="rounded-xl border border-line p-3">
@@ -171,9 +195,18 @@ async function loeschen() { if (await store.loeschen('kunde', k.value.id)) k.val
         </div>
       </section>
 
-      <AngelerntAnzeige v-if="!neu" :kunde="k.id" :darf="darf" />
-
-      <Toggle v-model="k.aktiv" label="Aktiv (in Auswahllisten sichtbar)" />
+      <!-- bleibt geladen (v-show): Änderungen gehen beim Reiterwechsel nicht verloren und werden mit gespeichert -->
+      <div v-if="!neu" v-show="tab === 'zeichnungen'" class="space-y-5">
+        <section>
+          <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold"><ShieldCheck :size="15" class="text-accent" /> Schwärzen der Zeichnungen</h3>
+          <KundeSchwaerzen ref="schwaerzen" :kunde-id="k.id" :kunde-name="k.name" :darf="darf" />
+        </section>
+        <section class="border-t border-line pt-4">
+          <h3 class="mb-2 flex items-center gap-2 text-sm font-semibold"><FileScan :size="15" class="text-accent" /> Zeichnungserkennung (angelernt)</h3>
+          <AngelerntAnzeige :kunde="k.id" :darf="darf" />
+        </section>
+      </div>
+      </div>
     </StammDialog>
   </div>
 </template>

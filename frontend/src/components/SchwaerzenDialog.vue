@@ -4,7 +4,7 @@
 // verschieben, Größe ändern, löschen, neu erkennen. „Ergebnis“: die geschwärzte Datei, so wie sie verschickt wird
 // (weiß übermalt, nur Bilder). Freigeben geht erst, wenn das Ergebnis angesehen, die Prüfung bestanden und bestätigt ist.
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
-import { X, ShieldCheck, ShieldAlert, Eye, PencilLine, Wand2, Trash2, Loader, Check, AlertTriangle, CircleCheck, CircleAlert, CircleX, RotateCcw, Square } from '@lucide/vue';
+import { X, ShieldCheck, ShieldAlert, Eye, PencilLine, Wand2, Trash2, Loader, Check, AlertTriangle, CircleCheck, CircleAlert, CircleX, RotateCcw, Square, SquareDashed, Hand, ZoomIn, ZoomOut, MoveHorizontal, Maximize } from '@lucide/vue';
 import { useSchwaerzen } from '../stores/schwaerzen.js';
 import { useUi } from '../stores/ui.js';
 
@@ -29,19 +29,99 @@ let ergebnis = null;
 const seiten = ref([]); // [{ nr, w, h }] (pt) des Originals
 const ergSeiten = ref([]);
 const leinwand = reactive({}); // 'o3' / 'e3' → canvas
-const breite = 900;
 
+// ---- Ansicht wie im PDF-Programm: Zoom (100 % = Seitenbreite), Verschieben mit Hand-Werkzeug, mittlerer Maustaste oder Leertaste
+const flaeche = ref(null); // Scroll-Bereich der Seiten
+const basis = ref(900); // Seitenbreite bei 100 % (Breite des Bereichs)
+const zoom = ref(1);
+const werkzeug = ref('rahmen'); // 'rahmen' | 'hand'
+const leertaste = ref(false);
+const ZOOM_MIN = 0.25, ZOOM_MAX = 8;
+const seitenBreite = computed(() => Math.round(basis.value * zoom.value));
+const zoomText = computed(() => `${Math.round(zoom.value * 100)} %`);
+function basisMessen() { if (flaeche.value) basis.value = Math.max(400, flaeche.value.clientWidth - 40); }
+
+let zeichnet = 0;
 async function seitenZeichnen(doc, praefix, liste) {
+  const lauf = ++zeichnet; // ein neuer Zoom bricht das alte Zeichnen ab
+  const dpr = window.devicePixelRatio || 1;
   for (const sz of liste) {
+    if (lauf !== zeichnet) return;
     const c = leinwand[`${praefix}${sz.nr}`];
     if (!c) continue;
     const page = await doc.getPage(sz.nr);
-    const vp = page.getViewport({ scale: (breite * (window.devicePixelRatio || 1)) / sz.w });
-    c.width = Math.ceil(vp.width);
-    c.height = Math.ceil(vp.height);
-    await page.render({ canvas: c, viewport: vp }).promise;
+    // scharf in jeder Vergrößerung, aber höchstens ~10.000 Pixel breit (Speicher)
+    const vp = page.getViewport({ scale: Math.min(seitenBreite.value * dpr, 10000) / sz.w });
+    const neu = document.createElement('canvas');
+    neu.width = Math.ceil(vp.width);
+    neu.height = Math.ceil(vp.height);
+    await page.render({ canvas: neu, viewport: vp }).promise;
+    if (lauf !== zeichnet) return;
+    // erst fertig zeichnen, dann tauschen: kein Flackern beim Zoomen
+    c.width = neu.width;
+    c.height = neu.height;
+    c.getContext('2d').drawImage(neu, 0, 0);
   }
 }
+const aktuelleSeiten = () => (ansicht.value === 'ergebnis' ? [ergebnis, 'e', ergSeiten.value] : [original, 'o', seiten.value]);
+let zoomTimer = null;
+function neuZeichnenSpaeter() {
+  clearTimeout(zoomTimer);
+  zoomTimer = setTimeout(() => { const [d, p, l] = aktuelleSeiten(); if (d) seitenZeichnen(d, p, l); }, 180);
+}
+// Zoom um einen Punkt (Mausposition), sonst um die Mitte des Bereichs
+async function zoomAuf(z, um = null) {
+  const el = flaeche.value;
+  const neu = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+  if (!el || neu === zoom.value) return;
+  const r = el.getBoundingClientRect();
+  const px = um ? um.x - r.left : el.clientWidth / 2;
+  const py = um ? um.y - r.top : el.clientHeight / 2;
+  const f = neu / zoom.value;
+  const sx = (el.scrollLeft + px) * f - px;
+  const sy = (el.scrollTop + py) * f - py;
+  zoom.value = neu;
+  await nextTick();
+  el.scrollLeft = sx;
+  el.scrollTop = sy;
+  neuZeichnenSpaeter();
+}
+const zoomRein = () => zoomAuf(zoom.value * 1.25);
+const zoomRaus = () => zoomAuf(zoom.value / 1.25);
+const breiteAnpassen = () => zoomAuf(1);
+function seiteAnpassen() {
+  const el = flaeche.value;
+  const sz = (ansicht.value === 'ergebnis' ? ergSeiten.value : seiten.value)[0];
+  if (el && sz) zoomAuf(Math.min(1, (el.clientHeight - 50) / ((basis.value * sz.h) / sz.w)));
+}
+function rad(e) {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  zoomAuf(zoom.value * (e.deltaY < 0 ? 1.15 : 1 / 1.15), { x: e.clientX, y: e.clientY });
+}
+// Verschieben: Hand-Werkzeug, mittlere Maustaste oder Leertaste gedrückt halten
+let pan = null;
+const schiebt = ref(false);
+function panStart(e) {
+  const el = flaeche.value;
+  if (!el || !(e.button === 1 || (e.button === 0 && (werkzeug.value === 'hand' || leertaste.value || ansicht.value === 'ergebnis')))) return false;
+  e.preventDefault();
+  pan = { x: e.clientX, y: e.clientY, sl: el.scrollLeft, st: el.scrollTop, id: e.pointerId };
+  schiebt.value = true;
+  el.setPointerCapture(e.pointerId);
+  return true;
+}
+function panBewegen(e) {
+  if (!pan || e.pointerId !== pan.id) return;
+  flaeche.value.scrollLeft = pan.sl - (e.clientX - pan.x);
+  flaeche.value.scrollTop = pan.st - (e.clientY - pan.y);
+}
+function panEnde(e) {
+  if (!pan || e.pointerId !== pan.id) return;
+  pan = null;
+  schiebt.value = false;
+}
+const cursor = computed(() => (schiebt.value ? 'grabbing' : werkzeug.value === 'hand' || leertaste.value || ansicht.value === 'ergebnis' ? 'grab' : 'crosshair'));
 async function seitenListe(doc) {
   const out = [];
   for (let i = 1; i <= doc.numPages; i++) {
@@ -76,6 +156,8 @@ onMounted(async () => {
     // erst die Seiten anzeigen (die Leinwände entstehen mit laedt = false), dann zeichnen
     laedt.value = false;
     await nextTick();
+    basisMessen();
+    await nextTick();
     await seitenZeichnen(original, 'o', seiten.value);
     await ergebnisLaden();
   } catch (e) {
@@ -84,7 +166,7 @@ onMounted(async () => {
     laedt.value = false;
   }
 });
-onBeforeUnmount(() => { original?.destroy?.(); ergebnis?.destroy?.(); });
+onBeforeUnmount(() => { clearTimeout(zoomTimer); original?.destroy?.(); ergebnis?.destroy?.(); });
 
 watch(ansicht, async (a) => {
   await nextTick();
@@ -104,31 +186,37 @@ async function neuErkennen() {
   } finally { arbeitet.value = ''; }
 }
 
-// ---- Bereiche mit der Maus: aufziehen (leere Stelle), verschieben (Bereich), Größe (Ecke unten rechts)
+// ---- Bereiche mit der linken Maustaste: aufziehen (leere Stelle), verschieben (Bereich), Größe (Ecke unten rechts).
+// Die Seite hält den Zeiger fest (Pointer Capture): das Ziehen reißt auch über Rahmen, Rand oder Fensterkante nicht ab.
 let zug = null;
-const MIN = 0.004;
+const MIN = 0.003;
 function punkt(e, el) {
   const r = el.getBoundingClientRect();
   return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
 }
 function runter(e, nr, b = null, ecke = false) {
+  if (panStart(e)) return;
+  if (e.button !== 0 || zug) return;
   const el = e.currentTarget.closest('[data-seite]');
   const p = punkt(e, el);
   e.preventDefault();
+  e.stopPropagation();
   if (b) {
     auswahl.value = b.id;
-    zug = { art: ecke ? 'groesse' : 'schieben', b, start: p, alt: { ...b }, el };
+    zug = { art: ecke ? 'groesse' : 'schieben', b, start: p, alt: { ...b }, el, id: e.pointerId };
   } else {
     const neu = { id: k.neueId(), page: nr, x0: p.x, y0: p.y, x1: p.x, y1: p.y, source: 'manual', kind: 'manual', reason: 'von Hand' };
     bereiche.value.push(neu);
+    zug = { art: 'neu', b: bereiche.value.at(-1), start: p, el, id: e.pointerId };
     auswahl.value = neu.id;
-    zug = { art: 'neu', b: neu, start: p, el };
   }
-  window.addEventListener('pointermove', bewegen);
-  window.addEventListener('pointerup', los, { once: true });
+  el.setPointerCapture(e.pointerId);
+  el.addEventListener('pointermove', bewegen);
+  el.addEventListener('pointerup', los);
+  el.addEventListener('pointercancel', los);
 }
 function bewegen(e) {
-  if (!zug) return;
+  if (!zug || e.pointerId !== zug.id) return;
   const p = punkt(e, zug.el);
   const b = zug.b;
   if (zug.art === 'neu') {
@@ -143,18 +231,49 @@ function bewegen(e) {
   if (zug.art !== 'neu') b.source = 'manual';
   geaendert.value = true;
 }
-function los() {
-  window.removeEventListener('pointermove', bewegen);
-  if (zug?.art === 'neu' && (zug.b.x1 - zug.b.x0 < MIN || zug.b.y1 - zug.b.y0 < MIN)) bereiche.value = bereiche.value.filter((b) => b !== zug.b);
+function los(e) {
+  if (!zug || (e && e.pointerId !== zug.id)) return;
+  const el = zug.el;
+  el.removeEventListener('pointermove', bewegen);
+  el.removeEventListener('pointerup', los);
+  el.removeEventListener('pointercancel', los);
+  if (el.hasPointerCapture?.(zug.id)) el.releasePointerCapture(zug.id);
+  // nur ein Klick ohne Ziehen: kein Bereich
+  if (zug.art === 'neu' && (zug.b.x1 - zug.b.x0 < MIN || zug.b.y1 - zug.b.y0 < MIN)) {
+    const weg = zug.b.id;
+    bereiche.value = bereiche.value.filter((b) => b.id !== weg);
+    if (auswahl.value === weg) auswahl.value = null;
+  }
   zug = null;
 }
 function loeschen(id) { bereiche.value = bereiche.value.filter((b) => b.id !== id); geaendert.value = true; if (auswahl.value === id) auswahl.value = null; }
+const eingabe = (e) => /input|textarea|select/i.test(e.target.tagName);
 function taste(e) {
-  if ((e.key === 'Delete' || e.key === 'Backspace') && auswahl.value && !/input|textarea/i.test(e.target.tagName)) loeschen(auswahl.value);
-  if (e.key === 'Escape') emit('schliessen');
+  if (eingabe(e)) return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && auswahl.value) loeschen(auswahl.value);
+  else if (e.key === 'Escape') emit('schliessen');
+  else if (e.key === ' ') { e.preventDefault(); leertaste.value = true; }
+  else if (e.key === '+' || e.key === '=') zoomRein();
+  else if (e.key === '-') zoomRaus();
+  else if (e.key === '0') breiteAnpassen();
+  else if (e.key === 'h' || e.key === 'H') werkzeug.value = werkzeug.value === 'hand' ? 'rahmen' : 'hand';
 }
-onMounted(() => window.addEventListener('keydown', taste));
-onBeforeUnmount(() => window.removeEventListener('keydown', taste));
+function tasteLos(e) { if (e.key === ' ') leertaste.value = false; }
+onMounted(() => {
+  window.addEventListener('keydown', taste);
+  window.addEventListener('keyup', tasteLos);
+  window.addEventListener('resize', basisMessen);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', taste);
+  window.removeEventListener('keyup', tasteLos);
+  window.removeEventListener('resize', basisMessen);
+});
+watch(flaeche, (el, alt) => {
+  alt?.removeEventListener('wheel', rad);
+  el?.addEventListener('wheel', rad, { passive: false });
+}, { immediate: true });
+watch(basis, () => neuZeichnenSpaeter());
 
 const ART = { keyword: 'Stichwort', header: 'Kopfzeile', changeTable: 'Änderungstabelle', labelRight: 'Wert neben Beschriftung', email: 'E-Mail', phone: 'Telefon', logo: 'Logo', annotation: 'Stempel/Feld', manual: 'Von Hand' };
 const farbe = (b) => (b.source === 'manual' ? '#2563eb' : b.kind === 'logo' ? '#7c3aed' : b.kind === 'annotation' ? '#d97706' : '#dc2626');
@@ -201,35 +320,47 @@ const anzahlJeSeite = (nr) => bereiche.value.filter((b) => b.page === nr).length
           <button type="button" class="grid h-8 w-8 place-items-center rounded-lg text-mute hover:bg-surface2" title="Schließen" @click="emit('schliessen')"><X :size="18" /></button>
         </header>
 
-        <div class="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <!-- Seiten -->
-          <div class="min-h-0 overflow-auto bg-surface2 p-4">
-            <div v-if="laedt" class="flex items-center gap-2 p-6 text-sm text-mute"><Loader :size="16" class="animate-spin" /> Zeichnung wird geladen und erkannt …</div>
-            <template v-else-if="ansicht === 'bearbeiten'">
-              <div v-for="sz in seiten" :key="`o${sz.nr}`" class="mx-auto mb-4" :style="{ maxWidth: `${breite}px` }">
-                <div class="mb-1 text-xs text-mute">Seite {{ sz.nr }} · {{ anzahlJeSeite(sz.nr) }} Bereich(e) · zum Ergänzen einen Rahmen aufziehen</div>
-                <div data-seite class="relative cursor-crosshair select-none bg-white shadow" @pointerdown.self="runter($event, sz.nr)">
-                  <canvas :ref="(el) => { if (el) leinwand[`o${sz.nr}`] = el; }" class="pointer-events-none block h-auto w-full" />
-                  <div class="absolute inset-0" @pointerdown.self="runter($event, sz.nr)">
-                    <div v-for="b in bereiche.filter((x) => x.page === sz.nr)" :key="b.id" class="absolute cursor-move border-2" :class="auswahl === b.id ? 'ring-2 ring-offset-1' : ''"
-                      :style="{ left: `${b.x0 * 100}%`, top: `${b.y0 * 100}%`, width: `${(b.x1 - b.x0) * 100}%`, height: `${(b.y1 - b.y0) * 100}%`, borderColor: farbe(b), background: `${farbe(b)}33` }"
-                      :title="`${ART[b.kind] ?? 'Bereich'}: ${b.reason || ''}`" @pointerdown.stop="runter($event, sz.nr, b)">
-                      <span class="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-se-resize rounded-sm border border-white" :style="{ background: farbe(b) }" @pointerdown.stop="runter($event, sz.nr, b, true)" />
+        <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_340px] lg:grid-rows-1">
+          <!-- Seiten mit Werkzeugleiste (Zoom, Rahmen/Hand) -->
+          <div class="flex min-h-0 min-w-0 flex-col bg-surface2">
+            <div class="flex flex-wrap items-center gap-1 border-b border-line bg-surface px-3 py-1.5 text-sm">
+              <div v-if="ansicht === 'bearbeiten'" class="mr-2 flex gap-0.5 rounded-lg border border-line p-0.5">
+                <button type="button" class="flex items-center gap-1 rounded-md px-2 py-1" :class="werkzeug === 'rahmen' ? 'bg-accent-soft font-medium text-accent' : 'text-mute hover:text-ink'" title="Rahmen aufziehen (linke Maustaste)" @click="werkzeug = 'rahmen'"><SquareDashed :size="15" /> Rahmen</button>
+                <button type="button" class="flex items-center gap-1 rounded-md px-2 py-1" :class="werkzeug === 'hand' ? 'bg-accent-soft font-medium text-accent' : 'text-mute hover:text-ink'" title="Verschieben (H) — auch mit gedrückter Leertaste oder mittlerer Maustaste" @click="werkzeug = 'hand'"><Hand :size="15" /> Verschieben</button>
+              </div>
+              <button type="button" class="grid h-8 w-8 place-items-center rounded-lg hover:bg-surface2" title="Verkleinern (−)" @click="zoomRaus"><ZoomOut :size="16" /></button>
+              <button type="button" class="min-w-[64px] rounded-lg px-2 py-1 text-xs font-medium tnum hover:bg-surface2" title="100 % = Seitenbreite" @click="breiteAnpassen">{{ zoomText }}</button>
+              <button type="button" class="grid h-8 w-8 place-items-center rounded-lg hover:bg-surface2" title="Vergrößern (+)" @click="zoomRein"><ZoomIn :size="16" /></button>
+              <button type="button" class="ml-1 flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-mute hover:bg-surface2 hover:text-ink" title="Seitenbreite (0)" @click="breiteAnpassen"><MoveHorizontal :size="14" /> Breite</button>
+              <button type="button" class="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-mute hover:bg-surface2 hover:text-ink" title="Ganze Seite" @click="seiteAnpassen"><Maximize :size="14" /> Ganze Seite</button>
+              <span class="ml-auto hidden text-[11px] text-mute xl:inline">Strg + Mausrad zoomt · Leertaste oder mittlere Maustaste halten zum Verschieben · Entf löscht den gewählten Bereich</span>
+            </div>
+            <div ref="flaeche" class="min-h-0 flex-1 overflow-auto p-5" :style="{ cursor }" @pointerdown="panStart" @pointermove="panBewegen" @pointerup="panEnde" @pointercancel="panEnde">
+              <div v-if="laedt" class="flex items-center gap-2 p-6 text-sm text-mute"><Loader :size="16" class="animate-spin" /> Zeichnung wird geladen und erkannt …</div>
+              <template v-else-if="ansicht === 'bearbeiten'">
+                <div v-for="sz in seiten" :key="`o${sz.nr}`" class="mx-auto mb-5" :style="{ width: `${seitenBreite}px` }">
+                  <div class="mb-1 text-xs text-mute">Seite {{ sz.nr }} · {{ anzahlJeSeite(sz.nr) }} Bereich(e) · Rahmen mit der linken Maustaste aufziehen</div>
+                  <div data-seite class="relative select-none bg-white shadow" style="touch-action: none" :style="{ cursor }" @pointerdown="runter($event, sz.nr)">
+                    <canvas :ref="(el) => { if (el) leinwand[`o${sz.nr}`] = el; }" class="pointer-events-none block h-auto w-full" />
+                    <div v-for="b in bereiche.filter((x) => x.page === sz.nr)" :key="b.id" class="absolute border-2" :class="auswahl === b.id ? 'ring-2 ring-offset-1' : ''"
+                      :style="{ left: `${b.x0 * 100}%`, top: `${b.y0 * 100}%`, width: `${(b.x1 - b.x0) * 100}%`, height: `${(b.y1 - b.y0) * 100}%`, borderColor: farbe(b), background: `${farbe(b)}33`, cursor: werkzeug === 'hand' || leertaste ? cursor : 'move' }"
+                      :title="`${ART[b.kind] ?? 'Bereich'}: ${b.reason || ''}`" @pointerdown="runter($event, sz.nr, b)">
+                      <span class="absolute -bottom-2 -right-2 h-4 w-4 cursor-se-resize rounded-sm border-2 border-white shadow" :style="{ background: farbe(b) }" @pointerdown="runter($event, sz.nr, b, true)" />
                     </div>
                   </div>
                 </div>
-              </div>
-            </template>
-            <template v-else>
-              <div v-for="sz in ergSeiten" :key="`e${sz.nr}`" class="mx-auto mb-4" :style="{ maxWidth: `${breite}px` }">
-                <div class="mb-1 text-xs text-mute">Ergebnis Seite {{ sz.nr }} von {{ ergSeiten.length }} — so bekommt es der Partner</div>
-                <canvas :ref="(el) => { if (el) leinwand[`e${sz.nr}`] = el; }" class="block h-auto w-full bg-white shadow" />
-              </div>
-            </template>
+              </template>
+              <template v-else>
+                <div v-for="sz in ergSeiten" :key="`e${sz.nr}`" class="mx-auto mb-5" :style="{ width: `${seitenBreite}px` }">
+                  <div class="mb-1 text-xs text-mute">Ergebnis Seite {{ sz.nr }} von {{ ergSeiten.length }} — so bekommt es der Partner</div>
+                  <canvas :ref="(el) => { if (el) leinwand[`e${sz.nr}`] = el; }" class="pointer-events-none block h-auto w-full bg-white shadow" />
+                </div>
+              </template>
+            </div>
           </div>
 
           <!-- Seitenleiste -->
-          <aside class="flex min-h-0 flex-col border-l border-line">
+          <aside class="flex max-h-[45vh] min-h-0 min-w-0 flex-col border-t border-line lg:max-h-none lg:border-l lg:border-t-0">
             <div class="min-h-0 flex-1 space-y-4 overflow-auto p-4 text-sm">
               <div v-if="s" class="rounded-xl border px-3 py-2" :class="s.status === 'Freigegeben' ? 'border-ok/40 bg-ok/5' : 'border-warn/40 bg-warn/5'">
                 <div class="flex items-center gap-1.5 font-medium" :class="s.status === 'Freigegeben' ? 'text-ok' : 'text-warn'">

@@ -75,6 +75,7 @@ def anfrage_ui(d):
 				"abmessung": p.abmessung or "",
 				"roh": als_json(p.roh) if p.roh else None,
 				"anforderungen": p.anforderungen or "",
+				"liefertermin": datum(p.liefertermin) if p.liefertermin else "",
 				"einheit": p.einheit or "Stk",
 				"mengen": als_json(p.mengen) if p.mengen else [],
 			}
@@ -160,6 +161,30 @@ def _roh(r):
 	return json.dumps(out, ensure_ascii=False)
 
 
+def _termin(wert):
+	"""Gewünschter Liefertermin: ISO-Datum oder leer."""
+	w = str(wert or "").strip()[:10]
+	return w if re.match(r"^\d{4}-\d{2}-\d{2}$", w) else None
+
+
+@frappe.whitelist(methods=["POST"])
+def liefertermine(vorgang, termine=None, alle=""):
+	"""Gewünschte Liefertermine der Positionen setzen (für alle Lieferanten des Vorgangs gleich): `termine` =
+	{ positionKey: "JJJJ-MM-TT" | "" }, `alle` setzt jede Position auf dieses Datum."""
+	nur_cnc()
+	if isinstance(termine, str):
+		termine = frappe.parse_json(termine) or {}
+	termine = termine or {}
+	docs = vorgang_docs(vorgang)
+	for d in docs:
+		d.check_permission("write")
+		for p in d.positionen:
+			if alle or p.position_key in termine:
+				p.liefertermin = _termin(alle or termine.get(p.position_key))
+		d.save()
+	return [anfrage_ui(d) for d in docs]
+
+
 def _zeilen(ang, art, positionen):
 	zeilen = []
 	for i, p in enumerate(positionen, 1):
@@ -184,6 +209,7 @@ def _zeilen(ang, art, positionen):
 			"abmessung": (p.get("abmessung") or "").strip()[:140],
 			"roh": _roh(p.get("roh")),
 			"anforderungen": (p.get("anforderungen") or "").strip()[:140],
+			"liefertermin": _termin(p.get("liefertermin")),
 			"einheit": einheit,
 			"mengen": json.dumps(mengen),
 		})
@@ -453,25 +479,30 @@ def _doppelt(bezeichnung, werkstoff, abmessung):
 
 
 # Spalten der Tabelle: (Schlüssel, Überschrift); Spalten, die in keiner Zeile etwas enthalten, fallen weg
-SPALTEN = (("pos", "Pos"), ("was", "Bezeichnung"), ("werkstoff", "Werkstoff"), ("masse", "Abmessung"), ("anforderungen", "Anforderungen"), ("menge", "Menge"))
+SPALTEN = (
+	("pos", "Pos"), ("leistung", "Leistung"), ("was", "Bezeichnung"), ("teilenummer", "Teilenummer"), ("zeichnung", "Zeichnung"),
+	("werkstoff", "Werkstoff"), ("masse", "Abmessung"), ("anforderungen", "Anforderungen"), ("menge", "Menge"), ("termin", "Liefertermin"),
+)
 
 
 def tabelle(doc):
 	"""Die Positionen der Anfrage als Tabelle {kopf, zeilen}: nur die Spalten, die etwas sagen, ohne Doppelungen
 	(die Bezeichnung entfällt, wenn sie nur Werkstoff und Abmessung wiederholt), mit den Anforderungen (Zeugnis, Prüfungen)."""
+	from frappe.utils import formatdate
+
 	reihen = []
 	for i, p in enumerate(doc.positionen, 1):
 		werkstoff, abmessung = p.material or "", p.abmessung or ""
 		was = "" if _doppelt(p.bezeichnung, werkstoff, abmessung) else (p.bezeichnung or "")
-		if p.ag_name:
-			was = f"{p.ag_name}: {was}" if was else p.ag_name
-		if p.teilenummer:
-			was += f" (Teilenummer {p.teilenummer})"
-		masse = abmessung or (f"Zeichnung {p.zeichnungsnr}" + (f" Rev. {p.revision}" if getattr(p, "revision", "") else "") if p.zeichnungsnr else "")
-		reihen.append({"pos": str(i), "was": was.strip(), "werkstoff": werkstoff, "masse": masse, "anforderungen": getattr(p, "anforderungen", "") or "", "menge": _mengen_text(p)})
+		rev = getattr(p, "revision", "") or ""
+		termin = getattr(p, "liefertermin", None)
+		reihen.append({
+			"pos": str(i), "leistung": p.ag_name or "", "was": was.strip(), "teilenummer": p.teilenummer or "",
+			"zeichnung": (p.zeichnungsnr or "") + (f" Rev. {rev}" if p.zeichnungsnr and rev else ""),
+			"werkstoff": werkstoff, "masse": abmessung, "anforderungen": getattr(p, "anforderungen", "") or "",
+			"menge": _mengen_text(p), "termin": formatdate(termin, "dd.MM.yyyy") if termin else "",
+		})
 	spalten = [(k, t) for k, t in SPALTEN if k in ("pos", "menge") or any(r[k] for r in reihen)]
-	if any(r["masse"].startswith("Zeichnung ") for r in reihen):
-		spalten = [(k, ("Abmessung / Zeichnung" if any(r["masse"] and not r["masse"].startswith("Zeichnung ") for r in reihen) else "Zeichnung") if k == "masse" else t) for k, t in spalten]
 	return {"kopf": [t for _k, t in spalten], "zeilen": [[r[k] for k, _t in spalten] for r in reihen]}
 
 
@@ -603,6 +634,7 @@ def mail_vorschlag(vorgang):
 		"tabelle": tabelle(erste),
 		"zeichnungen": mit_bauteil, "bereit": bereit, "absender": s.benutzer or "",
 		"zeichnungenListe": zeichnungen_der_anfrage(erste),
+		"positionen": [{"key": p.position_key, "text": " · ".join(x for x in (p.ag_name, p.bezeichnung, p.teilenummer) if x) or p.material or "", "liefertermin": datum(p.liefertermin) if p.liefertermin else ""} for p in erste.positionen],
 		"versendetAm": iso(erste.versendet_am) if erste.versendet_am else "",
 	}
 
@@ -650,6 +682,7 @@ def mail_muster(art="", notiz="", positionen=None, vorgang=""):
 			bezeichnung=(p.get("teil") or {}).get("name") or "", teilenummer=(p.get("teil") or {}).get("teilenummer") or "",
 			zeichnungsnr=(p.get("teil") or {}).get("zeichnungsnr") or "", material=(p.get("teil") or {}).get("material") or "",
 			ag_name=p.get("agName") or "", abmessung=p.get("abmessung") or "", anforderungen=(p.get("anforderungen") or "").strip(), einheit=p.get("einheit") or "Stk",
+			liefertermin=_termin(p.get("liefertermin")),
 			mengen=json.dumps(_mengen(p.get("mengen"))),
 		)
 		for p in positionen or []

@@ -5,6 +5,7 @@
  "engine": "InnoDB",
  "field_order": [
   "rechnungsnummer",
+  "mit_bildern",
   "kunde",
   "kunde_name",
   "auftrag",
@@ -59,6 +60,13 @@
    "read_only": 1,
    "in_list_view": 1,
    "description": "wird beim Festschreiben lückenlos vergeben"
+  },
+  {
+   "fieldname": "mit_bildern",
+   "fieldtype": "Check",
+   "label": "Bauteilbilder im PDF",
+   "default": "0",
+   "description": "Vorschaubild des Bauteils (aus dem 3D-Modell) neben jeder Position"
   },
   {
    "fieldname": "kunde",

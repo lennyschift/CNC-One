@@ -152,14 +152,14 @@ def _zuschlaege_markieren(positionen):
 
 
 def _html(doc, firma):
-	from cnc_one.api.angebot import _bild
+	from cnc_one.api.angebot import _bild, mit_bildern
 	from cnc_one.api.bauteil import vorschau
 
 	r = rechnung_ui(doc)
 	r["firma"] = firma
 	_zuschlaege_markieren(r["positionen"])
 	for p in r["positionen"]:
-		p["bild"] = _bild(vorschau(p["bauteilId"])) if p.get("art") == "Bauteil" and p.get("bauteilId") else ""
+		p["bild"] = _bild(vorschau(p["bauteilId"])) if mit_bildern(doc) and p.get("art") == "Bauteil" and p.get("bauteilId") else ""
 	storno = doc.art == "Storno"
 	von, bis = _de(doc.leistung_von), _de(doc.leistung_bis)
 	kontext = {

@@ -1,6 +1,6 @@
 <table class="posten">
   <thead><tr>
-    <th class="c-nr">Pos</th><th>Bauteil</th><th class="c-menge r">Menge</th><th class="c-einzel r">Stückpreis</th><th class="c-betrag r">Betrag</th>
+    <th class="c-nr">Pos</th>{% if mit_bild %}<th class="c-bild"></th>{% endif %}<th>Bauteil</th><th class="c-menge r">Menge</th><th class="c-einzel r">Stückpreis</th><th class="c-betrag r">Betrag</th>
   </tr></thead>
   {% for p in positionen %}{% set pr = p.preis %}{% set haupt = pr.haupt or [None] %}{% set zeilen = (haupt | length) + (pr.kosten | length) + (pr.summen | length) %}
   <tbody>
@@ -8,6 +8,7 @@
     <tr class="{{ 'erste' if loop.first }} {{ 'letzte' if loop.last and zeilen == haupt | length }}">
       {% if loop.first %}
       <td class="c-nr" rowspan="{{ zeilen }}">{{ p.nr }}</td>
+      {% if mit_bild %}<td class="c-bild" rowspan="{{ zeilen }}">{% if p.bild %}<img class="bild" src="{{ p.bild }}">{% endif %}</td>{% endif %}
       <td class="text" rowspan="{{ haupt | length }}">
         <div class="name{{ ' entfallen' if p.entfallen }}">{{ p.teil.name }}</div>
         {% for x in p.angaben %}<div class="angaben">{{ x }}</div>{% endfor %}

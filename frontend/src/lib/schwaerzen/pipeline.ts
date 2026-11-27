@@ -132,6 +132,8 @@ export async function runRedaction(opts: RunOptions): Promise<RunResult> {
     dpiEffectivePerPage.push(Math.round(plan.effectiveDpi));
 
     const rendered = await renderer.render(page, plan.scale);
+    // CNC One: Linien kräftiger, bevor geschwärzt wird (bei 450 DPI ein Pixel)
+    if (settings.linienStaerken) rendered.thicken?.(Math.max(1, Math.round(plan.effectiveDpi / 450)));
     try {
       const contentW = vp1.width * plan.scale;
       const contentH = vp1.height * plan.scale;

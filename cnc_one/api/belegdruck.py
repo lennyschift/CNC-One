@@ -8,7 +8,7 @@ import frappe
 from frappe import _
 from frappe.utils import getdate
 
-from cnc_one.api.angebot import _bild
+from cnc_one.api.angebot import _bild, mit_bildern
 from cnc_one.api.bauteil import vorschau
 from cnc_one.api.firma import firma_ui
 from cnc_one.api.stamm import nur_cnc
@@ -55,7 +55,7 @@ def lieferschein_pdf_erzeugen(doc):
 	l = lieferschein_ui(doc, {})
 	for p, z in zip(l["positionen"], doc.positionen):
 		t = p["teil"]
-		p["bild"] = _bild(vorschau(z.bauteil))
+		p["bild"] = _bild(vorschau(z.bauteil)) if mit_bildern(doc) else ""
 		bestellpos = frappe.db.get_value("Auftragsposition", {"parent": z.auftrag, "position_key": z.auftragsposition_key}, "bestellposition") if z.get("auftrag") and z.get("auftragsposition_key") else ""
 		p["angaben"] = " · ".join(x for x in (
 			f"Ihre Pos. {bestellpos}" if bestellpos else "",
@@ -119,7 +119,7 @@ def ab_pdf_erzeugen(doc, zu_haenden=""):
 	for nr, (p, z) in enumerate(zip(a["positionen"], doc.positionen), 1):
 		t = p["teil"]
 		p["nr"] = nr
-		p["bild"] = _bild(t.get("vorschaubild") or vorschau(z.bauteil))
+		p["bild"] = _bild(t.get("vorschaubild") or vorschau(z.bauteil)) if mit_bildern(doc) else ""
 		zeichnung = f"Zeichnung {t['zeichnungsnr']}" + (f" Rev. {z.revision}" if z.revision else "") if t.get("zeichnungsnr") else ""
 		ang_name = z.angebot or doc.angebot
 		k = kalk.get((ang_name, z.angebot_position_key))
@@ -174,6 +174,46 @@ def ab_dateiname(doc):
 def ab_pdf_ablegen(doc):
 	"""Beim Senden: das verschickte PDF am Auftrag ablegen (ein erneutes Senden derselben Änderung ersetzt es)."""
 	return _ablegen("Auftrag", doc, ab_dateiname(doc), True, lambda: ab_pdf_erzeugen(doc))
+
+
+# ----------------------------------------------------------------- Bauteilbilder ein/aus
+BILDER = ("Angebot", "Auftrag", "Lieferschein", "Rechnung")
+
+
+def _bilder_stand(doc):
+	festgeschrieben = doc.doctype == "Rechnung" and doc.status != "Entwurf"
+	abgelegt = (doc.doctype == "Angebot" and doc.status != "Entwurf") or (doc.doctype == "Lieferschein" and doc.status != "Bereit")
+	return {
+		"an": mit_bildern(doc), "aenderbar": not festgeschrieben, "abgelegt": abgelegt,
+		"hinweis": "Festgeschriebene Rechnung: das PDF bleibt, wie es erzeugt wurde." if festgeschrieben else "",
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def bilder(doctype, id, an=None, neu_erzeugen=0):
+	"""Bauteilbilder im PDF eines Belegs: ohne `an` der Stand { an, aenderbar, hinweis }, mit `an` (0/1) umschalten. Ein schon
+	abgelegtes PDF (gesendetes Angebot, gelieferter Lieferschein) wird dabei neu erzeugt — Inhalt und Datum bleiben, nur die
+	Bilder kommen dazu oder fallen weg. Festgeschriebene Rechnungen bleiben unverändert (GoBD)."""
+	nur_cnc()
+	if doctype not in BILDER:
+		frappe.throw(_("Für {0} gibt es keine Bauteilbilder.").format(doctype))
+	doc = frappe.get_doc(doctype, id)
+	doc.check_permission("read")
+	neu = frappe.utils.cint(neu_erzeugen)
+	if (an is None or an == "") and not neu:
+		return _bilder_stand(doc)
+	doc.check_permission("write")
+	if not _bilder_stand(doc)["aenderbar"]:
+		frappe.throw(_("Die Rechnung ist festgeschrieben, ihr PDF bleibt unverändert."))
+	if an is not None and an != "":
+		doc.db_set("mit_bildern", 1 if frappe.utils.cint(an) else 0, update_modified=False)
+	if doctype == "Angebot" and doc.status != "Entwurf" and doc.kunde:
+		from cnc_one.api.angebot import pdf_erzeugen
+
+		_ablegen("Angebot", doc, f"Angebot {doc.name}.pdf", False, lambda: pdf_erzeugen(doc), neu=True)
+	elif doctype == "Lieferschein" and doc.status != "Bereit":
+		lieferschein_pdf_ablegen(doc, neu=True)
+	return _bilder_stand(doc)
 
 
 # ----------------------------------------------------------------- Abruf

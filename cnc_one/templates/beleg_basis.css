@@ -40,6 +40,9 @@ table.posten thead + tbody tr.erste td { border-top: 0; }
 table.posten .r { text-align: right; white-space: nowrap; }
 table.posten th.r { text-align: right; }
 table.posten .c-nr { width: 8mm; color: #333; font-weight: 600; }
+/* Vorschaubild des Bauteils (aus dem 3D-Modell) neben dem Text */
+table.posten .c-bild { width: 21mm; }
+table.posten .bild { width: 17mm; height: 17mm; object-fit: contain; }
 table.posten .c-menge { width: 18mm; }
 table.posten .c-einzel { width: 24mm; }
 table.posten .c-betrag { width: 25mm; }

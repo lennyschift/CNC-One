@@ -8,6 +8,8 @@ export interface RenderedPage extends RasterSource {
   /** Browser only: the canvas holding the pixels (the preview shows it directly). */
   canvas?: HTMLCanvasElement;
   fillRects(rects: readonly PxRect[], fill: FillColor): void;
+  /** Optional (Browser): dunkle Pixel um `radius` Pixel ausdehnen (Linien kräftiger). */
+  thicken?(radius: number): void;
   dispose(): void;
 }
 

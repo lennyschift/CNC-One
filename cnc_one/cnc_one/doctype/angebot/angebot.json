@@ -7,6 +7,7 @@
   "kunde",
   "kunde_name",
   "status",
+  "mit_bildern",
   "netto",
   "sb_fassung",
   "ursprung",
@@ -52,6 +53,13 @@
    "read_only": 1,
    "in_list_view": 1,
    "in_standard_filter": 1
+  },
+  {
+   "fieldname": "mit_bildern",
+   "fieldtype": "Check",
+   "label": "Bauteilbilder im PDF",
+   "default": "1",
+   "description": "Vorschaubild des Bauteils (aus dem 3D-Modell) neben jeder Position"
   },
   {
    "fieldname": "netto",

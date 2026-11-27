@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { ArrowLeft, Printer, PackageCheck, XCircle } from '@lucide/vue';
 import { useUi } from '../stores/ui.js';
 import BelegPdf from '../components/BelegPdf.vue';
+import BilderSchalter from '../components/BilderSchalter.vue';
 import { belegPdfUrl, pdfDrucken } from '../lib/belegpdf.js';
 import StatusBadge from '../components/StatusBadge.vue';
 import { useLieferung } from '../stores/lieferung.js';
@@ -22,8 +23,8 @@ function stornieren() {
 }
 // Angezeigt und gedruckt wird das PDF vom Server; nach „geliefert“ ist es festgeschrieben
 const ui = useUi();
-const geladen = Date.now();
-const pdfUrl = computed(() => (ls.value ? belegPdfUrl('Lieferschein', ls.value.id, `${ls.value.status}-${geladen}`) : ''));
+const geladen = ref(Date.now()); // neu laden, wenn z. B. die Bauteilbilder umgeschaltet werden
+const pdfUrl = computed(() => (ls.value ? belegPdfUrl('Lieferschein', ls.value.id, `${ls.value.status}-${geladen.value}`) : ''));
 async function drucken() {
   try { await pdfDrucken(pdfUrl.value); } catch (e) { ui.toast(e.message, 'warn'); }
 }
@@ -31,6 +32,7 @@ async function drucken() {
 
 <template>
   <div v-if="ls" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_340px]">
+    <BilderSchalter :doctype="'Lieferschein'" :beleg-id="ls.id" class="mx-auto mb-3 max-w-[820px] justify-end" @geaendert="geladen = Date.now()" />
     <BelegPdf :url="pdfUrl" :name="`Lieferschein ${ls.id}.pdf`" />
 
     <aside class="no-print space-y-4 xl:sticky xl:top-0">

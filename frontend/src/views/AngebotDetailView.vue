@@ -5,6 +5,7 @@ import { Pencil, Send, Printer, ShoppingCart, XCircle, Trash2, ArrowLeft, Mail, 
 import AngebotMailDialog from '../components/AngebotMailDialog.vue';
 import { useUi } from '../stores/ui.js';
 import BelegPdf from '../components/BelegPdf.vue';
+import BilderSchalter from '../components/BilderSchalter.vue';
 import { belegPdfUrl, pdfDrucken } from '../lib/belegpdf.js';
 import AuftragDialog from '../components/AuftragDialog.vue';
 import AngebotAnfragen from '../components/AngebotAnfragen.vue';
@@ -33,8 +34,8 @@ const beauftragt = computed(() => stand.value > 0);
 const auftraegeDazu = computed(() => b.auftraege.filter((x) => x.angebotId === angebot.value?.id && x.status !== 'Storniert'));
 
 // Angezeigt und gedruckt wird das PDF, wie es verschickt wird (beim Entwurf frisch erzeugt, nach dem Senden das verschickte)
-const geladen = Date.now();
-const pdfUrl = computed(() => (angebot.value ? belegPdfUrl('Angebot', angebot.value.id, `${angebot.value.status}-${geladen}`) : ''));
+const geladen = ref(Date.now()); // neu laden, wenn z. B. die Bauteilbilder umgeschaltet werden
+const pdfUrl = computed(() => (angebot.value ? belegPdfUrl('Angebot', angebot.value.id, `${angebot.value.status}-${geladen.value}`) : ''));
 async function drucken() {
   try { await pdfDrucken(pdfUrl.value); } catch (e) { ui.toast(e.message, 'warn'); }
 }
@@ -69,6 +70,7 @@ function angelegt(auftrag) {
 
 <template>
   <div v-if="angebot" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_340px]">
+    <BilderSchalter :doctype="'Angebot'" :beleg-id="angebot.id" class="mx-auto mb-3 max-w-[820px] justify-end" @geaendert="geladen = Date.now()" />
     <BelegPdf v-if="angebot.kopf?.kundeId" :url="pdfUrl" :name="`Angebot ${angebot.id}.pdf`" />
     <div v-else class="card grid min-h-[300px] place-items-center p-10 text-sm text-mute">Ohne Kunden gibt es noch kein PDF. Bitte das Angebot in der Workbench vervollständigen.</div>
 

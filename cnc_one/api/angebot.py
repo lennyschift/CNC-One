@@ -278,6 +278,12 @@ def loeschen(id):
 PDF_VORLAGE = "templates/angebot_pdf.html"
 
 
+def mit_bildern(doc):
+	"""Bauteilbilder im PDF? Je Beleg einstellbar (Angebot und AB mit, Lieferschein und Rechnung ohne als Standard)."""
+	wert = doc.get("mit_bildern")
+	return bool(wert) if wert is not None else doc.doctype in ("Angebot", "Auftrag")
+
+
 def _bild(url):
 	"""Vorschaubild als lokaler Dateipfad für den PDF-Druck (nur Dateien dieser Site)."""
 	if not url:
@@ -329,7 +335,7 @@ def pdf_erzeugen(doc, zu_haenden=""):
 	for nr, p in enumerate(a["positionen"], 1):
 		t = p["teil"]
 		p["nr"] = nr
-		p["bild"] = _bild(t.get("vorschaubild") or bauteil_api.vorschau(p["bauteilId"]))
+		p["bild"] = _bild(t.get("vorschaubild") or bauteil_api.vorschau(p["bauteilId"])) if mit_bildern(doc) else ""
 		zeichnung = f"Zeichnung {t['zeichnungsnr']}" + (f" Rev. {t['revision']}" if t.get("revision") else "") if t.get("zeichnungsnr") else ""
 		# Liefertermin je Position bleibt intern (geht in Auftrag und Fertigung); im Angebot steht die Lieferzeit im Kopf
 		werkstoff = f"Werkstoff {t['material']}" if werkstoff_drucken(t, doc) and t.get("material") else ""

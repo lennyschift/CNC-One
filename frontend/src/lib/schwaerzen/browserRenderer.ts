@@ -19,6 +19,22 @@ export function wrapCanvas(canvas: HTMLCanvasElement): RenderedPage {
       for (const r of rects) ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
       ctx.restore();
     },
+    thicken(radius) {
+      if (!ctx || radius < 1) return;
+      // Kopie, dann mit „darken“ (Minimum je Farbkanal) versetzt darüber: dunkle Linien werden breiter, Weiß bleibt Weiß
+      const kopie = document.createElement("canvas");
+      kopie.width = canvas.width;
+      kopie.height = canvas.height;
+      kopie.getContext("2d")?.drawImage(canvas, 0, 0);
+      ctx.save();
+      ctx.globalCompositeOperation = "darken";
+      for (let dx = -radius; dx <= radius; dx++) {
+        for (let dy = -radius; dy <= radius; dy++) if (dx || dy) ctx.drawImage(kopie, dx, dy);
+      }
+      ctx.restore();
+      kopie.width = 0;
+      kopie.height = 0;
+    },
     dispose() {
       canvas.width = 0;
       canvas.height = 0;

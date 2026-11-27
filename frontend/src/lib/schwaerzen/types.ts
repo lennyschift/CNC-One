@@ -49,6 +49,12 @@ export interface ExportSettings {
    * leave gaps in the title-block grid. Only constant-colour lines are drawn, never original pixels.
    */
   keepLines: boolean;
+  /**
+   * CNC One: Linien beim Rastern um ein Pixel kräftiger zeichnen (nur im Export, vor dem Schwärzen). Haarlinien sind im
+   * Original in jeder Vergrößerung einen Bildschirmpixel breit, im Rasterbild nur einen Bildpixel — verkleinert angezeigt
+   * wirkt die Zeichnung sonst blass.
+   */
+  linienStaerken?: boolean;
 }
 
 export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
@@ -59,6 +65,7 @@ export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   fillHex: "#ffffff",
   mode: "rasterOnly",
   keepLines: true,
+  linienStaerken: true,
 };
 
 export const LIMITS = {

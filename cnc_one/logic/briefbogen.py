@@ -72,7 +72,8 @@ def posten(positionen):
 	preis = { haupt: [{menge, einzel, betrag}], kosten: [{label, betrag}], summen: [{menge, betrag}] }."""
 	from cnc_one.api.erechnung import _eur
 
-	return frappe.render_template(_datei("beleg_posten.html"), {"positionen": positionen, "eur": _eur})
+	# die Bildspalte nur, wenn es Bilder gibt (Bauteilbilder je Beleg abschaltbar)
+	return frappe.render_template(_datei("beleg_posten.html"), {"positionen": positionen, "eur": _eur, "mit_bild": any(p.get("bild") for p in positionen)})
 
 
 def muster_html(f):

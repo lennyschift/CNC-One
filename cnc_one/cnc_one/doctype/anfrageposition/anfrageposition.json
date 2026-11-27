@@ -16,6 +16,7 @@
   "abmessung",
   "roh",
   "anforderungen",
+  "liefertermin",
   "einheit",
   "mengen"
  ],
@@ -90,6 +91,11 @@
    "fieldtype": "Data",
    "label": "Anforderungen",
    "description": "z. B. Zeugnis 3.1, Ultraschallgeprüft"
+  },
+  {
+   "fieldname": "liefertermin",
+   "fieldtype": "Date",
+   "label": "Gewünschter Liefertermin"
   },
   {
    "fieldname": "einheit",

@@ -219,6 +219,26 @@ class TestLieferschein(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			belegdruck.pdf_holen("Angebot", ls["id"])
 
+	def test_bauteilbilder_ein_und_aus(self):
+		from cnc_one.api import belegdruck
+
+		auf = self.auftrag(10)
+		ls = self.liefern(auf, 4)
+		# Lieferschein ohne Bilder als Standard, der Auftrag (AB) mit
+		self.assertEqual(belegdruck.bilder("Lieferschein", ls["id"]), {"an": False, "aenderbar": True, "abgelegt": False, "hinweis": ""})
+		self.assertTrue(belegdruck.bilder("Auftrag", auf["id"])["an"])
+		lieferschein.geliefert_setzen(ls["id"])
+		vorher = frappe.get_all("File", filters={"attached_to_doctype": "Lieferschein", "attached_to_name": ls["id"]}, pluck="name")
+		# umschalten erzeugt das abgelegte PDF neu (eine Datei, neue Fassung)
+		r = belegdruck.bilder("Lieferschein", ls["id"], 1)
+		self.assertTrue(r["an"] and r["abgelegt"])
+		nachher = frappe.get_all("File", filters={"attached_to_doctype": "Lieferschein", "attached_to_name": ls["id"]}, pluck="name")
+		self.assertEqual(len(nachher), 1)
+		self.assertNotEqual(vorher, nachher)
+		self.assertTrue(belegdruck.bilder("Lieferschein", ls["id"])["an"])
+		with self.assertRaises(frappe.ValidationError):
+			belegdruck.bilder("Mahnung", ls["id"], 1)
+
 	# ------------------------------------------------------------- bauteilunabhängig
 	def test_lieferschein_frei_aus_bauteilen_des_kunden(self):
 		auf = self.auftrag(10)

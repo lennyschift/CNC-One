@@ -3,12 +3,13 @@
 // Rüsten und je Stück, Fremdvergaben, einmalige Kosten), rechts je Staffel eine Spalte mit dem Anteil am Stückpreis.
 // Rüsten und je Stück lassen sich je Arbeitsgang als Zeit × Satz oder direkt als Betrag eingeben. Unten Selbstkosten,
 // Aufschlag, Stückpreis und Gesamt je Staffel. Ohne Staffeln gibt es eine Spalte für die Stückzahl.
-import { computed } from 'vue';
+import { computed, reactive } from 'vue';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { Plus, X, Truck, Cog, ChevronUp, ChevronDown, Trash2, Save, DownloadCloud, FileText, Send, Euro, Hash, Layers, Workflow, Receipt, Calculator, Sigma } from '@lucide/vue';
+import { Plus, X, Truck, Cog, ChevronUp, ChevronDown, Trash2, Save, DownloadCloud, FileText, Send, Euro, Hash, Layers, Workflow, Receipt, Calculator, Sigma, Scale } from '@lucide/vue';
 import NumField from './NumField.vue';
 import Toggle from './Toggle.vue';
 import RohmaterialKarte from './RohmaterialKarte.vue';
+import FremdAngebote from './FremdAngebote.vue';
 import { eur, zahl } from '../lib/format.js';
 import { kostenTabelle, festerPreis, hatPlan, materialProStueck, ruestKosten } from '../lib/calc.js';
 import { useArbeitsplan } from '../lib/arbeitsplan.js';
@@ -35,6 +36,9 @@ const { stamm, maschinen, lieferanten, vorlagen, gespeichert, schluesselOk, ausB
 const fest = computed(() => festerPreis(props.teil));
 const staffel = computed(() => !!props.teil.staffel?.aktiv);
 const ausPlan = computed(() => hatPlan(props.teil));
+// Allgemeiner Block „Fertigung ohne Arbeitsplan“: nur ohne Arbeitsgänge; mit (nur externen) Arbeitsgängen bloß dann, wenn
+// eine ältere Kalkulation dort noch Zeiten hat (sonst würden sie unsichtbar mitgerechnet)
+const allgemein = computed(() => !ausPlan.value && (!props.teil.arbeitsgaenge?.length || Number(props.teil.ruestMin) > 0 || Number(props.teil.stueckMin) > 0));
 const t = computed(() => kostenTabelle(props.teil, props.ergebnis));
 const ruestIn = computed(() => staffel.value || !!props.teil.inStueckpreis?.ruest);
 const preisart = computed({
@@ -51,6 +55,11 @@ function staffelHinzu() {
 function staffelWeg(i) { if (stufen.value.length > 1) stufen.value.splice(i, 1); }
 const raster = computed(() => `minmax(250px, 1.7fr) 150px 150px repeat(${t.value.spalten.length}, minmax(112px, 1fr)) 34px`);
 const mindestBreite = computed(() => 250 + 150 * 2 + t.value.spalten.length * 112 + 34 + 24);
+
+// Angebote einer Fremdvergabe vergleichen (aufgeklappt je Arbeitsgang); Betrag für die Stückzahl der Hauptspalte
+const angeboteOffen = reactive({});
+const hauptMenge = computed(() => Number(t.value.spalten[t.value.haupt]?.menge) || Number(props.teil.menge) || 1);
+const angeboteAnzahl = (ag) => anfragenZu(ag).filter((a) => a.antwort).length + (ag.angebote?.length ?? 0);
 
 // Ohne Arbeitsplan: eine Maschine mit Rüst- und Stückzeit
 function einfacheMaschine(name) {
@@ -160,9 +169,9 @@ function bedarfText(menge) {
           </div>
 
           <!-- Ohne Arbeitsplan: eine Maschine -->
-          <div v-if="!ausPlan" class="zeile">
+          <div v-if="allgemein" class="zeile">
             <div class="pl-1">
-              <div class="flex items-center gap-2"><span class="nr"><Cog :size="12" /></span><span class="text-sm font-medium">Fertigung</span><span class="text-[11px] text-mute">ohne Arbeitsplan</span></div>
+              <div class="flex items-center gap-2"><span class="nr"><Cog :size="12" /></span><span class="text-sm font-medium">Fertigung</span><span class="text-[11px] text-mute">{{ teil.arbeitsgaenge?.length ? 'noch aus älterer Kalkulation — auf 0 setzen, dann verschwindet der Block' : 'ohne Arbeitsplan' }}</span></div>
               <select class="field mt-1.5 !py-1 !text-xs" :value="teil.maschine" @change="einfacheMaschine($event.target.value)">
                 <option value="">Maschine wählen …</option>
                 <option v-for="m in maschinen" :key="m.name" :value="m.name">{{ m.name }}</option>
@@ -244,6 +253,7 @@ function bedarfText(menge) {
                     <select v-model="ag.lieferant" class="field !py-1 !text-xs"><option value="">Lieferant …</option><option v-for="l in lieferanten" :key="l.id" :value="l.name">{{ l.name }}</option></select>
                   </div>
                   <div class="mt-1.5 flex flex-wrap items-center gap-1.5 pl-7 text-[11px]">
+                    <button type="button" class="mini" :class="angeboteOffen[ag.id] ? '!border-accent !text-accent' : ''" @click="angeboteOffen[ag.id] = !angeboteOffen[ag.id]"><Scale :size="11" /> Angebote vergleichen<span v-if="angeboteAnzahl(ag)" class="tnum">({{ angeboteAnzahl(ag) }})</span></button>
                     <button v-if="!nurAnsicht" type="button" class="mini" @click="emit('anfrage', ag)"><Send :size="11" /> Anfrage</button>
                     <template v-for="a in anfragenZu(ag)" :key="a.id">
                       <RouterLink :to="`/anfragen/${a.id}`" class="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2 py-0.5 hover:border-accent/50"><FileText :size="11" class="text-mute" /><span class="tnum">{{ a.id }}</span><span :class="farbe[a.status]">{{ a.status }}</span></RouterLink>
@@ -266,6 +276,9 @@ function bedarfText(menge) {
                   <button type="button" title="Nach unten" @click="schieben(i, 1)"><ChevronDown :size="13" /></button>
                   <button type="button" class="weg" title="Entfernen" @click="weg(i)"><Trash2 :size="13" /></button>
                 </div>
+              </div>
+              <div v-if="ag.typ === 'fremd' && angeboteOffen[ag.id]" class="px-4 pb-3 pl-10">
+                <FremdAngebote :ag="ag" :anfragen="anfragenZu(ag)" :menge="hauptMenge" :lieferanten="lieferanten" :nur-ansicht="nurAnsicht" @anfrage="emit('anfrage', $event)" />
               </div>
             </template>
           </div>

@@ -181,7 +181,7 @@ const bestellungDialog = ref(false);
     <AuftragAendernDialog v-if="aendernDialog" :auftrag="auftrag" @schliessen="aendernDialog = false" @geaendert="aendernDialog = false" />
     <BestellungDialog v-if="bestellungDialog" :auftrag="auftrag" @schliessen="bestellungDialog = false" @fertig="bestellungDialog = false" />
     <AngebotMailDialog v-if="abDialog" :auftrag="auftrag" @schliessen="abDialog = false" @gesendet="abDialog = false" />
-    <PdfVorschauDialog v-if="abPdf" :url="abPdf.url" :name="abPdf.name" @schliessen="abPdf = null" />
+    <PdfVorschauDialog v-if="abPdf" :url="abPdf.url" :name="abPdf.name" doctype="Auftrag" :beleg-id="auftrag.id" @schliessen="abPdf = null" />
     <RechnungDialog v-if="rechnungDialog" :auftrag-id="auftrag.id" @schliessen="rechnungDialog = false" @angelegt="rechnungAngelegt" />
     <LieferscheinDialog v-if="lieferDialog" :auftrag-id="auftrag.id" @schliessen="lieferDialog = false" @angelegt="lieferDialog = false" />
   </div>

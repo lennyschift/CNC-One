@@ -225,6 +225,24 @@ class TestAnfrageMail(IntegrationTestCase):
 		self.assertIn("Zuschnitt 500 × 300 mm", m["html"])
 		self.assertIn("Hinweis: mit Zeugnis", m["html"])
 
+	def test_fremdvergabe_tabelle_und_liefertermin(self):
+		doc = frappe._dict(positionen=[frappe._dict({
+			"bezeichnung": "Kettenführung", "teilenummer": "216021", "zeichnungsnr": "10242253", "material": "", "ag_name": "Fräsen",
+			"abmessung": "", "anforderungen": "", "einheit": "Stk", "mengen": "[40]", "liefertermin": "2026-12-18",
+		})])
+		t = anfrage.tabelle(doc)
+		self.assertEqual(t["kopf"], ["Pos", "Leistung", "Bezeichnung", "Teilenummer", "Zeichnung", "Menge", "Liefertermin"])
+		self.assertEqual(t["zeilen"][0], ["1", "Fräsen", "Kettenführung", "216021", "10242253", "40 Stk", "18.12.2026"])
+		# gewünschte Liefertermine für alle Lieferanten des Vorgangs setzen
+		neu = anfrage.anlegen("", ["ZZ Alu A", "ZZ Alu B"], self.pos)
+		vorgang = neu[0]["vorgang"]
+		r = anfrage.liefertermine(vorgang, alle="2026-12-20")
+		self.assertTrue(all(p["liefertermin"] == "2026-12-20" for a in r for p in a["positionen"]))
+		self.assertIn("Liefertermin", anfrage.mail_vorschlag(vorgang)["tabelle"]["kopf"])
+		key = neu[0]["positionen"][0]["key"]
+		r = anfrage.liefertermine(vorgang, {key: ""})
+		self.assertEqual(r[1]["positionen"][0]["liefertermin"], "")
+
 	def test_angebot_kommt_spaeter_dazu(self):
 		neu = anfrage.anlegen("", ["ZZ Alu A"], self.pos)
 		vorgang = neu[0]["vorgang"]

@@ -2,7 +2,7 @@
 // Lieferantenanfrage per Mail: eine Mail für den ganzen Vorgang, die Lieferanten stehen in BCC und sehen sich nicht.
 // An, CC, BCC, Betreff und Text sind frei änderbar; {tabelle} im Text wird zur Tabelle der Positionen.
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
-import { X, Send, AlertTriangle, Loader, EyeOff, Table2, Eye, ShieldCheck, ShieldAlert, FileText } from '@lucide/vue';
+import { X, Send, AlertTriangle, Loader, EyeOff, Table2, Eye, ShieldCheck, ShieldAlert, FileText, CalendarClock } from '@lucide/vue';
 import SchwaerzenDialog from './SchwaerzenDialog.vue';
 import { useSchwaerzen } from '../stores/schwaerzen.js';
 import { call } from '../data/api.js';
@@ -43,11 +43,26 @@ const zStatus = (z) => {
 };
 const zeichnungenOk = computed(() => !zeichnungen.value || !(v.value?.zeichnungenListe?.length) || v.value.zeichnungenListe.every((z) => zStatus(z).ok));
 
+// Gewünschter Liefertermin je Position (für alle Lieferanten gleich); steht als Spalte in der Tabelle
+const alleTermin = ref('');
+async function termineSetzen(termine, alle = '') {
+  try {
+    const r = await call('cnc_one.api.anfrage.liefertermine', { vorgang: props.vorgang, termine: JSON.stringify(termine), alle });
+    anfragen.alleEinsetzen(r);
+    const neu = r[0]?.positionen ?? [];
+    for (const p of v.value.positionen ?? []) p.liefertermin = neu.find((x) => x.key === p.key)?.liefertermin ?? p.liefertermin;
+    vorschauNeu();
+  } catch (e) { ui.toast(e.message, 'warn'); }
+}
+function fuerAlle() { if (alleTermin.value) termineSetzen({}, alleTermin.value); }
+
 // Vorschau: die Mail genau so, wie sie verschickt wird (HTML vom Server, Tabelle an der Stelle {tabelle})
 const html = ref('');
 let zeitgeber = null;
 let nr = 0;
-watch(() => v.value?.text, (text) => {
+const vorschauNeu = () => vorschauLaden(v.value?.text);
+watch(() => v.value?.text, (text) => vorschauLaden(text));
+function vorschauLaden(text) {
   if (text == null) return;
   clearTimeout(zeitgeber);
   zeitgeber = setTimeout(async () => {
@@ -57,7 +72,7 @@ watch(() => v.value?.text, (text) => {
       if (meins === nr) html.value = r.html;
     } catch { /* nur Vorschau */ }
   }, html.value ? 300 : 0);
-});
+}
 onBeforeUnmount(() => clearTimeout(zeitgeber));
 
 // Platzhalter für die Tabelle an der Cursorstelle einsetzen (falls er gelöscht wurde)
@@ -122,6 +137,20 @@ const bereit = () => v.value && v.value.bereit && (v.value.an.trim() || v.value.
               <input v-model="v.bcc" class="field" />
             </label>
             <label class="block"><span class="label mb-1 block">Betreff</span><input v-model="v.betreff" class="field" /></label>
+            <section v-if="v.positionen?.length" class="rounded-xl border border-line px-3 py-2.5">
+              <div class="mb-2 flex flex-wrap items-center gap-2">
+                <span class="label flex items-center gap-1.5"><CalendarClock :size="12" /> Gewünschter Liefertermin</span>
+                <span v-if="v.positionen.length > 1" class="ml-auto flex items-center gap-1.5 text-xs">für alle <input v-model="alleTermin" type="date" class="field !w-40 !py-1 text-xs" /><button type="button" class="btn !py-1 !text-xs" :disabled="!alleTermin" @click="fuerAlle">setzen</button></span>
+              </div>
+              <div class="space-y-1">
+                <div v-for="(p, i) in v.positionen" :key="p.key" class="flex items-center gap-2 text-xs">
+                  <span class="w-5 text-right text-mute">{{ i + 1 }}</span>
+                  <span class="min-w-0 flex-1 truncate" :title="p.text">{{ p.text }}</span>
+                  <input :value="p.liefertermin" type="date" class="field !w-40 !py-1 text-xs" @change="termineSetzen({ [p.key]: $event.target.value })" />
+                </div>
+              </div>
+              <p class="mt-1.5 text-[11px] text-mute">Steht als Spalte „Liefertermin“ in der Tabelle der Mail; leer = keine Angabe.</p>
+            </section>
             <label class="block">
               <span class="label mb-1 flex items-center justify-between">
                 <span>Text</span>

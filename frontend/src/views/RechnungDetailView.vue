@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ArrowLeft, Printer, Lock, Trash2, Banknote, BellRing, Undo2, FileText, Truck, ShieldCheck, FileDown, TriangleAlert } from '@lucide/vue';
 import BelegPdf from '../components/BelegPdf.vue';
+import BilderSchalter from '../components/BilderSchalter.vue';
 import { belegPdfUrl, pdfDrucken } from '../lib/belegpdf.js';
 import { useUi } from '../stores/ui.js';
 import StatusBadge from '../components/StatusBadge.vue';
@@ -71,8 +72,8 @@ async function eRechnungNeu() { laedt.value = true; await store.eRechnungNeu(r.v
 const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
 // Angezeigt und gedruckt wird das PDF: als Entwurf mit Stempel, festgeschrieben die abgelegte E-Rechnung
 const ui = useUi();
-const geladen = Date.now();
-const pdfUrl = computed(() => (r.value ? belegPdfUrl('Rechnung', r.value.id, `${r.value.status}-${r.value.nummer ?? ''}-${r.value.eRechnung?.status ?? ''}-${geladen}`) : ''));
+const geladen = ref(Date.now()); // neu laden, wenn z. B. die Bauteilbilder umgeschaltet werden
+const pdfUrl = computed(() => (r.value ? belegPdfUrl('Rechnung', r.value.id, `${r.value.status}-${r.value.nummer ?? ''}-${r.value.eRechnung?.status ?? ''}-${geladen.value}`) : ''));
 async function drucken() {
   try { await pdfDrucken(pdfUrl.value); } catch (e) { ui.toast(e.message, 'warn'); }
 }
@@ -80,6 +81,7 @@ async function drucken() {
 
 <template>
   <div v-if="r" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_360px]">
+    <BilderSchalter :doctype="'Rechnung'" :beleg-id="r.id" class="mx-auto mb-3 max-w-[820px] justify-end" @geaendert="geladen = Date.now()" />
     <BelegPdf :url="pdfUrl" :name="`${r.nummer ? `Rechnung ${r.nummer}` : 'Rechnung Entwurf'}.pdf`" />
 
     <aside class="no-print space-y-4 xl:sticky xl:top-0">
