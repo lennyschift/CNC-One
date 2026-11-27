@@ -13,6 +13,8 @@ PLAN = [
 
 class TestFertigung(IntegrationTestCase):
 	def setUp(self):
+		# Checkliste vor dem Start in diesen Tests aus (eigener Test in test_fertigung)
+		fertigung.vorlage_checkliste_speichern([])
 		frappe.set_user("Administrator")
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Fertigungskunde"}).insert().name
 		frappe.get_doc({"doctype": "Lieferant", "lieferantenname": "ZZ Härterei"}).insert()
@@ -38,6 +40,52 @@ class TestFertigung(IntegrationTestCase):
 	def zeiten(self, fb, ruest=30, bearb=60):
 		"""Ist-Zeiten für alle internen Arbeitsgänge (beim Abschließen Pflicht)."""
 		return [{"agId": a["id"], "ruestMin": ruest, "bearbMin": bearb} for a in fb["arbeitsgaenge"] if a["typ"] == "intern"]
+
+	# ------------------------------------------------------------- Checkliste vor dem Start
+	def test_checkliste_vor_dem_start(self):
+		fertigung.vorlage_checkliste_speichern([
+			{"id": "material", "text": "Material", "pflicht": 1},
+			{"id": "werkzeug", "text": "Werkzeug", "pflicht": 1},
+			{"id": "programm", "text": "NC-Programm", "pflicht": 0},
+			{"id": "aus", "text": "Abgeschaltet", "pflicht": 1, "aktiv": False},
+		])
+		fb = self.start()
+		self.assertEqual([p["id"] for p in fb["checkliste"]], ["material", "werkzeug", "programm"])
+		drehen = self.ag(fb, "Drehen")["id"]
+		# Start mit offenen Pflichtpunkten geht nicht, weder über den Status noch über die erste Buchung
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.status_setzen(fb["id"], "In Fertigung")
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.buchen(fb["id"], drehen, 1)
+		fb = fertigung.check_setzen(fb["id"], "material", 1, "Charge 24-0815")["fb"]
+		m = fb["checkliste"][0]
+		self.assertTrue(m["erledigt"])
+		self.assertEqual(m["notiz"], "Charge 24-0815")
+		self.assertTrue(m["von"] and m["am"])
+		# eigener Punkt nur für dieses Bauteil, als Pflicht
+		fb = fertigung.check_eigen(fb["id"], "Prüfvorrichtung vom Kunden", 1)["fb"]
+		eigen = fb["checkliste"][-1]
+		self.assertTrue(eigen["eigen"])
+		fb = fertigung.check_setzen(fb["id"], "werkzeug", 1)["fb"]
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.status_setzen(fb["id"], "In Fertigung")
+		fb = fertigung.check_setzen(fb["id"], eigen["id"], 1)["fb"]
+		# NC-Programm ist keine Pflicht: jetzt geht der Start
+		fb = fertigung.status_setzen(fb["id"], "In Fertigung")["fb"]
+		self.assertEqual(fb["status"], "In Fertigung")
+		self.assertEqual(fb["checklisteTrotzdem"], "")
+
+	def test_checkliste_trotzdem_starten_wird_vermerkt(self):
+		fertigung.vorlage_checkliste_speichern([{"id": "material", "text": "Material", "pflicht": 1}])
+		fb = self.start()
+		fb = fertigung.buchen(fb["id"], self.ag(fb, "Drehen")["id"], 1, trotzdem=1)["fb"]
+		self.assertEqual(fb["status"], "In Fertigung")
+		self.assertIn("Material", fb["checklisteTrotzdem"])
+		# eigener Punkt lässt sich wieder entfernen, feste nicht
+		fb = fertigung.check_eigen(fb["id"], "ZZ Sonderwerkzeug")["fb"]
+		fb = fertigung.check_weg(fb["id"], fb["checkliste"][-1]["id"])["fb"]
+		fb = fertigung.check_weg(fb["id"], "material")["fb"]
+		self.assertEqual([p["id"] for p in fb["checkliste"]], ["material"])
 
 	# ------------------------------------------------------------- Starten
 	def test_starten_legt_pro_position_ein_fertigungsbauteil_an(self):

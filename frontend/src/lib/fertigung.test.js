@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planAus, felderVon, leererArbeitsgang, produziert, fortschritt, ueberproduktion, nachzuholen, fremdGebucht, nochNichtGesendet, arbeitsgangStatus, autoStatus, restMinuten, lasten, tageBis } from './fertigung.js';
+import { planAus, felderVon, leererArbeitsgang, produziert, fortschritt, ueberproduktion, nachzuholen, fremdGebucht, nochNichtGesendet, arbeitsgangStatus, autoStatus, restMinuten, lasten, tageBis, checkOffen, checkStand, startPruefen } from './fertigung.js';
 
 const ag = (extra = {}) => ({ id: 'a', name: 'Fertigen', typ: 'intern', maschine: 'CTX400', ruestMin: 30, stueckMin: 2, status: 'Offen', gebucht: 0, lieferant: '', fremdStatus: '', ...extra });
 const fb = (extra = {}) => ({ id: 'f', menge: 10, status: 'Offen', termin: '', arbeitsgaenge: [ag()], ...extra });
@@ -86,5 +86,26 @@ describe('bearbeitbare Felder', () => {
   it('sind gleich, solange nichts geändert wird', () => {
     const x = fb({ rohmaterial: {}, notizen: {} });
     expect(JSON.stringify(felderVon(x))).toBe(JSON.stringify(felderVon(x)));
+  });
+});
+
+describe('Checkliste vor dem Start', () => {
+  const fb = (status, liste) => ({ status, checkliste: liste });
+  const L = [
+    { id: 'material', text: 'Material', pflicht: true, erledigt: true },
+    { id: 'werkzeug', text: 'Werkzeug', pflicht: true, erledigt: false },
+    { id: 'programm', text: 'NC-Programm', pflicht: false, erledigt: false },
+  ];
+  it('offene Pflichtpunkte und Stand', () => {
+    expect(checkOffen(fb('Offen', L)).map((p) => p.id)).toEqual(['werkzeug']);
+    expect(checkStand(fb('Offen', L))).toEqual({ erledigt: 1, alle: 3 });
+    expect(checkOffen({})).toEqual([]);
+  });
+  it('geprüft wird nur beim Start aus „Offen“', () => {
+    expect(startPruefen(fb('Offen', L))).toBe(true);
+    expect(startPruefen(fb('Offen', L), 'Fertig')).toBe(true);
+    expect(startPruefen(fb('Offen', L), 'Offen')).toBe(false);
+    expect(startPruefen(fb('In Fertigung', L))).toBe(false);
+    expect(startPruefen(fb('Offen', L.map((p) => ({ ...p, erledigt: true }))))).toBe(false);
   });
 });

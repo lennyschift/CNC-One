@@ -73,6 +73,12 @@ export function arbeitsgangStatus(ag, menge) {
 
 // Die frei bearbeitbaren Felder eines Fertigungsbauteils (ohne Buchungsstand, Status und Sendungen).
 // Sie werden automatisch gespeichert; der Server übernimmt nur diese Felder.
+// Checkliste vor dem Start: Pflichtpunkte, die noch nicht abgehakt sind, und der Stand (erledigt / alle)
+export const checkOffen = (fb) => (fb?.checkliste ?? []).filter((p) => p.pflicht && !p.erledigt);
+export const checkStand = (fb) => ({ erledigt: (fb?.checkliste ?? []).filter((p) => p.erledigt).length, alle: (fb?.checkliste ?? []).length });
+// Vor dem Start (Offen → In Fertigung, auch durch die erste Buchung) muss die Checkliste stimmen
+export const startPruefen = (fb, neuerStatus = 'In Fertigung') => !!fb && fb.status === 'Offen' && neuerStatus !== 'Offen' && checkOffen(fb).length > 0;
+
 export function felderVon(fb) {
   return {
     prioritaet: fb.prioritaet,

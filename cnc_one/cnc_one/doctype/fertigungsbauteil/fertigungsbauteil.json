@@ -33,6 +33,9 @@
   "sb_notizen",
   "pruefmasse",
   "bemerkungen",
+  "sb_check",
+  "checkliste",
+  "checkliste_trotzdem",
   "sb_ags",
   "arbeitsgaenge",
   "sendungen",
@@ -210,6 +213,24 @@
    "fieldname": "bemerkungen",
    "fieldtype": "Small Text",
    "label": "Bemerkungen Fertigung"
+  },
+  {
+   "fieldname": "sb_check",
+   "fieldtype": "Section Break",
+   "label": "Checkliste vor dem Start"
+  },
+  {
+   "fieldname": "checkliste",
+   "fieldtype": "JSON",
+   "label": "Checkliste",
+   "description": "Abgehakte Punkte (Material, Werkzeug, Messmittel …) und eigene Punkte dieses Bauteils"
+  },
+  {
+   "fieldname": "checkliste_trotzdem",
+   "fieldtype": "Data",
+   "label": "Ohne vollständige Checkliste gestartet",
+   "read_only": 1,
+   "description": "Wer, wann, welche Punkte offen waren"
   },
   {
    "fieldname": "sb_ags",

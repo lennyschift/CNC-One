@@ -5,6 +5,7 @@ import { vAutoAnimate } from '@formkit/auto-animate/vue';
 import { ArrowLeft, Hash, Cog, Truck, Timer, AlertTriangle, ChevronUp, ChevronDown, Trash2, Plus, Layers, NotebookPen, History, Send, PackageCheck, Save, Workflow, X } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import BauteilDateienAnsicht from '../components/BauteilDateienAnsicht.vue';
+import FertigungCheckliste from '../components/FertigungCheckliste.vue';
 import NumField from '../components/NumField.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import { repo } from '../data/repo.js';
@@ -243,6 +244,7 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
 
       <!-- Rechte Spalte -->
       <aside class="space-y-4">
+        <FertigungCheckliste :fb="fb" />
         <section class="card p-5">
           <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Layers :size="16" class="text-accent" /> Rohmaterial</h3>
           <div class="flex gap-3">

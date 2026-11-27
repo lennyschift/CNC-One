@@ -10,7 +10,8 @@ from cnc_one.api.werkstoff import roh_angaben
 from cnc_one.api.stamm import arbeitsgang_ui, arbeitsgang_zeile, ist_serienart, nur_cnc, serienart_namen, typ_db, typ_ui
 from frappe.utils import now_datetime
 
-from cnc_one.logic.daten import datum, iso
+from cnc_one.logic import checkliste as check
+from cnc_one.logic.daten import als_json, datum, iso
 
 FERTIGUNG_ROLLEN = ("CNC Admin", "CNC Vertrieb", "CNC Fertigung", "System Manager")
 
@@ -74,7 +75,106 @@ def fb_ui(d):
 			"info": d.roh_info or "", "verbrauchtMm": d.roh_verbraucht_mm or 0,
 		},
 		"notizen": {"pruefmasse": d.pruefmasse or "", "bemerkungen": d.bemerkungen or ""},
+		"checkliste": _checkliste(d),
+		"checklisteTrotzdem": d.checkliste_trotzdem or "",
 	}
+
+
+# ----------------------------------------------------------------- Checkliste vor dem Start
+def checkliste_vorlage():
+	"""Die festen Punkte aus den Fertigung-Einstellungen, sonst der Standard (Material, Werkzeug, Messmittel …)."""
+	if not frappe.db.exists("DocType", "Fertigung Einstellungen"):
+		return check.vorlage_bereinigt(check.STANDARD)
+	gespeichert = frappe.db.get_single_value("Fertigung Einstellungen", "checkliste")
+	punkte = als_json(gespeichert) if gespeichert else None
+	return check.vorlage_bereinigt(punkte if isinstance(punkte, list) else check.STANDARD)
+
+
+def _checkliste(d):
+	if not hasattr(frappe.local, "cnc_checkliste_vorlage"):
+		frappe.local.cnc_checkliste_vorlage = checkliste_vorlage()
+	return check.zusammenfuehren(frappe.local.cnc_checkliste_vorlage, als_json(d.checkliste) if d.checkliste else [])
+
+
+def _checkliste_speichern(doc, liste):
+	doc.checkliste = frappe.as_json(check.gespeichert(liste))
+
+
+@frappe.whitelist(methods=["POST"])
+def vorlage_checkliste():
+	nur_cnc()
+	darf = bool(set(frappe.get_roles()) & {"CNC Admin", "CNC Fertigung", "System Manager"})
+	return {"punkte": checkliste_vorlage(), "standard": check.vorlage_bereinigt(check.STANDARD), "darf": darf}
+
+
+@frappe.whitelist(methods=["POST"])
+def vorlage_checkliste_speichern(punkte):
+	"""Feste Punkte der Checkliste ändern (Text, Hinweis, Pflicht vor dem Start, aktiv, Reihenfolge)."""
+	frappe.only_for(("CNC Admin", "CNC Fertigung", "System Manager"))
+	if isinstance(punkte, str):
+		punkte = frappe.parse_json(punkte)
+	sauber = check.vorlage_bereinigt(punkte)
+	frappe.db.set_single_value("Fertigung Einstellungen", "checkliste", frappe.as_json(sauber))
+	if hasattr(frappe.local, "cnc_checkliste_vorlage"):
+		del frappe.local.cnc_checkliste_vorlage
+	return {"punkte": sauber}
+
+
+@frappe.whitelist(methods=["POST"])
+def check_setzen(id, punkt, erledigt=None, notiz=None):
+	"""Einen Punkt der Checkliste abhaken (mit Name und Zeit) oder wieder öffnen, oder die Notiz dazu ändern."""
+	doc = _laden(id)
+	liste = _checkliste(doc)
+	p = next((x for x in liste if x["id"] == punkt), None)
+	if not p:
+		frappe.throw(_("Diesen Punkt gibt es in der Checkliste nicht."))
+	if erledigt is not None:
+		p["erledigt"] = bool(frappe.utils.cint(erledigt))
+		p["von"] = frappe.utils.get_fullname(frappe.session.user) if p["erledigt"] else ""
+		p["am"] = iso(now_datetime()) if p["erledigt"] else ""
+	if notiz is not None:
+		p["notiz"] = str(notiz)[:300]
+	_checkliste_speichern(doc, liste)
+	doc.save()
+	return _antwort(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def check_eigen(id, text, pflicht=0):
+	"""Eigener Punkt nur für dieses Bauteil (z. B. Sonderwerkzeug, Prüfvorrichtung vom Kunden)."""
+	doc = _laden(id)
+	text = (text or "").strip()[:80]
+	if not text:
+		frappe.throw(_("Bitte einen Text für den Punkt eingeben."))
+	liste = _checkliste(doc)
+	liste.append({"id": f"e-{frappe.generate_hash(length=6)}", "text": text, "pflicht": bool(frappe.utils.cint(pflicht)), "eigen": True, "erledigt": False, "von": "", "am": "", "notiz": ""})
+	_checkliste_speichern(doc, liste)
+	doc.save()
+	return _antwort(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def check_weg(id, punkt):
+	"""Eigenen Punkt entfernen (feste Punkte bleiben, sie werden in den Einstellungen abgeschaltet)."""
+	doc = _laden(id)
+	liste = [p for p in _checkliste(doc) if not (p["id"] == punkt and p["eigen"])]
+	_checkliste_speichern(doc, liste)
+	doc.save()
+	return _antwort(doc)
+
+
+def _start_pruefen(doc, trotzdem):
+	"""Vor dem Start (Offen → In Fertigung, auch durch die erste Buchung) müssen die Pflichtpunkte abgehakt sein. Mit
+	`trotzdem` geht es dennoch, das wird am Bauteil vermerkt."""
+	if doc.status != "Offen":
+		return
+	fehlt = check.offen(_checkliste(doc))
+	if not fehlt:
+		return
+	if not frappe.utils.cint(trotzdem):
+		frappe.throw(_("Checkliste vor dem Start: noch offen sind {0}.").format(", ".join(p["text"] for p in fehlt)), title=_("Checkliste unvollständig"))
+	doc.checkliste_trotzdem = _("{0} am {1}, offen: {2}").format(
+		frappe.utils.get_fullname(frappe.session.user), now_datetime().strftime("%d.%m.%Y %H:%M"), ", ".join(p["text"] for p in fehlt))[:140]
 
 
 def alle_ui():
@@ -184,8 +284,9 @@ def zeiten_melden(id, zeiten):
 
 # ----------------------------------------------------------------- Buchen
 @frappe.whitelist(methods=["POST"])
-def buchen(id, ag_id, menge, zeiten=None):
+def buchen(id, ag_id, menge, zeiten=None, trotzdem=0):
 	doc = _laden(id)
+	_start_pruefen(doc, trotzdem)
 	vorher = _fertige(doc)
 	_zeiten_setzen(doc, zeiten)
 	nachgeholt = doc.buchen(ag_id, menge)
@@ -288,8 +389,10 @@ def sendung_loeschen(id, ag_id, sendung):
 
 # ----------------------------------------------------------------- Status und Felder
 @frappe.whitelist(methods=["POST"])
-def status_setzen(id, status, zeiten=None):
+def status_setzen(id, status, zeiten=None, trotzdem=0):
 	doc = _laden(id)
+	if status != "Offen":
+		_start_pruefen(doc, trotzdem)
 	vorher = _fertige(doc)
 	_zeiten_setzen(doc, zeiten)
 	doc.status_setzen(status)

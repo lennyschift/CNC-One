@@ -37,6 +37,7 @@ import PosteingangView from './views/PosteingangView.vue';
 import MailEinstellungenView from './views/MailEinstellungenView.vue';
 import DokumenteView from './views/DokumenteView.vue';
 import ArchivView from './views/ArchivView.vue';
+import CheckVorlageView from './views/CheckVorlageView.vue';
 import DruckvorlagenView from './views/DruckvorlagenView.vue';
 import FensterView from './views/FensterView.vue';
 import { ladeStammdaten } from './data/repo.js';
@@ -67,6 +68,7 @@ const router = createRouter({
     { path: '/mahnungen/:id', component: MahnungDetailView, meta: { titel: 'Mahnung', bereich: 'rechnungen', unterbereich: 'mahnwesen' } },
     { path: '/dokumente/:id?', component: DokumenteView, meta: { titel: 'Dokumente', bereich: 'dokumente' } },
     { path: '/stammdaten/archiv', component: ArchivView, meta: { titel: 'Stammdaten: Archiv', bereich: 'stammdaten' } },
+    { path: '/stammdaten/checkliste', component: CheckVorlageView, meta: { titel: 'Stammdaten: Checkliste Fertigung', bereich: 'stammdaten' } },
     { path: '/stammdaten/mail', component: MailEinstellungenView, meta: { titel: 'Stammdaten: Mail-Anbindung', bereich: 'stammdaten' } },
     { path: '/stammdaten/druckvorlagen', component: DruckvorlagenView, meta: { titel: 'Stammdaten: Druckvorlagen', bereich: 'stammdaten' } },
     { path: '/stammdaten/firma', component: FirmaView, meta: { titel: 'Stammdaten: Firma', bereich: 'stammdaten' } },

@@ -9,6 +9,7 @@ import CommandPalette from './components/CommandPalette.vue';
 import DropOverlay from './components/DropOverlay.vue';
 import Toasts from './components/Toasts.vue';
 import ZeitenDialog from './components/ZeitenDialog.vue';
+import CheckStartDialog from './components/CheckStartDialog.vue';
 import { useUi } from './stores/ui.js';
 import { useAngebot } from './stores/angebot.js';
 import { benutzer } from './data/repo.js';
@@ -110,6 +111,7 @@ useEventListener(window, 'keydown', (e) => {
     <CommandPalette :offen="ui.paletteOffen" :befehle="befehle" @schliessen="ui.paletteOffen = false" />
     <DropOverlay :titel="dropRechnung ? 'Rechnungen hier ablegen' : 'Dateien hier ablegen'" :text="dropRechnung ? 'PDF (auch ZUGFeRD) oder XML (XRechnung) – mehrere auf einmal möglich' : 'STEP und PDF mit gleichem Namen werden zu einem Bauteil'" @dateien="onDateien" />
     <ZeitenDialog />
+    <CheckStartDialog />
     <Toasts />
   </div>
 </template>

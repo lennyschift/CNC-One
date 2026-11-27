@@ -476,6 +476,9 @@ DOCTYPES += [
         Section("sb_notizen", "Prüfung und Notizen"),
         Text("pruefmasse", "Prüfmaße und Qualität"),
         Text("bemerkungen", "Bemerkungen Fertigung"),
+        Section("sb_check", "Checkliste vor dem Start"),
+        Json("checkliste", "Checkliste", description="Abgehakte Punkte (Material, Werkzeug, Messmittel …) und eigene Punkte dieses Bauteils"),
+        Data("checkliste_trotzdem", "Ohne vollständige Checkliste gestartet", read_only=1, description="Wer, wann, welche Punkte offen waren"),
         Section("sb_ags", "Arbeitsgänge und Buchungen"),
         Table("arbeitsgaenge", "Fertigungsarbeitsgang", "Arbeitsgänge"),
         Table("sendungen", "Fertigungssendung", "Sendungen (Fremdvergabe)"),
@@ -863,6 +866,9 @@ DOCTYPES += [
         Select("art", DOKUMENT_ARTEN, "Dokumentart", reqd=1, in_list_view=1),
         Int("jahre", "Jahre", in_list_view=1, description="0 = keine Aufbewahrungspflicht"),
         Data("grundlage", "Grundlage", in_list_view=1),
+    ]),
+    dict(name="Fertigung Einstellungen", rechte=[recht("System Manager", *ALLE), recht("CNC Admin", *ALLE), recht("CNC Fertigung", "read", "write"), recht("CNC Vertrieb", "read"), recht("CNC Buchhaltung", "read")], icon="list-checks", extra={"issingle": 1}, fields=[
+        Json("checkliste", "Checkliste vor dem Fertigungsstart", description="Feste Punkte für jedes Fertigungsbauteil: [{ id, text, hinweis, pflicht, aktiv }]"),
     ]),
     dict(name="Archiv Einstellungen", rechte=[recht("System Manager", *ALLE), recht("CNC Admin", *ALLE), recht("CNC Buchhaltung", "read", "write"), recht("CNC Vertrieb", "read"), recht("CNC Fertigung", "read")], icon="archive", extra={"issingle": 1}, fields=[
         Table("fristen", "Archiv Frist", "Aufbewahrungsfristen", description="Die Frist beginnt mit dem Schluss des Kalenderjahres, in dem das Dokument entstanden ist (§ 147 Abs. 4 AO)"),

@@ -37,6 +37,8 @@ class TestSerienLogik(UnitTestCase):
 
 class TestSerien(IntegrationTestCase):
 	def setUp(self):
+		# Checkliste vor dem Start in diesen Tests aus (eigener Test in test_fertigung)
+		fertigung.vorlage_checkliste_speichern([])
 		frappe.set_user("Administrator")
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Serienkunde"}).insert().name
 		b = bauteil.sicherstellen(self.kunde, "ZZ-S1", "Serienteil", "", "")

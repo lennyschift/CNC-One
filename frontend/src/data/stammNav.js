@@ -1,5 +1,5 @@
 // Die Bereiche unter "Stammdaten". Menü im Seitenstreifen, Übersicht und Reiter nutzen dieselbe Liste.
-import { Users, Package, Truck, Cog, Layers, ListTree, Building2, Mail, Archive, ListChecks, FileCode2, Network, ShieldCheck } from '@lucide/vue';
+import { Users, Package, Truck, Cog, Layers, ListTree, Building2, Mail, Archive, ListChecks, FileCode2, Network, ShieldCheck, ClipboardCheck } from '@lucide/vue';
 
 export const STAMM_PUNKTE = [
   { id: 'kunden', label: 'Kunden', icon: Users, to: '/stammdaten/kunden', text: 'Firmen mit Adressen, Ansprechpartnern und Steuerdaten', zaehler: 'kunden' },
@@ -14,5 +14,6 @@ export const STAMM_PUNKTE = [
   { id: 'druckvorlagen', label: 'Druckvorlagen', icon: FileCode2, to: '/stammdaten/druckvorlagen', text: 'PDF-Vorlagen der Belege ändern, mit Vorschau', zaehler: null },
   { id: 'archiv', label: 'Archiv', icon: Archive, to: '/stammdaten/archiv', text: 'Aufbewahrungsfristen der Dokumente', zaehler: null },
   { id: 'mail', label: 'Mail-Anbindung', icon: Mail, to: '/stammdaten/mail', text: 'Postfach, aus dem Anfragen geholt werden', zaehler: null },
+  { id: 'checkliste', label: 'Checkliste Fertigung', icon: ClipboardCheck, to: '/stammdaten/checkliste', text: 'Feste Punkte vor dem Fertigungsstart: Material, Werkzeug, Messmittel …', zaehler: null },
   { id: 'arbeitsgaenge', label: 'Arbeitsgänge und Vorlagen', icon: ListTree, to: '/stammdaten/arbeitsgaenge', text: 'Arbeitsgangarten und Vorlagen für Arbeitspläne', zaehler: 'vorlagen' },
 ];

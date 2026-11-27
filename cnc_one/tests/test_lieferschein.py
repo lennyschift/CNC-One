@@ -10,6 +10,8 @@ PLAN = [{"id": "p1", "name": "Drehen", "typ": "intern"}, {"id": "p2", "name": "P
 
 class TestLieferschein(IntegrationTestCase):
 	def setUp(self):
+		# Checkliste vor dem Start in diesen Tests aus (eigener Test in test_fertigung)
+		fertigung.vorlage_checkliste_speichern([])
 		frappe.set_user("Administrator")
 		self.kunde = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Lieferkunde"}).insert().name
 		self.andere = frappe.get_doc({"doctype": "Kunde", "kundenname": "ZZ Anderer Kunde"}).insert().name
