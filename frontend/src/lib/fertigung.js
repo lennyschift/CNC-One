@@ -73,6 +73,43 @@ export function arbeitsgangStatus(ag, menge) {
 
 // Die frei bearbeitbaren Felder eines Fertigungsbauteils (ohne Buchungsstand, Status und Sendungen).
 // Sie werden automatisch gespeichert; der Server übernimmt nur diese Felder.
+// Rohmaterial: Stand aus dem Lager (vom Server: ohne | entnommen | reserviert | lager | teilweise | fehlt) für Karte,
+// Liste und Kalender. Fertig melden geht erst, wenn feststeht, welches Material verwendet wurde.
+export const MATERIAL = {
+  reserviert: { kurz: 'Material reserviert', klasse: 'bg-ok/10 text-ok' },
+  lager: { kurz: 'Material im Lager', klasse: 'bg-ok/10 text-ok' },
+  teilweise: { kurz: 'Material teilweise', klasse: 'bg-warn/10 text-warn' },
+  fehlt: { kurz: 'Material fehlt', klasse: 'bg-accent-soft text-accent' },
+  entnommen: { kurz: 'Material entnommen', klasse: 'bg-surface2 text-mute' },
+  ohne: { kurz: 'Rohmaterial offen', klasse: 'bg-surface2 text-mute' },
+};
+const rohVollstaendig = (s) => !!(s?.werkstoff && s?.abmessungId && Number(s?.laenge) > 0);
+export const materialFehlt = (fb) => !!fb && rohVollstaendig(fb.roh?.spez) && !(fb.roh?.entnahmen ?? []).length && !fb.roh?.ohneLager;
+// Wird das Bauteil mit dieser Buchung fertig? (der letzte Arbeitsgang erreicht die Sollmenge)
+export function wirdFertig(fb, agId, menge) {
+  const ags = fb?.arbeitsgaenge ?? [];
+  const letzter = ags.at(-1);
+  return !!letzter && letzter.id === agId && letzter.gebucht + Number(menge || 0) >= fb.menge;
+}
+// Verbrauch einer Entnahme wie auf dem Server (logic/rohlager.py): Stangen/Platten raus, Reststück zurück
+export function entnahmeRechnen(charge, stueck, restLaenge = 0, restBreite = 0, menge = 0) {
+  const st = Math.floor(Number(stueck) || 0);
+  const platte = charge?.form === 'Platte';
+  const rl = Number(restLaenge) || 0, rb = Number(restBreite) || 0;
+  const verbraucht = platte ? st * num(charge?.laenge) * num(charge?.breite) - rl * rb : st * num(charge?.laenge) - rl;
+  return { verbraucht: Math.max(0, verbraucht), einheit: platte ? 'mm²' : 'mm', jeStueck: menge > 0 ? Math.max(0, verbraucht) / menge : 0 };
+}
+// Vorschlag: so viele Stangen/Platten, wie für die Menge nötig sind, und das Reststück, das übrig bleibt (nur Stangen)
+export function entnahmeVorschlag(charge, spez, menge) {
+  const je = Number(charge?.jeEinheit) || 0;
+  const stueck = je ? Math.min(Math.max(1, Math.ceil(menge / je)), charge.stueck || 1) : 1;
+  if (charge?.form === 'Platte' || !je) return { stueck, restLaenge: 0 };
+  const zuschnitt = num(spez?.laenge) + num(spez?.saege);
+  const rest = stueck * num(charge.laenge) - Math.min(menge, stueck * je) * zuschnitt;
+  // ein Rest unter einem Zuschnitt lohnt nicht zurück ins Lager
+  return { stueck, restLaenge: rest >= zuschnitt ? Math.floor(rest) : 0 };
+}
+
 // Checkliste vor dem Start: Pflichtpunkte, die noch nicht abgehakt sind, und der Stand (erledigt / alle)
 export const checkOffen = (fb) => (fb?.checkliste ?? []).filter((p) => p.pflicht && !p.erledigt);
 export const checkStand = (fb) => ({ erledigt: (fb?.checkliste ?? []).filter((p) => p.erledigt).length, alle: (fb?.checkliste ?? []).length });

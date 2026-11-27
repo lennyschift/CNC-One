@@ -2,6 +2,7 @@
 // Fertigung als Liste: ein Fertigungsbauteil je Zeile mit dem aktuellen Arbeitsgang, Maschine, Plan- und Liefertermin.
 import { Flame, AlertTriangle, Truck } from '@lucide/vue';
 import PartImage from './PartImage.vue';
+import MaterialChip from './MaterialChip.vue';
 import StatusBadge from './StatusBadge.vue';
 import { produziert, tageBis, zeitenFehlen } from '../lib/fertigung.js';
 
@@ -25,6 +26,7 @@ const terminFarbe = (fb) => {
           <th class="px-2 py-2.5 text-right font-semibold">Fortschritt</th>
           <th class="px-2 py-2.5 font-semibold">Aktueller Arbeitsgang</th>
           <th class="px-2 py-2.5 font-semibold">Geplant</th>
+          <th class="px-2 py-2.5 font-semibold">Material</th>
           <th class="px-2 py-2.5 font-semibold">Liefertermin</th>
           <th class="px-4 py-2.5 font-semibold">Status</th>
         </tr>
@@ -52,6 +54,7 @@ const terminFarbe = (fb) => {
             <div v-if="zeitenFehlen(fb).length" class="mt-0.5 inline-flex items-center gap-1 text-[11px] text-warn"><AlertTriangle :size="11" /> Zeiten fehlen</div>
           </td>
           <td class="px-2 py-2 tnum">{{ tag(aktuell(fb)?.geplantAm) }}</td>
+          <td class="px-2 py-2"><MaterialChip :fb="fb" /></td>
           <td class="px-2 py-2 tnum" :class="terminFarbe(fb)">{{ tag(fb.termin) }}</td>
           <td class="px-4 py-2"><StatusBadge :status="fb.status" /></td>
         </tr>

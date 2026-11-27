@@ -10,6 +10,7 @@ import DropOverlay from './components/DropOverlay.vue';
 import Toasts from './components/Toasts.vue';
 import ZeitenDialog from './components/ZeitenDialog.vue';
 import CheckStartDialog from './components/CheckStartDialog.vue';
+import MaterialEntnahmeDialog from './components/MaterialEntnahmeDialog.vue';
 import { useUi } from './stores/ui.js';
 import { useAngebot } from './stores/angebot.js';
 import { benutzer } from './data/repo.js';
@@ -112,6 +113,7 @@ useEventListener(window, 'keydown', (e) => {
     <DropOverlay :titel="dropRechnung ? 'Rechnungen hier ablegen' : 'Dateien hier ablegen'" :text="dropRechnung ? 'PDF (auch ZUGFeRD) oder XML (XRechnung) – mehrere auf einmal möglich' : 'STEP und PDF mit gleichem Namen werden zu einem Bauteil'" @dateien="onDateien" />
     <ZeitenDialog />
     <CheckStartDialog />
+    <MaterialEntnahmeDialog />
     <Toasts />
   </div>
 </template>

@@ -27,6 +27,7 @@ const props = defineProps({
   nurAnsicht: { type: Boolean, default: false },
   zeile: { type: Boolean, default: false }, // kompakt als Zeile der Kalkulationstabelle
   kundeId: { type: String, default: '' },
+  ohnePreis: { type: Boolean, default: false }, // Fertigung: keine Preise, kein Gewicht/Preis-Abschnitt
 });
 const ws = useWerkstoff();
 
@@ -154,7 +155,7 @@ const proStueck = computed(() => materialProStueck(props.teil));
         <div class="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg font-bold" :style="iso ? { background: iso.farbe, color: iso.schrift } : {}" :class="iso ? '' : 'border-2 border-dashed border-line text-mute'" :title="iso ? `ISO ${iso.code}: ${iso.name}` : 'ISO-Gruppe unbekannt'">{{ iso?.code ?? '?' }}</div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5"><span class="truncate font-medium" :class="teil.material ? '' : 'text-mute'">{{ artikel || 'Werkstoff wählen' }}</span><Pencil :size="12" class="shrink-0 text-mute opacity-0 transition group-hover:opacity-100" /></div>
-          <div class="truncate text-xs text-mute tnum">{{ rohText(roh) ? rohText(roh) + ' mm' : 'Abmessung und Zuschnitt fehlen' }} · {{ kg(teil.gewichtKg || 0) }} × {{ eur(teil.materialPreisKg || 0) }}/kg</div>
+          <div class="truncate text-xs text-mute tnum">{{ rohText(roh) ? rohText(roh) + ' mm' : 'Abmessung und Zuschnitt fehlen' }}<template v-if="!ohnePreis"> · {{ kg(teil.gewichtKg || 0) }} × {{ eur(teil.materialPreisKg || 0) }}/kg</template></div>
           <div v-if="anf.zeugnis || anf.pruefungen?.length || roh.ausLager" class="mt-1 flex flex-wrap gap-1">
             <span v-if="anf.zeugnis" class="chip !text-[10px]"><FileBadge :size="11" /> {{ zeugnisKurz(anf.zeugnis) }}</span>
             <span v-for="p in anf.pruefungen" :key="p" class="chip !text-[10px]"><ShieldCheck :size="11" /> {{ p }}</span>
@@ -180,10 +181,10 @@ const proStueck = computed(() => materialProStueck(props.teil));
             <div class="truncate text-base font-semibold" :class="teil.material ? '' : 'text-mute'">{{ artikel || 'Werkstoff wählen' }}</div>
             <div class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-mute">
               <span v-if="rohText(roh)" class="font-medium text-ink tnum">{{ rohText(roh) }} mm</span><span v-else>Abmessung und Zuschnitt fehlen</span>
-              <span class="tnum">{{ kg(teil.gewichtKg || 0) }} × {{ eur(teil.materialPreisKg || 0) }}/kg</span>
+              <span v-if="!ohnePreis" class="tnum">{{ kg(teil.gewichtKg || 0) }} × {{ eur(teil.materialPreisKg || 0) }}/kg</span>
             </div>
           </div>
-          <div class="shrink-0 text-right"><div class="label">je Stück</div><div class="text-xl font-semibold tnum">{{ eur(proStueck) }}</div></div>
+          <div v-if="!ohnePreis" class="shrink-0 text-right"><div class="label">je Stück</div><div class="text-xl font-semibold tnum">{{ eur(proStueck) }}</div></div>
         </div>
       </div>
     </template>
@@ -200,7 +201,8 @@ const proStueck = computed(() => materialProStueck(props.teil));
                 <h2 class="truncate text-base font-semibold">{{ artikel || 'Rohmaterial' }}</h2>
                 <p class="truncate text-xs text-mute">{{ teil.name || 'Bauteil' }}<template v-if="teil.teilenummer"> · {{ teil.teilenummer }}</template><template v-if="stamm?.kurz"> · {{ stamm.kurz }}</template></p>
               </div>
-              <div class="ml-auto text-right"><div class="label">je Stück</div><div class="text-lg font-semibold tnum">{{ eur(proStueck) }}</div></div>
+              <div v-if="!ohnePreis" class="ml-auto text-right"><div class="label">je Stück</div><div class="text-lg font-semibold tnum">{{ eur(proStueck) }}</div></div>
+              <div v-else class="ml-auto" />
               <button type="button" class="grid h-8 w-8 place-items-center rounded-lg text-mute hover:bg-surface2" title="Schließen" @click="offen = false"><X :size="18" /></button>
             </header>
 
@@ -231,7 +233,7 @@ const proStueck = computed(() => materialProStueck(props.teil));
                 </section>
 
                 <!-- Gewicht und Preis -->
-                <section class="grid gap-3 sm:grid-cols-2">
+                <section v-if="!ohnePreis" class="grid gap-3 sm:grid-cols-2">
                   <div>
                     <div class="mb-1 flex items-center justify-between gap-2"><span class="label">Gewicht je Stück</span><Toggle v-model="teil.roh.gewichtAuto" klein label="aus Maßen" /></div>
                     <div v-if="roh.gewichtAuto" class="field flex items-center justify-between !bg-surface2 tnum">
@@ -286,7 +288,7 @@ const proStueck = computed(() => materialProStueck(props.teil));
             </div>
 
             <footer class="flex items-center gap-2 border-t border-line bg-surface2 px-6 py-3">
-              <span class="text-xs text-mute tnum">{{ kg(teil.gewichtKg || 0) }} × {{ eur(teil.materialPreisKg || 0) }}/kg = {{ eur(proStueck) }} je Stück</span>
+              <span v-if="!ohnePreis" class="text-xs text-mute tnum">{{ kg(teil.gewichtKg || 0) }} × {{ eur(teil.materialPreisKg || 0) }}/kg = {{ eur(proStueck) }} je Stück</span>
               <button type="button" class="btn btn-primary ml-auto" @click="offen = false"><Check :size="15" /> Fertig</button>
             </footer>
           </div>

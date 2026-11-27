@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Truck, Cog, CalendarClock, Flame, AlertTriangle, ListChecks } from '@lucide/vue';
 import PartImage from './PartImage.vue';
+import MaterialChip from './MaterialChip.vue';
 import ProjektMarke from './ProjektMarke.vue';
 import { useBelege } from '../stores/belege.js';
 import { bereichText } from '../lib/serien.js';
@@ -62,6 +63,7 @@ const weg = computed(() => props.fb.arbeitsgaenge.some((a) => a.typ === 'fremd' 
       <span class="inline-flex shrink-0 items-center gap-1 text-[11px]" :class="terminFarbe"><CalendarClock :size="12" />{{ terminText }}</span>
     </div>
     <div v-if="weg" class="mt-2 inline-flex items-center gap-1 rounded-md bg-surface2 px-2 py-0.5 text-[11px] text-warn"><Truck :size="11" /> Beim Lieferanten</div>
+    <MaterialChip :fb="fb" class="mr-1 mt-2" />
     <div v-if="fb.status === 'Offen' && checkStand(fb).alle" class="mr-1 mt-2 inline-flex items-center gap-1 rounded-md bg-surface2 px-2 py-0.5 text-[11px] tnum" :class="checkOffen(fb).length ? 'text-warn' : 'text-ok'" :title="checkOffen(fb).length ? `Vor dem Start noch offen: ${checkOffen(fb).map((p) => p.text).join(', ')}` : 'Checkliste erledigt, bereit zum Start'"><ListChecks :size="11" /> {{ checkStand(fb).erledigt }}/{{ checkStand(fb).alle }}</div>
     <div v-if="zeitenFehlen(fb).length" class="ml-1 mt-2 inline-flex items-center gap-1 rounded-md bg-surface2 px-2 py-0.5 text-[11px] text-warn"><AlertTriangle :size="11" /> Zeiten fehlen</div>
   </RouterLink>

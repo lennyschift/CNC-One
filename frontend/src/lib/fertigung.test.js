@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planAus, felderVon, leererArbeitsgang, produziert, fortschritt, ueberproduktion, nachzuholen, fremdGebucht, nochNichtGesendet, arbeitsgangStatus, autoStatus, restMinuten, lasten, tageBis, checkOffen, checkStand, startPruefen } from './fertigung.js';
+import { planAus, felderVon, leererArbeitsgang, produziert, fortschritt, ueberproduktion, nachzuholen, fremdGebucht, nochNichtGesendet, arbeitsgangStatus, autoStatus, restMinuten, lasten, tageBis, checkOffen, checkStand, startPruefen, materialFehlt, wirdFertig, entnahmeRechnen, entnahmeVorschlag } from './fertigung.js';
 
 const ag = (extra = {}) => ({ id: 'a', name: 'Fertigen', typ: 'intern', maschine: 'CTX400', ruestMin: 30, stueckMin: 2, status: 'Offen', gebucht: 0, lieferant: '', fremdStatus: '', ...extra });
 const fb = (extra = {}) => ({ id: 'f', menge: 10, status: 'Offen', termin: '', arbeitsgaenge: [ag()], ...extra });
@@ -107,5 +107,29 @@ describe('Checkliste vor dem Start', () => {
     expect(startPruefen(fb('Offen', L), 'Offen')).toBe(false);
     expect(startPruefen(fb('In Fertigung', L))).toBe(false);
     expect(startPruefen(fb('Offen', L.map((p) => ({ ...p, erledigt: true }))))).toBe(false);
+  });
+});
+
+describe('Rohmaterial in der Fertigung', () => {
+  const spez = { werkstoff: 'ZZ 7075', abmessungId: 'a1', laenge: 82, saege: 3 };
+  it('Material fehlt beim Fertigmelden nur mit vollständigem Rohteil und ohne Entnahme', () => {
+    expect(materialFehlt({ roh: { spez, entnahmen: [] } })).toBe(true);
+    expect(materialFehlt({ roh: { spez, entnahmen: [{ id: 'e' }] } })).toBe(false);
+    expect(materialFehlt({ roh: { spez, entnahmen: [], ohneLager: 'Beistellung' } })).toBe(false);
+    expect(materialFehlt({ roh: { spez: { werkstoff: 'X' }, entnahmen: [] } })).toBe(false);
+  });
+  it('fertig wird es mit der Buchung des letzten Arbeitsgangs bis zur Sollmenge', () => {
+    const fb = { menge: 10, arbeitsgaenge: [{ id: 'a', gebucht: 10 }, { id: 'b', gebucht: 6 }] };
+    expect(wirdFertig(fb, 'b', 4)).toBe(true);
+    expect(wirdFertig(fb, 'b', 3)).toBe(false);
+    expect(wirdFertig(fb, 'a', 5)).toBe(false);
+  });
+  it('Verbrauch und Vorschlag einer Entnahme', () => {
+    const stange = { form: 'Rund', laenge: 3000, stueck: 2, jeEinheit: 35 };
+    expect(entnahmeRechnen(stange, 1, 2100, 0, 10)).toEqual({ verbraucht: 900, einheit: 'mm', jeStueck: 90 });
+    expect(entnahmeVorschlag(stange, spez, 10)).toEqual({ stueck: 1, restLaenge: 2150 });
+    expect(entnahmeVorschlag(stange, spez, 50).stueck).toBe(2);
+    const platte = { form: 'Platte', laenge: 1000, breite: 500, stueck: 1 };
+    expect(entnahmeRechnen(platte, 1, 400, 500, 4).verbraucht).toBe(300000);
   });
 });

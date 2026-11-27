@@ -5,6 +5,7 @@
 import { ref, computed } from 'vue';
 import { ChevronLeft, ChevronRight, CalendarDays, Inbox, Flame } from '@lucide/vue';
 import PartImage from './PartImage.vue';
+import MaterialChip from './MaterialChip.vue';
 import { useFertigung } from '../stores/fertigung.js';
 import { useUi } from '../stores/ui.js';
 import { alleArbeitsgaenge, restMinuten, maschinenFuer, tagIso, wocheVon, tageAb, kw } from '../lib/fertigung.js';
@@ -90,6 +91,7 @@ const kopfTag = (d) => d.toLocaleDateString('de-DE', { weekday: 'short', day: '2
           <div class="min-w-0 flex-1">
             <div class="truncate text-xs font-medium">{{ e.fb.teil.name }}</div>
             <div class="truncate text-[10px] text-mute">{{ e.ag.name }} · {{ e.ag.maschine || 'Maschine offen' }} · {{ stunden(restMinuten(e.ag, e.fb.menge)) }} h</div>
+            <MaterialChip :fb="e.fb" klein />
           </div>
           <span v-if="e.fb.termin" class="text-[10px] text-mute tnum">{{ new Date(e.fb.termin).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) }}</span>
         </div>
@@ -124,6 +126,7 @@ const kopfTag = (d) => d.toLocaleDateString('de-DE', { weekday: 'short', day: '2
               <RouterLink v-for="e in zelle(m.name, tagIso(d))" :key="e.ag.id" :to="`/fertigung/${e.fb.id}`" class="eintrag" :class="spaet(e) ? 'spaet' : ''" draggable="true" :title="`${e.fb.teil.name} · ${e.ag.name} · ${stunden(restMinuten(e.ag, e.fb.menge))} h${spaet(e) ? ' · nach dem Liefertermin!' : ''}`" @dragstart="ziehen($event, e)">
                 <span class="flex items-center gap-1 truncate font-medium"><Flame v-if="e.fb.prioritaet !== 'Normal'" :size="10" class="shrink-0 text-accent" />{{ e.fb.teil.name }}</span>
                 <span class="block truncate text-[10px] opacity-70">{{ e.ag.name }} · {{ stunden(restMinuten(e.ag, e.fb.menge)) }} h · {{ e.fb.menge - e.ag.gebucht }} Stk</span>
+                <MaterialChip v-if="e.fb.roh && !['lager', 'reserviert', 'entnommen'].includes(e.fb.roh.status)" :fb="e.fb" klein />
               </RouterLink>
               <div v-if="m.stundenTag && minuten(m.name, tagIso(d))" class="mt-0.5 text-right text-[10px] text-mute tnum">{{ stunden(minuten(m.name, tagIso(d))) }}/{{ zahl(m.stundenTag, 0) }} h</div>
             </div>

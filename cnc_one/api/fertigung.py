@@ -11,6 +11,7 @@ from cnc_one.api.stamm import arbeitsgang_ui, arbeitsgang_zeile, ist_serienart, 
 from frappe.utils import now_datetime
 
 from cnc_one.logic import checkliste as check
+from cnc_one.logic import rohlager
 from cnc_one.logic.daten import als_json, datum, iso
 
 FERTIGUNG_ROLLEN = ("CNC Admin", "CNC Vertrieb", "CNC Fertigung", "System Manager")
@@ -74,10 +75,180 @@ def fb_ui(d):
 			"werkstoff": d.roh_werkstoff or "", "charge": d.roh_charge or "", "lagerplatz": d.roh_lagerplatz or "",
 			"info": d.roh_info or "", "verbrauchtMm": d.roh_verbraucht_mm or 0,
 		},
+		"roh": _roh_ui(d),
 		"notizen": {"pruefmasse": d.pruefmasse or "", "bemerkungen": d.bemerkungen or ""},
 		"checkliste": _checkliste(d),
 		"checklisteTrotzdem": d.checkliste_trotzdem or "",
 	}
+
+
+# ----------------------------------------------------------------- Rohmaterial aus dem Lager
+def _chargen():
+	"""Vorrätige Chargen (einmal je Anfrage)."""
+	if not hasattr(frappe.local, "cnc_chargen"):
+		from cnc_one.api.werkstoff import charge_ui
+
+		namen = frappe.get_all("Rohmaterialcharge", filters={"status": "Vorrätig"}, pluck="name", order_by="eingang asc, creation asc")
+		frappe.local.cnc_chargen = [charge_ui(frappe.get_doc("Rohmaterialcharge", n)) for n in namen]
+	return frappe.local.cnc_chargen
+
+
+def _chargen_vergessen():
+	"""Zwischenstände dieser Anfrage (Chargen, Material-Anfragen, Checkliste) verwerfen."""
+	for k in ("cnc_chargen", "cnc_material_angefragt", "cnc_checkliste_vorlage"):
+		if hasattr(frappe.local, k):
+			delattr(frappe.local, k)
+
+
+def _angefragt(d):
+	"""Gibt es eine Material-Anfrage an Lieferanten zum Angebot dieses Auftrags (noch offen oder beantwortet)?"""
+	if not hasattr(frappe.local, "cnc_material_angefragt"):
+		frappe.local.cnc_material_angefragt = set(frappe.get_all("Lieferantenanfrage", filters={"art": "Material", "status": ["in", ["Gesendet", "Angebot erhalten"]], "angebot": ["is", "set"]}, pluck="angebot"))
+	angebot = frappe.db.get_value("Auftrag", d.auftrag, "angebot") if d.auftrag else None
+	return bool(angebot and angebot in frappe.local.cnc_material_angefragt)
+
+
+def _spez(d):
+	"""Rohteil des Fertigungsbauteils; ältere Bauteile holen es einmal aus der Workbench-Kalkulation des Angebots."""
+	if d.roh_spez:
+		return als_json(d.roh_spez) or {}
+	spez = {}
+	if d.auftrag and d.auftragsposition_key and frappe.db.exists("Auftrag", d.auftrag):
+		auf = frappe.get_doc("Auftrag", d.auftrag)
+		pos = next((p for p in auf.positionen if p.position_key == d.auftragsposition_key), None)
+		if pos:
+			spez = spez_aus_teil(auftrag_api.teil_fuer_position(auf, pos), pos.material)
+	if d.name and not d.is_new():
+		frappe.db.set_value("Fertigungsbauteil", d.name, "roh_spez", frappe.as_json(spez), update_modified=False)
+	d.roh_spez = frappe.as_json(spez)
+	return spez
+
+
+def spez_aus_teil(teil, material=""):
+	"""Rohteil aus der Workbench (teil.roh) ohne Preise und Gewichte, dazu der Werkstoff."""
+	roh = (teil or {}).get("roh") or {}
+	felder = ("form", "abmessungId", "abmessung", "zustand", "ausfuehrung", "laenge", "breite", "saege", "anforderungen", "zeugnis")
+	spez = {k: roh[k] for k in felder if roh.get(k) not in (None, "")}
+	werkstoff = (teil or {}).get("material") or material or ""
+	if werkstoff:
+		spez["werkstoff"] = werkstoff
+	return spez
+
+
+def _roh_ui(d):
+	spez = _spez(d)
+	entnahmen = als_json(d.roh_entnahmen) if d.roh_entnahmen else []
+	st = rohlager.stand(spez, d.menge or 0, _chargen(), d.roh_charge or "", entnahmen, _angefragt(d) if spez else False)
+	return {
+		"spez": spez, "gewaehlt": d.roh_charge or "", "entnahmen": entnahmen, "ohneLager": d.roh_ohne_lager or "",
+		"status": st["status"], "text": st["text"], "teile": st["teile"],
+		"passend": [
+			{k: c[k] for k in ("id", "chargennr", "lieferant", "form", "laenge", "breite", "stueck", "zeugnis", "pruefungen", "lagerplatz", "eingang", "zustand", "abmessungText", "reicht", "jeEinheit", "ok", "fehlt")}
+			for c in st["passend"]
+		],
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def roh_setzen(id, spez=None, charge=None):
+	"""Rohteil in der Fertigung ändern (Auswahl wie in der Workbench) und/oder die Charge wählen, die genommen wird."""
+	doc = _laden(id)
+	if spez is not None:
+		spez = frappe.parse_json(spez) if isinstance(spez, str) else spez
+		sauber = spez_aus_teil({"roh": spez, "material": spez.get("werkstoff")})
+		doc.roh_spez = frappe.as_json(sauber)
+		doc.roh_werkstoff = sauber.get("werkstoff", "")
+		from cnc_one.api.werkstoff import roh_angaben
+
+		doc.roh_info = roh_angaben({"roh": sauber})[0]
+	if charge is not None:
+		if charge and not frappe.db.exists("Rohmaterialcharge", charge):
+			frappe.throw(_("Diese Charge gibt es nicht."))
+		doc.roh_charge = charge or ""
+		doc.roh_lagerplatz = frappe.db.get_value("Rohmaterialcharge", charge, "lagerplatz") or "" if charge else ""
+	doc.save()
+	return _antwort(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def material_entnehmen(id, charge, stueck, rest_laenge=0, rest_breite=0, menge=0, notiz=""):
+	"""Material aus dem Lager nehmen: `stueck` Stangen/Platten der Charge, ein Reststück geht als eigener Lagerposten
+	(gleiche Chargennummer, Zeugnis, Lagerplatz) zurück. Am Fertigungsbauteil steht danach, was genau verwendet wurde."""
+	doc = _laden(id)
+	c = frappe.get_doc("Rohmaterialcharge", charge)
+	if c.status != "Vorrätig":
+		frappe.throw(_("Die Charge {0} ist aufgebraucht.").format(c.name))
+	menge = frappe.utils.cint(menge) or doc.menge or 0
+	try:
+		r = rohlager.entnahme_rechnen({"form": c.form, "laenge": c.laenge, "breite": c.breite, "stueck": c.stueck}, stueck, rest_laenge, rest_breite, menge)
+	except ValueError as e:
+		frappe.throw(str(e))
+	stueck = frappe.utils.cint(stueck)
+	rest_l, rest_b = frappe.utils.flt(rest_laenge), frappe.utils.flt(rest_breite)
+	c.stueck = (c.stueck or 0) - stueck
+	if c.stueck <= 0:
+		c.stueck = 0
+		c.status = "Aufgebraucht"
+	c.save(ignore_permissions=True)
+	rest_id = ""
+	if rest_l > 0:
+		rest = frappe.copy_doc(c)
+		rest.update({"stueck": 1, "laenge": rest_l, "breite": rest_b if c.form == "Platte" else c.breite, "status": "Vorrätig",
+			"bemerkung": _("Reststück aus {0} ({1})").format(c.name, doc.name)})
+		rest.insert(ignore_permissions=True)
+		rest_id = rest.name
+	entnahmen = als_json(doc.roh_entnahmen) if doc.roh_entnahmen else []
+	entnahmen.append({
+		"id": frappe.generate_hash(length=8), "charge": c.name, "chargennr": c.chargennr or "", "lieferant": c.lieferant or "", "zeugnis": c.zeugnis or "",
+		"form": c.form, "abmessung": c.abmessung_text or "", "stueck": stueck, "laenge": c.laenge or 0, "breite": c.breite or 0,
+		"restLaenge": rest_l, "restBreite": rest_b, "restCharge": rest_id, "menge": menge, **r,
+		"notiz": (notiz or "").strip()[:200], "von": frappe.utils.get_fullname(frappe.session.user), "am": iso(now_datetime()),
+	})
+	doc.roh_entnahmen = frappe.as_json(entnahmen)
+	doc.roh_charge = c.name
+	doc.roh_lagerplatz = c.lagerplatz or ""
+	doc.roh_verbraucht_mm = sum(frappe.utils.flt(e.get("verbraucht")) for e in entnahmen if e.get("einheit") == "mm")
+	doc.save()
+	_chargen_vergessen()
+	return _antwort(doc)
+
+
+@frappe.whitelist(methods=["POST"])
+def entnahme_zurueck(id, entnahme):
+	"""Entnahme rückgängig (falsche Charge gebucht): Stangen/Platten zurück in die Charge, ein unbenutztes Reststück weg."""
+	doc = _laden(id)
+	entnahmen = als_json(doc.roh_entnahmen) if doc.roh_entnahmen else []
+	e = next((x for x in entnahmen if x.get("id") == entnahme), None)
+	if not e:
+		frappe.throw(_("Diese Entnahme gibt es nicht."))
+	if e.get("restCharge") and frappe.db.exists("Rohmaterialcharge", e["restCharge"]):
+		rest = frappe.get_doc("Rohmaterialcharge", e["restCharge"])
+		if rest.status != "Vorrätig" or (rest.stueck or 0) < 1:
+			frappe.throw(_("Das Reststück {0} wurde schon verwendet, die Entnahme lässt sich nicht zurücknehmen.").format(rest.name))
+		frappe.delete_doc("Rohmaterialcharge", rest.name, ignore_permissions=True)
+	c = frappe.get_doc("Rohmaterialcharge", e["charge"])
+	c.stueck = (c.stueck or 0) + int(e.get("stueck") or 0)
+	c.status = "Vorrätig"
+	c.save(ignore_permissions=True)
+	entnahmen = [x for x in entnahmen if x.get("id") != entnahme]
+	doc.roh_entnahmen = frappe.as_json(entnahmen)
+	doc.roh_verbraucht_mm = sum(frappe.utils.flt(x.get("verbraucht")) for x in entnahmen if x.get("einheit") == "mm")
+	doc.save()
+	_chargen_vergessen()
+	return _antwort(doc)
+
+
+def _material_pruefen(doc, vorher_status, ohne_material):
+	"""Fertig gemeldet (Status oder letzte Buchung): spätestens jetzt muss feststehen, welches Material verwendet wurde."""
+	if doc.status != "Fertig" or vorher_status == "Fertig":
+		return
+	spez = _spez(doc)
+	if not rohlager.spez_vollstaendig(spez) or (als_json(doc.roh_entnahmen) if doc.roh_entnahmen else []):
+		return
+	grund = (ohne_material or "").strip() if isinstance(ohne_material, str) else ""
+	if not grund:
+		frappe.throw(_("Bitte vor dem Fertigmelden angeben, welches Material verwendet wurde (Entnahme aus dem Lager)."), title=_("Material fehlt"))
+	doc.roh_ohne_lager = _("{0} ({1}, {2})").format(grund, frappe.utils.get_fullname(frappe.session.user), now_datetime().strftime("%d.%m.%Y"))[:140]
 
 
 # ----------------------------------------------------------------- Checkliste vor dem Start
@@ -178,6 +349,7 @@ def _start_pruefen(doc, trotzdem):
 
 
 def alle_ui():
+	_chargen_vergessen()
 	namen = frappe.get_list("Fertigungsbauteil", pluck="name", order_by="creation asc", limit_page_length=0)
 	return [fb_ui(frappe.get_doc("Fertigungsbauteil", n)) for n in namen]
 
@@ -195,6 +367,7 @@ def _antwort(doc):
 
 def _laden(id):
 	_nur_fertigung()
+	_chargen_vergessen()
 	doc = frappe.get_doc("Fertigungsbauteil", id)
 	doc.check_permission("write")
 	return doc
@@ -205,7 +378,8 @@ def fb_anlegen(auf, pos):
 	"""Fertigungsbauteil zu einer Auftragsposition (auch für eine Position, die eine Auftragsänderung später dazunimmt).
 	Liefert, ob es einen Arbeitsplan gab."""
 	plan = auftrag_api.plan_fuer_position(auf, pos)
-	roh_info, roh_charge, roh_platz = roh_angaben(auftrag_api.teil_fuer_position(auf, pos))
+	teil = auftrag_api.teil_fuer_position(auf, pos)
+	roh_info, roh_charge, roh_platz = roh_angaben(teil)
 	fb = frappe.new_doc("Fertigungsbauteil")
 	fb.update({
 		"auftrag": auf.name, "auftragsposition_key": pos.position_key, "bauteil": pos.bauteil or None,
@@ -213,6 +387,7 @@ def fb_anlegen(auf, pos):
 		"bezeichnung": pos.bezeichnung, "zeichnungsnr": pos.zeichnungsnr, "revision": pos.revision or "", "material": pos.material,
 		"menge": pos.menge, "termin": pos.liefertermin, "prioritaet": "Normal", "status": "Offen",
 		"roh_werkstoff": pos.material or "", "roh_info": roh_info, "roh_charge": roh_charge, "roh_lagerplatz": roh_platz,
+		"roh_spez": frappe.as_json(spez_aus_teil(teil, pos.material)),
 		"serien_von": pos.serien_von or None, "serien_bis": pos.serien_bis or None, "serien_stellen": pos.serien_stellen or 4,
 	})
 	for a in plan:
@@ -226,6 +401,7 @@ def fb_anlegen(auf, pos):
 def starten(auftrag):
 	"""Legt je Auftragsposition ein Fertigungsbauteil an. Der Arbeitsplan darf fehlen und kommt dann später in der Fertigung."""
 	_nur_fertigung()
+	_chargen_vergessen()
 	auf = frappe.get_doc("Auftrag", auftrag)
 	if frappe.db.exists("Fertigungsbauteil", {"auftrag": auftrag}):
 		frappe.throw(_("Für diesen Auftrag läuft die Fertigung schon."))
@@ -284,13 +460,15 @@ def zeiten_melden(id, zeiten):
 
 # ----------------------------------------------------------------- Buchen
 @frappe.whitelist(methods=["POST"])
-def buchen(id, ag_id, menge, zeiten=None, trotzdem=0):
+def buchen(id, ag_id, menge, zeiten=None, trotzdem=0, ohne_material=""):
 	doc = _laden(id)
 	_start_pruefen(doc, trotzdem)
+	status_vorher = doc.status
 	vorher = _fertige(doc)
 	_zeiten_setzen(doc, zeiten)
 	nachgeholt = doc.buchen(ag_id, menge)
 	_zeiten_pruefen(doc, vorher)
+	_material_pruefen(doc, status_vorher, ohne_material)
 	doc.save()
 	return {**_antwort(doc), "nachgeholt": nachgeholt, "ueberproduktion": doc.ueberproduktion}
 
@@ -389,14 +567,16 @@ def sendung_loeschen(id, ag_id, sendung):
 
 # ----------------------------------------------------------------- Status und Felder
 @frappe.whitelist(methods=["POST"])
-def status_setzen(id, status, zeiten=None, trotzdem=0):
+def status_setzen(id, status, zeiten=None, trotzdem=0, ohne_material=""):
 	doc = _laden(id)
 	if status != "Offen":
 		_start_pruefen(doc, trotzdem)
+	status_vorher = doc.status
 	vorher = _fertige(doc)
 	_zeiten_setzen(doc, zeiten)
 	doc.status_setzen(status)
 	_zeiten_pruefen(doc, vorher)
+	_material_pruefen(doc, status_vorher, ohne_material)
 	doc.save()
 	return _antwort(doc)
 

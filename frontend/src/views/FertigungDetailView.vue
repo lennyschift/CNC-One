@@ -6,6 +6,7 @@ import { ArrowLeft, Hash, Cog, Truck, Timer, AlertTriangle, ChevronUp, ChevronDo
 import PartImage from '../components/PartImage.vue';
 import BauteilDateienAnsicht from '../components/BauteilDateienAnsicht.vue';
 import FertigungCheckliste from '../components/FertigungCheckliste.vue';
+import FertigungMaterial from '../components/FertigungMaterial.vue';
 import NumField from '../components/NumField.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import { repo } from '../data/repo.js';
@@ -245,22 +246,7 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
       <!-- Rechte Spalte -->
       <aside class="space-y-4">
         <FertigungCheckliste :fb="fb" />
-        <section class="card p-5">
-          <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><Layers :size="16" class="text-accent" /> Rohmaterial</h3>
-          <div class="flex gap-3">
-            <PartImage art="material" :groesse="64" />
-            <div class="min-w-0 flex-1">
-              <div class="font-medium">{{ fb.rohmaterial.werkstoff || 'Kein Rohmaterial' }}</div>
-              <div class="text-xs text-mute">Bedarf für {{ fb.menge }} Stk</div>
-            </div>
-          </div>
-          <div class="mt-4 grid grid-cols-2 gap-3">
-            <label class="block"><span class="label mb-1 block">Charge</span><input v-model="fb.rohmaterial.charge" class="field" placeholder="z. B. 24-0815" /></label>
-            <label class="block"><span class="label mb-1 block">Lagerplatz</span><input v-model="fb.rohmaterial.lagerplatz" class="field" placeholder="z. B. R2-04" /></label>
-            <NumField v-model="fb.rohmaterial.verbrauchtMm" label="Verbrauchte Länge" unit="mm" :decimals="0" />
-            <label class="block"><span class="label mb-1 block">Info (Maß, Länge)</span><input v-model="fb.rohmaterial.info" class="field" placeholder="z. B. Ø30 × 3000" /></label>
-          </div>
-        </section>
+        <FertigungMaterial :fb="fb" />
 
         <section class="card p-5">
           <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><NotebookPen :size="16" class="text-accent" /> Prüfung und Notizen</h3>

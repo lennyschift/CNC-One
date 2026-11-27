@@ -30,6 +30,9 @@
   "roh_lagerplatz",
   "roh_info",
   "roh_verbraucht_mm",
+  "roh_spez",
+  "roh_entnahmen",
+  "roh_ohne_lager",
   "sb_notizen",
   "pruefmasse",
   "bemerkungen",
@@ -198,6 +201,25 @@
    "fieldname": "roh_verbraucht_mm",
    "fieldtype": "Float",
    "label": "Verbrauchte Länge (mm)"
+  },
+  {
+   "fieldname": "roh_spez",
+   "fieldtype": "JSON",
+   "label": "Rohteil",
+   "description": "Werkstoff, Zustand, Form, Abmessung, Ausführung, Zuschnitt und Anforderungen (aus der Workbench, in der Fertigung änderbar)"
+  },
+  {
+   "fieldname": "roh_entnahmen",
+   "fieldtype": "JSON",
+   "label": "Entnahmen aus dem Lager",
+   "description": "Je Entnahme: Charge, Stangen/Platten, Reststück zurück, Verbrauch gesamt und je Stück"
+  },
+  {
+   "fieldname": "roh_ohne_lager",
+   "fieldtype": "Data",
+   "label": "Ohne Lagerentnahme fertig gemeldet",
+   "read_only": 1,
+   "description": "z. B. Beistellung des Kunden"
   },
   {
    "fieldname": "sb_notizen",

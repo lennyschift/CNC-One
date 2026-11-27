@@ -41,6 +41,66 @@ class TestFertigung(IntegrationTestCase):
 		"""Ist-Zeiten für alle internen Arbeitsgänge (beim Abschließen Pflicht)."""
 		return [{"agId": a["id"], "ruestMin": ruest, "bearbMin": bearb} for a in fb["arbeitsgaenge"] if a["typ"] == "intern"]
 
+	# ------------------------------------------------------------- Rohmaterial aus dem Lager
+	def roh_vorbereiten(self):
+		from cnc_one.api import werkstoff
+
+		werkstoff.werkstoff_anlegen("ZZ 7075", "N", formen=["Rund"])
+		abm = werkstoff.abmessung_hinzu("Rund", 41)
+		gut = werkstoff.charge_speichern({"werkstoff": "ZZ 7075", "abmessung": abm["id"], "chargennr": "ZZ-S1", "laenge": 3000, "stueck": 2, "zeugnis": "3.1", "lagerplatz": "ZZ-R1"})
+		ohne = werkstoff.charge_speichern({"werkstoff": "ZZ 7075", "abmessung": abm["id"], "chargennr": "ZZ-S2", "laenge": 3000, "stueck": 5})
+		roh = {"form": "Rund", "abmessungId": abm["id"], "abmessung": "Ø41", "laenge": 82, "saege": 3, "anforderungen": {"zeugnis": "3.1", "pruefungen": []}, "gewichtAuto": True}
+		t = teil("t1", teilenummer="ZZ-F1", material="ZZ 7075", roh=roh)
+		fb = fertigung.starten(self.auftrag([PLAN[0]], 10, teile=[t])["id"])["fertigung"][0]
+		return fb, gut, ohne
+
+	def test_rohmaterial_lagerstand_entnahme_und_fertigmelden(self):
+		fb, gut, ohne = self.roh_vorbereiten()
+		r = fb["roh"]
+		self.assertEqual(r["spez"]["werkstoff"], "ZZ 7075")
+		self.assertNotIn("gewichtAuto", r["spez"])
+		self.assertEqual(r["status"], "lager")
+		# die Charge mit Zeugnis 3.1 zuerst, die ohne Zeugnis erfüllt die Anforderung nicht
+		self.assertEqual([c["id"] for c in r["passend"]], [gut["id"], ohne["id"]])
+		self.assertEqual(r["passend"][0]["reicht"], 70)  # 3000 // 85 = 35 je Stange, 2 Stangen
+		self.assertEqual(r["passend"][1]["fehlt"], ["Zeugnis 3.1"])
+		fb = fertigung.roh_setzen(fb["id"], charge=gut["id"])["fb"]
+		self.assertEqual((fb["roh"]["status"], fb["rohmaterial"]["lagerplatz"]), ("reserviert", "ZZ-R1"))
+
+		# fertig melden geht erst, wenn feststeht, welches Material verwendet wurde
+		drehen = fb["arbeitsgaenge"][0]["id"]
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.buchen(fb["id"], drehen, 10, self.zeiten(fb))
+		fb = fertigung.material_entnehmen(fb["id"], gut["id"], 1, rest_laenge=2100, notiz="ZZ")["fb"]
+		e = fb["roh"]["entnahmen"][0]
+		self.assertEqual((e["charge"], e["stueck"], e["verbraucht"], e["jeStueck"], e["einheit"]), (gut["id"], 1, 900, 90, "mm"))
+		self.assertEqual(fb["roh"]["status"], "entnommen")
+		self.assertEqual(frappe.db.get_value("Rohmaterialcharge", gut["id"], "stueck"), 1)
+		rest = frappe.get_doc("Rohmaterialcharge", e["restCharge"])
+		self.assertEqual((rest.laenge, rest.stueck, rest.chargennr, rest.zeugnis, rest.lagerplatz), (2100, 1, "ZZ-S1", "3.1", "ZZ-R1"))
+		fb = fertigung.buchen(fb["id"], drehen, 10, self.zeiten(fb))["fb"]
+		self.assertEqual(fb["status"], "Fertig")
+
+		# falsch gebucht: zurücknehmen, das unbenutzte Reststück verschwindet wieder
+		fb = fertigung.entnahme_zurueck(fb["id"], e["id"])["fb"]
+		self.assertEqual(fb["roh"]["entnahmen"], [])
+		self.assertEqual(frappe.db.get_value("Rohmaterialcharge", gut["id"], "stueck"), 2)
+		self.assertFalse(frappe.db.exists("Rohmaterialcharge", e["restCharge"]))
+
+	def test_rohmaterial_ohne_lager_und_letzte_stange(self):
+		fb, gut, ohne = self.roh_vorbereiten()
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.material_entnehmen(fb["id"], gut["id"], 3)  # nur 2 Stangen da
+		with self.assertRaises(frappe.ValidationError):
+			fertigung.material_entnehmen(fb["id"], gut["id"], 1, rest_laenge=3500)
+		fb = fertigung.material_entnehmen(fb["id"], gut["id"], 2)["fb"]
+		self.assertEqual(frappe.db.get_value("Rohmaterialcharge", gut["id"], "status"), "Aufgebraucht")
+		fb = fertigung.entnahme_zurueck(fb["id"], fb["roh"]["entnahmen"][0]["id"])["fb"]
+		# Beistellung des Kunden: ohne Lagerentnahme fertig melden, mit Grund
+		fb = fertigung.status_setzen(fb["id"], "Fertig", self.zeiten(fb), ohne_material="Beistellung ZZ")["fb"]
+		self.assertEqual(fb["status"], "Fertig")
+		self.assertIn("Beistellung ZZ", fb["roh"]["ohneLager"])
+
 	# ------------------------------------------------------------- Checkliste vor dem Start
 	def test_checkliste_vor_dem_start(self):
 		fertigung.vorlage_checkliste_speichern([

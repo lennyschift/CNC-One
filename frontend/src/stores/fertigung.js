@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { felderVon, produziert, zeitenNoetigBeiBuchung, zeitenNoetigBeiFertig, startPruefen } from '../lib/fertigung.js';
+import { felderVon, produziert, zeitenNoetigBeiBuchung, zeitenNoetigBeiFertig, startPruefen, materialFehlt, wirdFertig } from '../lib/fertigung.js';
 import { call } from '../data/api.js';
 import { stammdatenRoh } from '../data/repo.js';
 import { useBelege } from './belege.js';
@@ -98,6 +98,29 @@ export const useFertigung = defineStore('fertigung', () => {
       : `${n} Fertigungsbauteil${n === 1 ? '' : 'e'} angelegt`, res.ohnePlan ? 'warn' : 'ok');
   }
 
+  // Rohmaterial: Rohteil ändern, Charge wählen, Entnahme aus dem Lager (mit Reststück) und zurücknehmen. Beim
+  // Fertigmelden fragt MaterialEntnahmeDialog (App.vue) nach, falls noch nichts entnommen ist:
+  // {} = entnommen, { ohne: Grund } = ohne Lagerentnahme, null = abgebrochen.
+  const rohSetzen = (fbId, werte) => aendern(fbId, 'roh_setzen', werte);
+  async function materialEntnehmen(fbId, werte) {
+    const res = await aendern(fbId, 'material_entnehmen', werte);
+    if (res) ui.toast('Entnahme gebucht, Lager aktualisiert', 'ok');
+    return res;
+  }
+  const entnahmeZurueck = (fbId, entnahme) => aendern(fbId, 'entnahme_zurueck', { entnahme });
+  const materialAnfrage = ref(null);
+  function materialAbfragen(fbId, pflicht = false) {
+    return new Promise((resolve) => { materialAnfrage.value = { fbId, pflicht, resolve }; });
+  }
+  function materialFreigeben(fbId) {
+    return materialFehlt(bauteil(fbId)) ? materialAbfragen(fbId, true) : Promise.resolve({});
+  }
+  function materialAntwort(antwort) {
+    const a = materialAnfrage.value;
+    materialAnfrage.value = null;
+    a?.resolve(antwort);
+  }
+
   // Checkliste vor dem Start: abhaken (mit Notiz), eigene Punkte. Sind beim Start noch Pflichtpunkte offen, zeigt
   // CheckStartDialog (App.vue) sie an: { trotzdem: 0 } = alles da, { trotzdem: 1 } = bewusst ohne, null = abgebrochen.
   const checkSetzen = (fbId, punkt, werte) => aendern(fbId, 'check_setzen', { punkt, ...werte });
@@ -137,10 +160,12 @@ export const useFertigung = defineStore('fertigung', () => {
     if (!(m > 0)) return;
     const frei = await startFreigeben(fbId);
     if (!frei) return;
+    const mat = wirdFertig(bauteil(fbId), agId, m) ? await materialFreigeben(fbId) : {};
+    if (!mat) return;
     const fb = bauteil(fbId);
     const zeiten = fb ? await zeitenAbfragen(fb, zeitenNoetigBeiBuchung(fb, agId, m), 'Arbeitsgang abschließen') : [];
     if (zeiten === null) return;
-    const res = await aendern(fbId, 'buchen', { ag_id: agId, menge: m, zeiten, trotzdem: frei.trotzdem });
+    const res = await aendern(fbId, 'buchen', { ag_id: agId, menge: m, zeiten, trotzdem: frei.trotzdem, ohne_material: mat.ohne ?? '' });
     if (!res) return;
     if (res.nachgeholt) ui.toast(`${res.nachgeholt} vorherige${res.nachgeholt === 1 ? 'r' : ''} Arbeitsgang${res.nachgeholt === 1 ? '' : 'e'} mit abgehakt`);
     const ag = res.fb.arbeitsgaenge.find((x) => x.id === agId);
@@ -180,10 +205,12 @@ export const useFertigung = defineStore('fertigung', () => {
     if (!fb || fb.status === status) return;
     const frei = await startFreigeben(fbId, status);
     if (!frei) return;
+    const mat = status === 'Fertig' ? await materialFreigeben(fbId) : {};
+    if (!mat) return;
     const vorher = produziert(fb);
     const zeiten = status === 'Fertig' ? await zeitenAbfragen(fb, zeitenNoetigBeiFertig(fb), 'Bauteil fertig melden') : [];
     if (zeiten === null) return;
-    const res = await aendern(fbId, 'status_setzen', { status, zeiten, trotzdem: frei.trotzdem });
+    const res = await aendern(fbId, 'status_setzen', { status, zeiten, trotzdem: frei.trotzdem, ohne_material: mat.ohne ?? '' });
     if (res && status === 'Fertig' && vorher < fb.menge) ui.toast('Restmenge in allen Arbeitsgängen gebucht');
   }
 
@@ -198,5 +225,6 @@ export const useFertigung = defineStore('fertigung', () => {
     sendungAnlegen, sendungWeg, sendungZurueck, sendungLoeschen, statusSetzen,
     zeitenAnfrage, zeitenAntwort, zeitenMelden,
     checkSetzen, checkEigen, checkWeg, startAnfrage, startAntwort,
+    rohSetzen, materialEntnehmen, entnahmeZurueck, materialAnfrage, materialAbfragen, materialAntwort,
   };
 });
