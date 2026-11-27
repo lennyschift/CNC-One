@@ -77,6 +77,7 @@ def arbeitsgang_ui(r):
 		"fremdEinmal": r.fremd_einmal or 0,
 		"anfrageId": r.anfrage or "",
 		"serie": bool(r.serie),
+		"hinweis": r.get("hinweis") or "",
 	}
 
 
@@ -109,6 +110,7 @@ def arbeitsgang_zeile(a):
 		"anfrage": a.get("anfrageId") or "",
 		# ob der Arbeitsgang Seriennummern anbringt, ergibt sich allein aus der Arbeitsgangart (dem Namen)
 		"serie": 1 if ist_serienart(a.get("name")) else 0,
+		"hinweis": str(a.get("hinweis") or "").strip()[:1000],
 	}
 
 

@@ -5,8 +5,10 @@
 import { ref, computed, watch } from 'vue';
 import { X, PackageMinus, Check, AlertTriangle } from '@lucide/vue';
 import NumField from './NumField.vue';
+import ChargenAuswahl from './ChargenAuswahl.vue';
 import { useFertigung } from '../stores/fertigung.js';
 import { entnahmeRechnen, entnahmeVorschlag } from '../lib/fertigung.js';
+import { artikelText } from '../lib/werkstoffbaum.js';
 import { zahl } from '../lib/format.js';
 
 const f = useFertigung();
@@ -35,7 +37,8 @@ function vorbelegen() {
 }
 watch(() => f.materialAnfrage, (a) => { if (a) vorbelegen(); });
 watch(charge, () => {
-  const v = entnahmeVorschlag(c.value, fb.value?.roh?.spez, menge.value || fb.value?.menge || 0);
+  const bekannt = fb.value?.roh?.verbrauch?.einheit === 'mm' ? fb.value.roh.verbrauch.jeStueck : 0;
+  const v = entnahmeVorschlag(c.value, { ...(fb.value?.roh?.spez ?? {}), verbrauchJeStueck: bekannt }, menge.value || fb.value?.menge || 0);
   stueck.value = v.stueck;
   restLaenge.value = v.restLaenge;
   restBreite.value = 0;
@@ -51,6 +54,16 @@ const fehler = computed(() => {
   if (platte.value && restLaenge.value && !restBreite.value) return 'Beim Reststück einer Platte Länge und Breite angeben.';
   return '';
 });
+// Stangen: Verbrauch eingeben → Reststück = entnommen − Verbrauch (nicht kleiner als 0)
+const entnommenMm = computed(() => (c.value ? Number(stueck.value || 0) * Number(c.value.laenge || 0) : 0));
+const jeStueckMm = computed(() => Math.round((r.value.jeStueck || 0) * 10) / 10);
+function gesamtSetzen(v) {
+  restLaenge.value = Math.max(0, Math.round(entnommenMm.value - Number(v || 0)));
+}
+function jeStueckSetzen(v) {
+  gesamtSetzen(Number(v || 0) * Number(menge.value || 0));
+}
+const titel = computed(() => artikelText(fb.value?.roh?.spez?.werkstoff, fb.value?.roh?.spez));
 const verbraucht = computed(() => (r.value.einheit === 'mm²' ? `${zahl(r.value.verbraucht / 1e6, 3)} m²` : `${zahl(r.value.verbraucht, 0)} mm`));
 const jeStueck = computed(() => (r.value.einheit === 'mm²' ? `${zahl(r.value.jeStueck / 1e4, 1)} cm²` : `${zahl(r.value.jeStueck, 1)} mm`));
 const soll = computed(() => {
@@ -81,29 +94,24 @@ async function buchen() {
         </header>
 
         <div class="min-h-0 space-y-4 overflow-auto px-5 py-4">
-          <div v-if="!ohne">
-            <div class="label mb-1.5">Charge</div>
-            <div class="space-y-1.5">
-              <label v-for="x in chargen" :key="x.id" class="flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2 transition" :class="charge === x.id ? 'border-accent bg-accent-soft/50' : 'border-line hover:border-mute'">
-                <input v-model="charge" type="radio" :value="x.id" class="mt-1 accent-[var(--color-accent)]" />
-                <div class="min-w-0 flex-1 text-sm">
-                  <div class="flex items-center gap-2"><span class="font-semibold tnum">{{ x.id }}</span><span class="text-[11px] text-mute">{{ x.chargennr }}</span><span class="ml-auto text-[11px] tnum" :class="x.reicht >= fb.menge ? 'text-ok' : 'text-warn'">reicht für {{ x.reicht }}</span></div>
-                  <div class="text-[11px] text-mute tnum">{{ x.stueck }} × {{ x.form === 'Platte' ? `${zahl(x.breite, 0)} × ${zahl(x.laenge, 0)}` : zahl(x.laenge, 0) }} mm · Zeugnis {{ x.zeugnis || 'keins' }}<template v-if="x.lagerplatz"> · {{ x.lagerplatz }}</template></div>
-                  <div v-if="!x.ok" class="text-[11px] text-warn">fehlt: {{ x.fehlt.join(', ') }}</div>
-                </div>
-              </label>
-            </div>
-            <p v-if="!chargen.length" class="rounded-xl bg-surface2 px-3 py-2.5 text-xs text-mute">Keine passende Charge im Lager.</p>
-          </div>
+          <ChargenAuswahl v-if="!ohne" :chargen="chargen" :gewaehlt="charge" :titel="titel" :bedarf="fb.menge" @waehlen="(x) => (charge = x.id)" />
 
           <template v-if="!ohne && c">
             <div class="grid gap-3" :class="platte ? 'sm:grid-cols-4' : 'sm:grid-cols-3'">
               <NumField v-model="stueck" :label="platte ? 'Platten entnommen' : 'Stangen entnommen'" unit="Stk" :decimals="0" :min="1" :hint="`von ${c.stueck}, je ${zahl(c.laenge, 0)} mm`" />
+              <NumField v-model="menge" label="Gefertigte Menge" unit="Stk" :decimals="0" :min="1" hint="für den Verbrauch je Stück" />
               <NumField v-model="restLaenge" label="Reststück zurück: Länge" unit="mm" :decimals="0" :min="0" hint="0 = kein Rest" />
               <NumField v-if="platte" v-model="restBreite" label="Reststück: Breite" unit="mm" :decimals="0" :min="0" />
-              <NumField v-model="menge" label="Gefertigte Menge" unit="Stk" :decimals="0" :min="1" hint="für den Verbrauch je Stück" />
             </div>
-            <div class="grid grid-cols-2 gap-3 rounded-xl bg-surface2 px-4 py-3 text-sm">
+            <!-- Stangen: Verbrauch je Stück oder gesamt eingeben, das Reststück rechnet sich daraus (und umgekehrt) -->
+            <div v-if="!platte" class="rounded-xl bg-surface2 px-4 py-3">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <NumField :model-value="jeStueckMm" label="Verbraucht je Stück" unit="mm" :decimals="1" :min="0" :hint="soll ? `geplant ${soll}` : 'inkl. Säge und Verschnitt'" @update:model-value="jeStueckSetzen" />
+                <NumField :model-value="r.verbraucht" label="Verbraucht gesamt" unit="mm" :decimals="0" :min="0" :hint="`entnommen ${zahl(entnommenMm, 0)} mm`" @update:model-value="gesamtSetzen" />
+              </div>
+              <p class="mt-1.5 text-[11px] text-mute">Eine Angabe genügt: Verbrauch je Stück, gesamt oder das Reststück – der Rest rechnet sich. Der Verbrauch je Stück wird am Bauteil gemerkt und beim nächsten Auftrag für den Materialbedarf genommen.</p>
+            </div>
+            <div v-else class="grid grid-cols-2 gap-3 rounded-xl bg-surface2 px-4 py-3 text-sm">
               <div><div class="label">Verbraucht gesamt</div><div class="text-lg font-semibold tnum">{{ verbraucht }}</div></div>
               <div><div class="label">Je Stück</div><div class="text-lg font-semibold tnum">{{ jeStueck }}</div><div v-if="soll" class="text-[11px] text-mute">geplant {{ soll }}</div></div>
             </div>

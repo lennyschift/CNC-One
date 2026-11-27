@@ -101,6 +101,42 @@ class TestFertigung(IntegrationTestCase):
 		self.assertEqual(fb["status"], "Fertig")
 		self.assertIn("Beistellung ZZ", fb["roh"]["ohneLager"])
 
+	def test_verbrauch_am_bauteil_fuer_wiederholauftrag(self):
+		fb, gut, ohne = self.roh_vorbereiten()
+		# tatsächlich 100 mm je Stück (Zuschnitt 82 + Säge 3): Reststück 2000 von 3000 bei 10 Stück
+		fb = fertigung.material_entnehmen(fb["id"], gut["id"], 1, rest_laenge=2000, menge=10)["fb"]
+		v = frappe.parse_json(frappe.db.get_value("Bauteil", fb["teil"]["bauteilId"], "roh_verbrauch"))
+		self.assertEqual((v["jeStueck"], v["einheit"], v["fb"], v["spez"]["werkstoff"], v["spez"]["laenge"]), (100, "mm", fb["id"], "ZZ 7075", 82))
+		# Wiederholauftrag ohne Rohteil in der Kalkulation: Rohteil der letzten Fertigung, gerechnet mit 100 mm je Stück
+		t = teil("t1", teilenummer="ZZ-F1", material="ZZ 7075")
+		fb2 = fertigung.starten(self.auftrag([PLAN[0]], 20, teile=[t])["id"])["fertigung"][0]
+		self.assertEqual(fb2["teil"]["bauteilId"], fb["teil"]["bauteilId"])
+		self.assertEqual(fb2["roh"]["spez"]["laenge"], 82)
+		self.assertEqual(fb2["roh"]["verbrauch"]["jeStueck"], 100)
+		reicht = {c["laenge"]: c["reicht"] for c in fb2["roh"]["passend"] if c["id"] != ohne["id"]}
+		self.assertEqual(reicht, {3000: 30, 2000: 20})
+		self.assertTrue(next(c for c in fb2["roh"]["passend"] if c["laenge"] == 2000)["rest"])
+
+	def test_hinweise_bauteil_und_arbeitsgang(self):
+		fb = self.start()
+		bt = fb["teil"]["bauteilId"]
+		self.assertTrue(bt)
+		fertigung.plan_am_bauteil_speichern(fb["id"])
+		fb = fertigung.hinweis_setzen(fb["id"], "  ZZ Kanten nicht brechen ")["fb"]
+		self.assertEqual(fb["hinweis"], "ZZ Kanten nicht brechen")
+		ags = [{**a, "hinweis": "ZZ nur an Fläche A spannen" if a["name"] == "Drehen" else ""} for a in fb["arbeitsgaenge"]]
+		fb = fertigung.felder_speichern(fb["id"], {"arbeitsgaenge": ags})["fb"]
+		self.assertEqual(self.ag(fb, "Drehen")["hinweis"], "ZZ nur an Fläche A spannen")
+		# gilt für das Bauteil: im Arbeitsplan mitgespeichert, und ein neuer Plan ohne Hinweise (Workbench) behält ihn
+		plan = {r.bezeichnung: r.hinweis for r in frappe.get_doc("Bauteil", bt).arbeitsplan}
+		self.assertEqual(plan["Drehen"], "ZZ nur an Fläche A spannen")
+		doc = frappe.get_doc("Bauteil", bt)
+		bauteil.plan_setzen(doc.kunde, doc.teilenummer, [{k: v for k, v in a.items() if k != "id"} for a in PLAN])
+		self.assertEqual({r.bezeichnung: r.hinweis for r in frappe.get_doc("Bauteil", bt).arbeitsplan}["Drehen"], "ZZ nur an Fläche A spannen")
+		# im nächsten Auftrag steht der Hinweis schon am Arbeitsgang
+		fb2 = self.start()
+		self.assertEqual((self.ag(fb2, "Drehen")["hinweis"], fb2["hinweis"]), ("ZZ nur an Fläche A spannen", "ZZ Kanten nicht brechen"))
+
 	# ------------------------------------------------------------- Checkliste vor dem Start
 	def test_checkliste_vor_dem_start(self):
 		fertigung.vorlage_checkliste_speichern([

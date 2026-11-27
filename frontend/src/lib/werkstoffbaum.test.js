@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   querschnitt, kgJeMeter, kgJeQm, masText, artikelText, chargePruefen, reichtFuer, ausfuehrungenFuer, formenVon, rohAusAbmessung,
-  abmessungVorschlag, anforderungenMit, zeugnisMax, materialBedarf, anforderungenVon, anforderungenText, zeugnisKurz,
+  abmessungVorschlag, anforderungenMit, zeugnisMax, materialBedarf, anforderungenVon, anforderungenText, zeugnisKurz, chargenBuendeln, interneChargennr,
 } from './werkstoffbaum.js';
 import { rohVolumen, rohText } from './rohmaterial.js';
 
@@ -102,5 +102,26 @@ describe('Werkszeugnis', () => {
     expect(anforderungenText({ zeugnis: '3.1', pruefungen: ['RoHS/REACH'] })).toBe('Abnahmeprüfzeugnis 3.1 (EN 10204), RoHS/REACH');
     expect(anforderungenText({ zeugnis: '2.2', pruefungen: [] })).toBe('Werkszeugnis 2.2 (EN 10204)');
     expect(anforderungenText({ zeugnis: '', pruefungen: [] })).toBe('');
+  });
+});
+
+describe('Rohmaterial-Lager: Chargen', () => {
+  it('interne Chargennummer: Standard Kürzel + Monat + Jahr', () => {
+    expect(interneChargennr('', 'AMC', '2026-11-03')).toBe('AMC1126');
+    expect(interneChargennr('{kuerzel}{JJ}{MM}{TT}', 'BIK', '2026-11-03')).toBe('BIK261103');
+  });
+  it('bündelt Posten je Charge, Reststücke nach den vollen Stangen', () => {
+    const g = chargenBuendeln([
+      { id: 'RC-1', interneNr: 'AMC1126', lieferantKurz: 'AMC', form: 'Rund', laenge: 440, stueck: 1, rest: true, reicht: 5, pruefungen: ['Ultraschallgeprüft'] },
+      { id: 'RC-2', interneNr: 'BIK1026', form: 'Rund', laenge: 3000, stueck: 2, reicht: 70, ok: false, fehlt: ['Zeugnis 3.1'] },
+      { id: 'RC-3', interneNr: 'AMC1126', form: 'Rund', laenge: 3000, stueck: 3, reicht: 105, pruefungen: ['Ultraschallgeprüft'] },
+    ]);
+    expect(g.map((x) => x.nr)).toEqual(['AMC1126', 'BIK1026']);
+    expect(g[0].posten.map((c) => c.id)).toEqual(['RC-3', 'RC-1']);
+    expect(g[0].stueck).toBe(4);
+    expect(g[0].meter).toBeCloseTo(9.44);
+    expect(g[0].reicht).toBe(110);
+    expect(g[0].pruefungen).toEqual(['Ultraschallgeprüft']);
+    expect([g[1].ok, g[1].fehlt]).toEqual([false, ['Zeugnis 3.1']]);
   });
 });

@@ -139,6 +139,7 @@ def _position(kunde, p, prozent, auftrag=None):
 			erwartet = {"menge": z.menge, "einzelpreis": z.einzelpreis or 0, "kosten": kosten, "summe": z.summe or 0, "staffelMenge": z.staffel_menge or None}
 			out["auftragKey"] = z.position_key
 			out["erwartet"] = erwartet
+			out["serienAuftrag"] = {"von": z.serien_von, "bis": z.serien_bis, "stellen": z.serien_stellen or 4} if z.serien_von else None
 			out["abgleich"] = bestellabgleich.vergleichen(erwartet, menge or z.menge, preis, kosten_bestellt, prozent)
 			out["mengeAuftrag"] = z.menge
 		else:
@@ -241,7 +242,7 @@ def auftrag_anlegen(kunde, positionen, kundenbestellnr="", bestelldatum="", kont
 		auftrag_api.position_aus_bauteil(doc, b, p, merker)
 	doc.insert()
 	auftrag_api.nachbereiten(doc, merker)
-	return auftrag_api.auftrag_ui(doc)
+	return {**auftrag_api.auftrag_ui(doc), "hinweise": merker.get("hinweise") or []}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -257,10 +258,12 @@ def koppeln(auftrag, positionen=None, kundenbestellnr="", bestelldatum=""):
 		doc.kundenbestellnr = kundenbestellnr.strip()
 	if bestelldatum:
 		doc.bestelldatum = bestelldatum
+	hinweise = []
 	for p in positionen or []:
 		z = next((x for x in doc.positionen if x.position_key == p.get("auftragKey")), None)
 		if not z:
 			continue
+		_serien_koppeln(doc, z, p, hinweise)
 		z.bestellposition = str(p.get("bestellposition") or z.bestellposition or "")[:40]
 		if num(p.get("bestellpreis")) > 0:
 			z.bestellpreis = r2(num(p["bestellpreis"]))
@@ -270,7 +273,38 @@ def koppeln(auftrag, positionen=None, kundenbestellnr="", bestelldatum=""):
 		if angaben:
 			z.bestellangaben = frappe.as_json(angaben)
 	doc.save()
-	return auftrag_api.auftrag_ui(doc)
+	return {**auftrag_api.auftrag_ui(doc), "hinweise": hinweise}
+
+
+def _serien_koppeln(doc, z, p, hinweise):
+	"""Seriennummern laut Bestellung an eine Auftragsposition: hat sie noch keine (oder soll die Bestellung gelten), werden
+	sie übernommen, am Bauteil eingeschaltet und in der Fertigung nachgezogen. Sonst nur ein Hinweis, wenn sie abweichen."""
+	sb = auftrag_api.serien_bereinigt(p.get("serien"))
+	if not sb:
+		return
+	text = f"{str(sb['von']).zfill(sb['stellen'])} bis {str(sb['bis']).zfill(sb['stellen'])}"
+	if z.serien_von and (z.serien_von, z.serien_bis) == (sb["von"], sb["bis"]):
+		return
+	if z.serien_von and not p.get("serienUebernehmen"):
+		hinweise.append(_("{0}: Bestellung nennt die Seriennummern {1}, im Auftrag stehen {2} bis {3}.").format(z.teilenummer, text, str(z.serien_von).zfill(z.serien_stellen or 4), str(z.serien_bis).zfill(z.serien_stellen or 4)))
+		return
+	if z.bauteil:
+		belegt = frappe.db.sql(
+			"""select p.serien_von, p.serien_bis, p.parent from `tabAuftragsposition` p join `tabAuftrag` a on a.name = p.parent
+			where p.bauteil = %s and p.serien_von > 0 and a.status != 'Storniert' and not (p.parent = %s and p.position_key = %s)""",
+			(z.bauteil, doc.name, z.position_key),
+		)
+		for von, bis, auftrag in belegt:
+			if von <= sb["bis"] and sb["von"] <= bis:
+				frappe.throw(_("Die Seriennummern {0} der Bestellung überschneiden sich mit {1} ({2} bis {3}).").format(text, auftrag, von, bis))
+		auftrag_api.serien_aktivieren(z.bauteil, sb["stellen"], hinweise)
+		letzte = frappe.db.get_value("Bauteil", z.bauteil, "letzte_seriennummer") or 0
+		if sb["bis"] > letzte:
+			frappe.db.set_value("Bauteil", z.bauteil, "letzte_seriennummer", sb["bis"])
+	z.serien_von, z.serien_bis, z.serien_stellen = sb["von"], sb["bis"], sb["stellen"]
+	for fb in frappe.get_all("Fertigungsbauteil", filters={"auftrag": doc.name, "auftragsposition_key": z.position_key}, pluck="name"):
+		frappe.db.set_value("Fertigungsbauteil", fb, {"serien_von": sb["von"], "serien_bis": sb["bis"], "serien_stellen": sb["stellen"]})
+	hinweise.append(_("{0}: Seriennummern {1} laut Bestellung übernommen.").format(z.teilenummer, text))
 
 
 @frappe.whitelist(methods=["POST"])

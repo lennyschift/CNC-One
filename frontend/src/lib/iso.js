@@ -1,5 +1,5 @@
 // ISO-Materialgruppen der Zerspanung (ISO 513): P Stahl, M rostfreier Stahl, K Guss, N NE-Metalle, S Superlegierungen und Titan,
-// H harte Werkstoffe. Gepflegt am Rohmaterial (Feld „ISO-Gruppe“); ist dort nichts eingetragen, wird sie aus dem Namen bzw. der
+// H harte Werkstoffe, dazu O Kunststoffe (keine ISO-513-Gruppe, eigene Gruppe in CNC One). Gepflegt am Rohmaterial (Feld „ISO-Gruppe“); ist dort nichts eingetragen, wird sie aus dem Namen bzw. der
 // Werkstoffnummer abgeleitet. H lässt sich nicht ableiten (Härte steht nicht im Namen) und wird nur von Hand gesetzt.
 // Nur für die Oberfläche (Bild in Workbench, Auftrag, Fertigung), nicht für PDFs.
 export const ISO_GRUPPEN = {
@@ -9,6 +9,7 @@ export const ISO_GRUPPEN = {
   N: { code: 'N', name: 'NE-Metalle', farbe: '#16a34a', schrift: '#fff' },
   S: { code: 'S', name: 'Superlegierungen und Titan', farbe: '#c2410c', schrift: '#fff' },
   H: { code: 'H', name: 'Harte Werkstoffe', farbe: '#6b7280', schrift: '#fff' },
+  O: { code: 'O', name: 'Kunststoffe', farbe: '#7c3aed', schrift: '#fff' },
 };
 
 // Gruppe aus dem Werkstoffnamen ableiten ('' wenn unklar)
@@ -25,7 +26,8 @@ export function isoAusName(name) {
   }
   if (/\bEN[- ]?(GJ[LSMV]|JL|JS)\b|\bGG[GV]?\b|GUSSEISEN|GRAUGUSS|SPHÄROGUSS|TEMPERGUSS/.test(s)) return 'K';
   if (/INCONEL|HASTELLOY|NIMONIC|WASPALOY|MONEL|\bTITAN|\bTI[- ]?\d|\bTIAL|\bNICR|\bNIMO/.test(s)) return 'S';
-  if (/\bEN ?A[WC]\b|\bAL[A-Z]|\bALU|ALUMINIUM|\bCW\d|\bCC\d|\bCU[A-Z]|KUPFER|MESSING|BRONZE|\bMS ?\d|\bMG|MAGNESIUM|\bPOM|\bPA ?\d|\bPEEK|\bPE[- ]?HD|\bPTFE|KUNSTSTOFF/.test(s)) return 'N';
+  if (/\bPOM|\bPA ?\d|\bPEEK|\bPE[- ]?(HD|UHMW|\d)|\bPTFE|\bPVC|\bPMMA|\bPVDF|\bPPS\b|\bPEI\b|\bPSU\b|DELRIN|TEFLON|PLEXIGLAS|KUNSTSTOFF/.test(s)) return 'O';
+  if (/\bEN ?A[WC]\b|\bAL[A-Z]|\bALU|ALUMINIUM|\bCW\d|\bCC\d|\bCU[A-Z]|KUPFER|MESSING|BRONZE|\bMS ?\d|\bMG|MAGNESIUM/.test(s)) return 'N';
   if (/\bX\d+CR(?!MOV)|\bV[24]A\b|EDELSTAHL|NIROSTA|ROSTFREI|\bAISI ?[34]\d\d(?!\d)|\bA[24]\b/.test(s)) return 'M';
   if (/\bS\d{3}|\bC\d{2}E?\b|\b\d{2}(CRMO|CRNIMO|MNCR|MNSI|SMNPB|SMN|NICRMO)|\bST ?\d{2}|\b\d{2}MNV|\b\d{2}CRMOV|\bX\d+CRMOV|\bAISI ?1\d{3}|\bAISI ?4\d{3}|STAHL/.test(s)) return 'P';
   return '';

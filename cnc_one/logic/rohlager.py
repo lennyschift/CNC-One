@@ -29,16 +29,21 @@ def passt(charge, spez):
 
 
 def reicht_fuer(charge, spez):
-	"""Wie viele Zuschnitte gibt die Charge her (Stangen: je Stange abgesägt, Platte: im Raster, auch gedreht)?"""
+	"""Wie viele Zuschnitte gibt die Charge her (Stangen: je Stange abgesägt, Platte: im Raster, auch gedreht)?
+	Ist aus einer früheren Fertigung der tatsächliche Verbrauch je Stück bekannt (spez.verbrauchJeStueck, mm bzw. mm²)
+	und größer als der Zuschnitt, zählt dieser."""
 	s = _n(spez.get("saege"))
+	ist = _n(spez.get("verbrauchJeStueck"))
 	if charge.get("form") == "Platte":
 		b, l = _n(spez.get("breite")) + s, _n(spez.get("laenge")) + s
 		if not b or not l:
 			return 0
 		je = max(int(_n(charge.get("breite")) // b) * int(_n(charge.get("laenge")) // l), int(_n(charge.get("breite")) // l) * int(_n(charge.get("laenge")) // b))
+		if ist > b * l:
+			je = min(je, int(_n(charge.get("breite")) * _n(charge.get("laenge")) // ist))
 		return je * max(1, int(charge.get("stueck") or 1))
-	l = _n(spez.get("laenge")) + s
-	return int(_n(charge.get("laenge")) // l) * max(1, int(charge.get("stueck") or 1)) if l else 0
+	l = max(_n(spez.get("laenge")) + s, ist)
+	return int(_n(charge.get("laenge")) // l) * max(1, int(charge.get("stueck") or 1)) if _n(spez.get("laenge")) else 0
 
 
 def je_einheit(charge, spez):
@@ -86,7 +91,7 @@ def stand(spez, menge, chargen, gewaehlt="", entnahmen=None, angefragt=False):
 	if entnahmen:
 		st, text = "entnommen", "Material entnommen"
 	elif g and g["ok"] and g["reicht"] >= menge:
-		st, text = "reserviert", f"Charge {g['id']} reserviert"
+		st, text = "reserviert", f"Charge {g.get('interneNr') or g['id']} reserviert"
 	elif teile >= menge:
 		st, text = "lager", "Material im Lager"
 	elif teile > 0:
@@ -94,6 +99,19 @@ def stand(spez, menge, chargen, gewaehlt="", entnahmen=None, angefragt=False):
 	else:
 		st, text = "fehlt", "Material angefragt, noch nicht im Lager" if angefragt else "Material nicht im Lager"
 	return {"status": st, "text": text, "passend": passend, "teile": teile}
+
+
+def verbrauch_fuer_bauteil(entnahmen):
+	"""Tatsächlicher Verbrauch je Stück aus den Entnahmen eines Fertigungsbauteils (für den nächsten Auftrag):
+	Summe des Verbrauchs geteilt durch die gefertigte Menge. → { jeStueck, einheit } oder None."""
+	if not entnahmen:
+		return None
+	einheit = entnahmen[-1].get("einheit") or "mm"
+	gleich = [e for e in entnahmen if (e.get("einheit") or "mm") == einheit]
+	menge = max(int(e.get("menge") or 0) for e in gleich)
+	if menge < 1:
+		return None
+	return {"jeStueck": round(sum(_n(e.get("verbraucht")) for e in gleich) / menge, 1), "einheit": einheit}
 
 
 def entnahme_rechnen(charge, stueck, rest_laenge=0, rest_breite=0, menge=0):

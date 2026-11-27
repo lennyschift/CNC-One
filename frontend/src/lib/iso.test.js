@@ -28,7 +28,10 @@ describe('ISO-Materialgruppe aus dem Werkstoff', () => {
     expect(isoAusName('EN AW-6082')).toBe('N');
     expect(isoAusName('AlMg4,5Mn')).toBe('N');
     expect(isoAusName('CW614N')).toBe('N');
-    expect(isoAusName('POM-C')).toBe('N');
+    expect(isoAusName('POM-C')).toBe('O');
+    expect(isoAusName('PEEK natur')).toBe('O');
+    expect(isoAusName('PA 6')).toBe('O');
+    expect(isoAusName('EN AW-7075')).toBe('N');
     expect(isoAusName('Inconel 718')).toBe('S');
     expect(isoAusName('Ti6Al4V')).toBe('S');
   });

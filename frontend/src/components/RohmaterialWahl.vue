@@ -112,7 +112,7 @@ const tasten = (e) => { if (e.key === 'Enter' && neuGueltig.value) anlegen(); if
     <!-- 1 ISO-Gruppe -->
     <section>
       <div class="stufe"><span class="nr">1</span> ISO-Werkstoffgruppe</div>
-      <div class="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+      <div class="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
         <button v-for="g in ISO_GRUPPEN" :key="g.code" type="button" class="iso-kachel" :class="iso === g.code && !suche ? 'aktiv' : ''" :style="{ '--iso': g.farbe }" :title="g.name" @click="isoWaehlen(g.code)">
           <span class="grid h-9 w-9 place-items-center rounded-lg text-lg font-bold" :style="{ background: g.farbe, color: g.schrift }">{{ g.code }}</span>
           <span class="text-[10.5px] leading-tight text-mute">{{ g.name }}</span>

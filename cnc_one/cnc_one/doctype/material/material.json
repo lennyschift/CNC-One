@@ -39,8 +39,8 @@
    "fieldname": "iso_gruppe",
    "fieldtype": "Select",
    "label": "ISO-Gruppe (Zerspanung)",
-   "options": "\nP\nM\nK\nN\nS\nH",
-   "description": "P Stahl, M rostfreier Stahl, K Guss, N NE-Metalle, S Superlegierungen/Titan, H harte Werkstoffe; leer = aus dem Namen abgeleitet"
+   "options": "\nP\nM\nK\nN\nS\nH\nO",
+   "description": "P Stahl, M rostfreier Stahl, K Guss, N NE-Metalle, S Superlegierungen/Titan, H harte Werkstoffe, O Kunststoffe; leer = aus dem Namen abgeleitet"
   },
   {
    "fieldname": "aktiv",

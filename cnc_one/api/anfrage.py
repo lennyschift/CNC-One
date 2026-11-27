@@ -764,7 +764,7 @@ def vorlage_setzen(doc, d):
 	if doc.is_new():
 		doc.bezeichnung = (d.get("name") or "").strip()
 	doc.stichwoerter = ", ".join(w.strip() for w in (d.get("stichwoerter") or "").replace("\n", ",").split(",") if w.strip())
-	doc.iso_gruppe = d.get("isoGruppe") if d.get("isoGruppe") in ("P", "M", "K", "N", "S", "H") else ""
+	doc.iso_gruppe = d.get("isoGruppe") if d.get("isoGruppe") in ("P", "M", "K", "N", "S", "H", "O") else ""
 	doc.art = d.get("art") if d.get("art") in ARTEN else ""
 	lieferanten = [l for l in (d.get("lieferanten") or []) if frappe.db.exists("Lieferant", l)]
 	doc.lieferanten = json.dumps(lieferanten, ensure_ascii=False)

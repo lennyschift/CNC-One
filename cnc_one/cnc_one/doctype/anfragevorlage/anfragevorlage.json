@@ -32,7 +32,7 @@
    "fieldname": "iso_gruppe",
    "fieldtype": "Select",
    "label": "ISO-Gruppe des Werkstoffs",
-   "options": "\nP\nM\nK\nN\nS\nH",
+   "options": "\nP\nM\nK\nN\nS\nH\nO",
    "description": "Passt auch, wenn der Werkstoff zu dieser Gruppe gehört (N = NE-Metalle wie Aluminium)"
   },
   {

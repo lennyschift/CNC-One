@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
-import { zahlAus, preiseinheitAus, zeilenAus, positionenAus, kopfAus, bestellungLesen, vorlageAus, kwDatum, zeichnungAus } from './bestellung.js';
+import { zahlAus, preiseinheitAus, zeilenAus, positionenAus, kopfAus, bestellungLesen, vorlageAus, kwDatum, zeichnungAus, seriennummernAus, istSerienZeile } from './bestellung.js';
 
 // Text mit Lage aus einer echten Bestellung (Bankverbindung entfernt)
 const ECHT = JSON.parse(fs.readFileSync(new URL('./testdaten/bestellungen.json', import.meta.url), 'utf8'));
@@ -139,5 +139,33 @@ describe('Zweizeilige Spalten', () => {
     expect(v).toEqual({ 'details / materialnummer': 'bezeichnung|teilenummer' });
     const { spalten } = positionenAus(zeilenAus([zwei]), { spalten: v });
     expect(spalten[1]).toMatchObject({ rolle: 'bezeichnung', rolle2: 'teilenummer' });
+  });
+});
+
+describe('Seriennummern aus der Bestellung', () => {
+  it('Zeilen „Teilenummer/Nummer“ unter der Position', () => {
+    const s = seite([
+      [0.2, [[0.05, 'Pos.'], [0.12, 'Details / Materialnummer', 0.14], [0.42, 'Lief.dat. / MOD Dat.', 0.1], [0.56, 'Menge'], [0.62, 'ME'], [0.7, 'Preis pro Einheit in EUR', 0.12], [0.88, 'Betrag in EUR', 0.08]]],
+      [0.23, [[0.05, '00010'], [0.12, 'ZZ SLEEVE_D9,9 / L14,2', 0.12], [0.42, '17.11.2026', 0.06], [0.56, '10,00'], [0.62, 'ST'], [0.77, '4,50'], [0.9, '45,00']]],
+      [0.25, [[0.12, 'ZZ8115283G', 0.07], [0.42, '09.12.24', 0.05]]],
+      ...Array.from({ length: 10 }, (_, i) => [0.27 + i * 0.015, [[0.3, `ZZ8115283G/${String(81 + i).padStart(4, '0')}`, 0.1]]]),
+      [0.45, [[0.05, '00020'], [0.12, 'ZZ RING', 0.06], [0.42, '17.11.2026', 0.06], [0.56, '5,00'], [0.62, 'ST'], [0.77, '1,00'], [0.9, '5,00']]],
+      [0.47, [[0.12, 'ZZ999', 0.04], [0.42, '01.01.25', 0.05]]],
+    ]);
+    const { positionen } = positionenAus(zeilenAus([s]));
+    expect(positionen.length).toBe(2);
+    expect(positionen[0]).toMatchObject({ teilenummer: 'ZZ8115283G', bezeichnung: 'ZZ SLEEVE_D9,9 / L14,2', menge: 10 });
+    expect(positionen[0].serien).toMatchObject({ von: 81, bis: 90, anzahl: 10, stellen: 4, praefix: 'ZZ8115283G', luecken: false });
+    // die Seriennummern landen nicht in den Spalten
+    expect(positionen[0].angaben.find((a) => a.spalte === 'Details / Materialnummer').wert).toBe('ZZ SLEEVE_D9,9 / L14,2 / ZZ8115283G');
+    expect(positionen[1].serien).toBeNull();
+  });
+  it('Bereich im Text und Lücken', () => {
+    expect(seriennummernAus(['Seriennummer 0081 - 0085'])).toMatchObject({ von: 81, bis: 85, anzahl: 5, stellen: 4 });
+    expect(seriennummernAus(['SN: 7 bis 9'])).toMatchObject({ von: 7, bis: 9 });
+    expect(seriennummernAus(['ZZ1/0001', 'ZZ1/0003'], 'ZZ1')).toMatchObject({ anzahl: 2, luecken: true });
+    expect(seriennummernAus(['ANDERE/0001'], 'ZZ1')).toBeNull();
+    expect(istSerienZeile('ZZ8115283G/0081')).toBe(true);
+    expect(istSerienZeile('Zeichnung 4711/02 Rev A')).toBe(false);
   });
 });

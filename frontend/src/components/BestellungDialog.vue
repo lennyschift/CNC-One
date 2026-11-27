@@ -5,7 +5,7 @@
 // Alles Erkannte lässt sich vor dem Anlegen ändern. Links steht das PDF, rechts was daraus gelesen wurde; alle Spalten
 // der Bestellung bleiben an der Auftragsposition gespeichert (bestellung).
 import { ref, computed, watch, onBeforeUnmount, defineAsyncComponent } from 'vue';
-import { X, FileUp, AlertTriangle, CheckCircle2, CircleHelp, ShoppingCart, Link2, Columns3, Save, Plus, Trash2 } from '@lucide/vue';
+import { X, FileUp, AlertTriangle, CheckCircle2, CircleHelp, ShoppingCart, Link2, Columns3, Save, Plus, Trash2, Hash } from '@lucide/vue';
 import PartImage from './PartImage.vue';
 import NumField from './NumField.vue';
 import SerienFeld from './SerienFeld.vue';
@@ -86,7 +86,10 @@ function neuePosition(p) {
     aktiv: true, bestellposition: p.bestellposition ?? '', teilenummer: p.teilenummer ?? '', bezeichnung: p.bezeichnung ?? '',
     menge: p.menge ?? 1, preis: p.preis ?? 0, preiseinheit: p.preiseinheit ?? 1, betrag: p.betrag ?? null, termin: p.termin ?? '', text: p.text ?? '',
     einheit: p.einheit ?? '', zeichnungsdatum: p.zeichnungsdatum ?? '', zeichnungsnr: p.zeichnungsnr ?? '', index: p.index ?? '', angaben: p.angaben ?? [],
-    bauteil: null, quellen: [], quelle: -1, abgleich: null, letzterAuftrag: null, preisform: '', serienStart: '', auftragKey: '', erwartet: null,
+    serien: p.serien ?? null, serienUebernehmen: false, serienAuftrag: null,
+    bauteil: null, quellen: [], quelle: -1, abgleich: null, letzterAuftrag: null, preisform: '', auftragKey: '', erwartet: null,
+    // Seriennummern laut Bestellung haben Vorrang vor der nächsten Nummer am Bauteil
+    serienStart: p.serien ? formatNr(p.serien.von, p.serien.stellen) : '',
   };
 }
 
@@ -119,7 +122,7 @@ async function abgleichen() {
     // die gewählte Quelle bleibt gewählt, wenn es sie noch gibt
     const vorher = p.quelle >= 0 ? p.quellen[p.quelle] : null;
     const ohneAngebot = p.quelle === -2 && p.geladen; // „ohne Angebot“ selbst gewählt
-    Object.assign(p, { bauteil: s.bauteil, quellen: s.quellen ?? [], letzterAuftrag: s.letzterAuftrag ?? null, auftragKey: s.auftragKey ?? '', erwartet: s.erwartet ?? null });
+    Object.assign(p, { bauteil: s.bauteil, quellen: s.quellen ?? [], letzterAuftrag: s.letzterAuftrag ?? null, auftragKey: s.auftragKey ?? '', erwartet: s.erwartet ?? null, serienAuftrag: s.serienAuftrag ?? null });
     if (!p.teilenummer && s.teilenummer) p.teilenummer = s.teilenummer;
     const gleich = vorher ? p.quellen.findIndex((q) => q.angebot === vorher.angebot && q.angebotKey === vorher.angebotKey) : -1;
     p.quelle = ohneAngebot ? -2 : gleich >= 0 ? gleich : s.quelle ?? -1;
@@ -161,8 +164,30 @@ const de = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE') : '');
 const bestellungVon = (p) => ({
   bestellposition: p.bestellposition, teilenummer: p.teilenummer, bezeichnung: p.bezeichnung, menge: p.menge, einheit: p.einheit,
   preis: p.preis, preiseinheit: p.preiseinheit, betrag: p.betrag, termin: p.termin, zeichnungsdatum: p.zeichnungsdatum,
-  zeichnungsnr: p.zeichnungsnr, index: p.index, angaben: p.angaben,
+  zeichnungsnr: p.zeichnungsnr, index: p.index, angaben: p.angaben, serien: p.serien,
 });
+// Seriennummern laut Bestellung gegen Bauteil und Auftrag: Meldungen für die Position
+const snText = (von, bis, stellen) => `${formatNr(von, stellen)} bis ${formatNr(bis, stellen)}`;
+function serienMeldungen(p) {
+  const s = p.serien;
+  if (!s) return [];
+  const m = [];
+  if (s.anzahl !== p.menge) m.push({ warn: true, text: `Die Bestellung nennt ${s.anzahl} Seriennummern für ${p.menge} Stück.` });
+  if (s.luecken) m.push({ warn: true, text: 'Die Seriennummern sind nicht fortlaufend (Lücken).' });
+  if (!p.bauteil && !props.auftrag) m.push({ warn: false, text: 'Neues Bauteil: es wird mit Seriennummern angelegt, die Nummern laut Bestellung kommen in den Auftrag.' });
+  if (p.bauteil && !p.bauteil.seriennummern) m.push({ warn: true, text: `Am Bauteil sind noch keine Seriennummern eingeschaltet. Auf der Bestellung gefunden: wird beim ${props.auftrag ? 'Koppeln' : 'Anlegen'} eingeschaltet und übernommen.` });
+  if (props.auftrag) {
+    const a = p.serienAuftrag;
+    if (!a) m.push({ warn: false, text: 'Im Auftrag stehen noch keine Seriennummern, sie werden aus der Bestellung übernommen.' });
+    else if (a.von !== s.von || a.bis !== s.bis) m.push({ warn: true, abweichung: true, text: `Im Auftrag stehen ${snText(a.von, a.bis, a.stellen)}, die Bestellung nennt ${snText(s.von, s.bis, s.stellen)}.` });
+    else m.push({ warn: false, ok: true, text: 'Passt zum Auftrag.' });
+  } else if (p.bauteil?.seriennummern) {
+    const naechste = (p.bauteil.letzteSeriennummer || 0) + 1;
+    if (s.von !== naechste) m.push({ warn: true, text: `Das System würde ab ${formatNr(naechste, p.bauteil.serienStellen)} vergeben (zuletzt ${formatNr(p.bauteil.letzteSeriennummer || 0, p.bauteil.serienStellen)}). Übernommen wird die Bestellung.` });
+    else m.push({ warn: false, ok: true, text: 'Passt zur nächsten Nummer am Bauteil.' });
+  }
+  return m;
+}
 // Betrag laut Bestellung passt nicht zu Menge × Stückpreis (Tippfehler im PDF oder falsch gelesen)
 const betragAbweichung = (p) => (p.betrag && p.preis && p.menge && Math.abs(p.preis * p.menge - p.betrag) > Math.max(0.05, p.betrag * 0.01) ? p.preis * p.menge - p.betrag : 0);
 
@@ -200,7 +225,10 @@ async function anlegen() {
   try {
     const positionen = aktive.value.map((p) => {
       const q = p.quellen[p.quelle];
-      const gemeinsam = { menge: p.menge, termin: p.termin, bestellposition: p.bestellposition, bestellpreis: p.preis, serienStart: p.bauteil?.seriennummern ? String(p.serienStart) : '', bestellung: bestellungVon(p) };
+      const gemeinsam = {
+        menge: p.menge, termin: p.termin, bestellposition: p.bestellposition, bestellpreis: p.preis, bestellung: bestellungVon(p),
+        serienStart: p.bauteil?.seriennummern || p.serien ? String(p.serienStart) : '', serienBestellung: p.serien,
+      };
       if (p.quelle >= 0 && q) return { ...gemeinsam, angebot: q.angebot, angebotKey: q.angebotKey, optionId: q.optionId, preisform: p.preisform };
       return { ...gemeinsam, bauteil: p.bauteil?.id ?? '', teilenummer: p.teilenummer, bezeichnung: p.bezeichnung };
     });
@@ -208,6 +236,7 @@ async function anlegen() {
     try { rec = (await pdfAblegen(rec.id)) ?? rec; } catch { ui.toast('Der Auftrag ist angelegt, das PDF ließ sich aber nicht ablegen.', 'warn'); }
     b.auftragEinsetzen(rec);
     ui.toast(`Auftrag ${rec.id} aus der Bestellung angelegt`);
+    for (const h of rec.hinweise ?? []) ui.toast(h, 'warn');
     emit('fertig', rec);
   } catch (e) {
     ui.toast(e?.message ?? 'Der Auftrag ließ sich nicht anlegen.', 'warn');
@@ -218,11 +247,12 @@ async function koppeln() {
   if (arbeitet.value) return;
   arbeitet.value = true;
   try {
-    const positionen = aktive.value.filter((p) => p.auftragKey).map((p) => ({ auftragKey: p.auftragKey, bestellposition: p.bestellposition, bestellpreis: p.preis, termin: p.termin, bestellung: bestellungVon(p) }));
+    const positionen = aktive.value.filter((p) => p.auftragKey).map((p) => ({ auftragKey: p.auftragKey, bestellposition: p.bestellposition, bestellpreis: p.preis, termin: p.termin, bestellung: bestellungVon(p), serien: p.serien, serienUebernehmen: p.serienUebernehmen }));
     let rec = await call('cnc_one.api.bestellung.koppeln', { auftrag: props.auftrag.id, positionen, kundenbestellnr: kopf.value.bestellnr, bestelldatum: kopf.value.datum || '' });
     try { rec = (await pdfAblegen(rec.id)) ?? rec; } catch { ui.toast('Die Angaben sind übernommen, das PDF ließ sich aber nicht ablegen.', 'warn'); }
     b.auftragEinsetzen(rec);
     ui.toast('Bestellung an den Auftrag gekoppelt');
+    for (const h of rec.hinweise ?? []) ui.toast(h, 'warn');
     emit('fertig', rec);
   } catch (e) {
     ui.toast(e?.message ?? 'Die Bestellung ließ sich nicht koppeln.', 'warn');
@@ -326,6 +356,15 @@ function fallen(e) { ziehen.value = false; dateiGewaehlt(e.dataTransfer?.files?.
                     <div v-else class="text-xs"><span class="label mb-1 block">Im Auftrag</span><span v-if="p.auftragKey" class="text-ok">Position gefunden ({{ p.erwartet?.menge }} Stk)</span><span v-else class="text-warn">keine passende Position</span></div>
                   </div>
                   <p v-if="p.preiseinheit > 1" class="text-xs text-mute">Preis in der Bestellung je {{ p.preiseinheit }} Stück, umgerechnet auf ein Stück.</p>
+                  <!-- Seriennummern laut Bestellung -->
+                  <div v-if="p.serien" class="rounded-xl border border-line px-3 py-2 text-xs">
+                    <div class="flex flex-wrap items-center gap-2"><Hash :size="13" class="text-accent" /><span class="font-medium">Seriennummern laut Bestellung</span>
+                      <span class="tnum">{{ p.serien.praefix ? `${p.serien.praefix}/` : '' }}{{ snText(p.serien.von, p.serien.bis, p.serien.stellen) }} · {{ p.serien.anzahl }} Stk</span></div>
+                    <p v-for="(m, mi) in serienMeldungen(p)" :key="mi" class="mt-1 flex items-start gap-1.5" :class="m.ok ? 'text-ok' : m.warn ? 'text-warn' : 'text-mute'">
+                      <CheckCircle2 v-if="m.ok" :size="13" class="mt-px shrink-0" /><AlertTriangle v-else-if="m.warn" :size="13" class="mt-px shrink-0" /><CircleHelp v-else :size="13" class="mt-px shrink-0" />{{ m.text }}
+                      <label v-if="m.abweichung" class="ml-auto flex shrink-0 cursor-pointer items-center gap-1 text-ink"><input v-model="p.serienUebernehmen" type="checkbox" class="accent-[var(--color-accent)]" /> laut Bestellung übernehmen</label>
+                    </p>
+                  </div>
                   <!-- alles, was im PDF zu dieser Position steht -->
                   <details v-if="p.angaben?.length" class="rounded-xl border border-line px-3 py-2 text-xs" open>
                     <summary class="cursor-pointer text-mute">Laut Bestellung (alle Spalten)</summary>

@@ -4,6 +4,7 @@ import StammListe from '../components/StammListe.vue';
 
 const felder = [
   { key: 'leistung', label: 'Leistung', hinweis: 'z. B. Härten, Eloxieren' },
+  { key: 'kuerzel', label: 'Kürzel', hinweis: 'z. B. BIK – für die interne Chargennummer im Rohmaterial-Lager' },
   { key: 'email', label: 'E-Mail', hinweis: 'allgemeine Adresse, z. B. verkauf@…' },
   { key: 'weitereEmails', label: 'Weitere E-Mail-Adressen', typ: 'text-lang', hinweis: 'eine je Zeile, z. B. rechnung@… – Mails von dort kommen in den Posteingang' },
   { key: 'ustId', label: 'USt-IdNr.', hinweis: 'ordnet E-Rechnungen dem Lieferanten zu' },
@@ -16,7 +17,7 @@ const kontakte = (x) => (x.kontakte ??= []);
 </script>
 
 <template>
-  <StammListe art="lieferant" einzahl="Lieferant" :icon="Truck" beschreibung="Lieferanten für Fremdvergabe und Lieferantenanfragen." :felder="felder" :spalten="['leistung', 'email', 'telefon']" dialog-breite="820px">
+  <StammListe art="lieferant" einzahl="Lieferant" :icon="Truck" beschreibung="Lieferanten für Fremdvergabe und Lieferantenanfragen." :felder="felder" :spalten="['leistung', 'kuerzel', 'email', 'telefon']" dialog-breite="820px">
     <template #mehr="{ x, darf }">
       <section>
         <div class="mb-2 flex items-center justify-between">

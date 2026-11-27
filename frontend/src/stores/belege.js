@@ -94,6 +94,7 @@ export const useBelege = defineStore('belege', () => {
     if (!rec) return null;
     auftraege.value.unshift(rec);
     ui.toast(`${rec.id} angelegt`, 'ok');
+    for (const h of rec.hinweise ?? []) ui.toast(h, 'warn');
     return rec;
   }
 

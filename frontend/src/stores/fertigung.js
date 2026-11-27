@@ -126,6 +126,7 @@ export const useFertigung = defineStore('fertigung', () => {
   const checkSetzen = (fbId, punkt, werte) => aendern(fbId, 'check_setzen', { punkt, ...werte });
   const checkEigen = (fbId, text, pflicht = false) => aendern(fbId, 'check_eigen', { text, pflicht: pflicht ? 1 : 0 });
   const checkWeg = (fbId, punkt) => aendern(fbId, 'check_weg', { punkt });
+  const hinweisSetzen = (fbId, text) => aendern(fbId, 'hinweis_setzen', { text });
   const startAnfrage = ref(null);
   function startFreigeben(fbId, status = 'In Fertigung') {
     if (!startPruefen(bauteil(fbId), status)) return Promise.resolve({ trotzdem: 0 });
@@ -224,7 +225,7 @@ export const useFertigung = defineStore('fertigung', () => {
     arbeitsgangHinzu, arbeitsgangWeg, arbeitsgangVerschieben, vorlageAnwenden, planAmBauteilSpeichern,
     sendungAnlegen, sendungWeg, sendungZurueck, sendungLoeschen, statusSetzen,
     zeitenAnfrage, zeitenAntwort, zeitenMelden,
-    checkSetzen, checkEigen, checkWeg, startAnfrage, startAntwort,
+    checkSetzen, checkEigen, checkWeg, startAnfrage, startAntwort, hinweisSetzen,
     rohSetzen, materialEntnehmen, entnahmeZurueck, materialAnfrage, materialAbfragen, materialAntwort,
   };
 });

@@ -14,6 +14,8 @@
   "notiz_intern",
   "frueher_gefertigt",
   "frueher_notiz",
+  "fertigungshinweis",
+  "roh_verbrauch",
   "sb_serie",
   "seriennummern",
   "serien_stellen",
@@ -95,6 +97,19 @@
    "fieldtype": "Data",
    "label": "Früher gefertigt: Hinweis",
    "description": "z. B. 2022, alter Auftrag 4711"
+  },
+  {
+   "fieldname": "fertigungshinweis",
+   "fieldtype": "Small Text",
+   "label": "Hinweise für die Fertigung",
+   "description": "Grundsätzlich zu beachten; steht in der Fertigung oben im Kopf"
+  },
+  {
+   "fieldname": "roh_verbrauch",
+   "fieldtype": "JSON",
+   "label": "Rohmaterial laut letzter Fertigung",
+   "read_only": 1,
+   "description": "Rohteil und tatsächlicher Verbrauch je Stück der letzten Entnahme (für Wiederholaufträge)"
   },
   {
    "fieldname": "sb_serie",

@@ -23,6 +23,7 @@
   "anfrage",
   "bestellung",
   "serie",
+  "hinweis",
   "geplant_am",
   "ist_ruest_min",
   "ist_bearb_min",
@@ -144,6 +145,11 @@
    "fieldtype": "Check",
    "label": "Bringt die Seriennummer an",
    "read_only": 1
+  },
+  {
+   "fieldname": "hinweis",
+   "fieldtype": "Small Text",
+   "label": "Hinweis für die Fertigung"
   },
   {
    "fieldname": "geplant_am",

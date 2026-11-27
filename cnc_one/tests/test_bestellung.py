@@ -192,6 +192,49 @@ class TestBestellung(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			bestellung.auftrag_anlegen(andere, [{"angebot": a["id"], "angebotKey": "t1", "menge": 1}])
 
+	def test_seriennummern_laut_bestellung(self):
+		sn = {"von": 81, "bis": 90, "stellen": 4, "praefix": "ZZ-SN1", "nummern": list(range(81, 91))}
+		# Bauteil ohne Seriennummern: die Bestellung schaltet sie ein und gibt die Nummern vor
+		a = self.gesendet([teil("t1", teilenummer="ZZ-SN1")])
+		auf = auftrag.aus_angebot(a["id"], "", [{"angebotKey": "t1", "menge": 10, "serienBestellung": sn, "bestellung": {"serien": sn}}])
+		pos = auf["positionen"][0]
+		self.assertEqual((pos["serienVon"], pos["serienBis"]), (81, 90))
+		self.assertEqual(pos["bestellung"]["serien"]["praefix"], "ZZ-SN1")
+		self.assertTrue(any("eingeschaltet" in h for h in auf["hinweise"]))
+		b = frappe.get_doc("Bauteil", pos["teil"]["bauteilId"])
+		self.assertEqual((b.seriennummern, b.letzte_seriennummer), (1, 90))
+
+		# koppeln: weicht ab → nur Hinweis; mit „übernehmen“ gilt die Bestellung, auch in der Fertigung
+		from cnc_one.api import fertigung
+		fertigung.vorlage_checkliste_speichern([])
+		fb = fertigung.starten(auf["id"])["fertigung"][0]
+		anders = {**sn, "von": 101, "bis": 110, "nummern": list(range(101, 111))}
+		v = bestellung.vorschlag("", [{"teilenummer": "ZZ-SN1", "menge": 10, "preis": 1}], auftrag=auf["id"])
+		self.assertEqual(v["positionen"][0]["serienAuftrag"]["von"], 81)
+		r = bestellung.koppeln(auf["id"], [{"auftragKey": pos["key"], "serien": anders}])
+		self.assertEqual(r["positionen"][0]["serienVon"], 81)
+		self.assertTrue(any("0101 bis 0110" in h for h in r["hinweise"]))
+		r = bestellung.koppeln(auf["id"], [{"auftragKey": pos["key"], "serien": anders, "serienUebernehmen": 1, "bestellung": {"serien": anders}}])
+		self.assertEqual((r["positionen"][0]["serienVon"], r["positionen"][0]["serienBis"]), (101, 110))
+		self.assertEqual(frappe.db.get_value("Fertigungsbauteil", fb["id"], ["serien_von", "serien_bis"]), (101, 110))
+		f = next(x for x in fertigung.alle_ui() if x["id"] == fb["id"])
+		self.assertEqual(f["serienBestellung"]["von"], 101)
+
+	def test_interne_chargennummer(self):
+		from cnc_one.api import werkstoff
+
+		frappe.get_doc({"doctype": "Lieferant", "lieferantenname": "ZZ Metallhandel", "kuerzel": "ZZM"}).insert()
+		werkstoff.werkstoff_anlegen("ZZ 6082", "N", formen=["Rund"])
+		abm = werkstoff.abmessung_hinzu("Rund", 61)
+		werkstoff.chargen_muster_speichern("{kuerzel}{JJ}{MM}{TT}-{nr}")
+		d = {"werkstoff": "ZZ 6082", "abmessung": abm["id"], "lieferant": "ZZ Metallhandel", "eingang": "2026-11-27", "laenge": 3000, "stueck": 1}
+		self.assertEqual(werkstoff.charge_speichern(d)["interneNr"], "ZZM261127-1")
+		self.assertEqual(werkstoff.charge_speichern(d)["interneNr"], "ZZM261127-2")
+		self.assertEqual(werkstoff.charge_speichern({**d, "interneNr": "ZZ-EIGEN"})["interneNr"], "ZZ-EIGEN")
+		# Standard wie bisher im Betrieb: Kürzel + Monat + Jahr
+		werkstoff.chargen_muster_speichern("")
+		self.assertEqual(werkstoff.charge_speichern(d)["interneNr"], "ZZM1126")
+
 	def test_an_auftrag_koppeln_und_abgleichen(self):
 		t = teil("t1", teilenummer="ZZ-600")
 		a = self.gesendet([t])

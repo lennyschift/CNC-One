@@ -7,7 +7,7 @@ import { useStammdaten } from '../stores/stammdaten.js';
 
 const store = useStammdaten();
 onMounted(() => store.laden('lieferant'));
-const ISO = [['', '– keine –'], ['P', 'P Stahl'], ['M', 'M Rostfreier Stahl'], ['K', 'K Guss'], ['N', 'N NE-Metalle (Alu, Messing, Kupfer, Kunststoff)'], ['S', 'S Superlegierungen, Titan'], ['H', 'H Harte Werkstoffe']];
+const ISO = [['', '– keine –'], ['P', 'P Stahl'], ['M', 'M Rostfreier Stahl'], ['K', 'K Guss'], ['N', 'N NE-Metalle (Alu, Messing, Kupfer)'], ['S', 'S Superlegierungen, Titan'], ['H', 'H Harte Werkstoffe'], ['O', 'O Kunststoffe']];
 const felder = computed(() => [
   { key: 'stichwoerter', label: 'Passt bei (Stichwörter, mit Komma)', hinweis: 'z. B. alu, en aw, almg' },
   { key: 'isoGruppe', label: 'oder Werkstoffgruppe', typ: 'auswahl', optionen: ISO.map(([wert, label]) => ({ wert, label })) },

@@ -69,9 +69,9 @@ const wann = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
     <p v-if="!fb.checkliste?.length" class="py-2 text-center text-xs text-mute">Keine Punkte. Feste Punkte legen Sie in den Stammdaten an.</p>
 
     <form v-if="!kompakt" class="mt-3 flex flex-wrap items-center gap-2" @submit.prevent="eigenDazu">
-      <input v-model="neu" class="field min-w-0 flex-1 !py-1.5 text-sm" placeholder="Eigener Punkt, z. B. Prüfvorrichtung vom Kunden" />
+      <input v-model="neu" class="field min-w-0 basis-full !py-1.5 text-sm" placeholder="Eigener Punkt, z. B. Prüfvorrichtung vom Kunden" />
       <Toggle v-model="neuPflicht" klein label="Pflicht" />
-      <button class="btn !py-1.5 text-sm" :disabled="!neu.trim()"><Plus :size="14" /> Dazu</button>
+      <button class="btn ml-auto !py-1.5 text-sm" :disabled="!neu.trim()"><Plus :size="14" /> Dazu</button>
     </form>
   </section>
 </template>

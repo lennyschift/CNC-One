@@ -55,6 +55,7 @@ def fb_ui(d):
 		"serienVon": d.serien_von or None,
 		"serienBis": d.serien_bis or None,
 		"serienStellen": d.serien_stellen or 4,
+		"serienBestellung": _serien_bestellung(d),
 		"kundeId": d.kunde or "",
 		"kundeName": d.kunde_name or "",
 		"teil": {
@@ -76,10 +77,59 @@ def fb_ui(d):
 			"info": d.roh_info or "", "verbrauchtMm": d.roh_verbraucht_mm or 0,
 		},
 		"roh": _roh_ui(d),
+		"hinweis": _bauteil(d).get("fertigungshinweis") or "",
 		"notizen": {"pruefmasse": d.pruefmasse or "", "bemerkungen": d.bemerkungen or ""},
 		"checkliste": _checkliste(d),
 		"checklisteTrotzdem": d.checkliste_trotzdem or "",
 	}
+
+
+def _serien_bestellung(d):
+	"""Seriennummern, die in der Bestellung des Kunden zu dieser Position stehen (aus dem Bestell-PDF), sonst None."""
+	if not (d.auftrag and d.auftragsposition_key):
+		return None
+	angaben = frappe.db.get_value("Auftragsposition", {"parent": d.auftrag, "position_key": d.auftragsposition_key}, "bestellangaben")
+	return (als_json(angaben) or {}).get("serien") if angaben else None
+
+
+def _bauteil(d):
+	"""Hinweise für die Fertigung und Rohmaterial der letzten Fertigung vom Bauteil (einmal je Fertigungsbauteil)."""
+	if getattr(d, "_cnc_bauteil", None) is None:
+		werte = frappe.db.get_value("Bauteil", d.bauteil, ["fertigungshinweis", "roh_verbrauch"], as_dict=True) if d.bauteil else None
+		d._cnc_bauteil = dict(werte or {})
+	return d._cnc_bauteil
+
+
+@frappe.whitelist(methods=["POST"])
+def hinweis_setzen(id, text=""):
+	"""Hinweise, die bei diesem Bauteil grundsätzlich zu beachten sind (stehen am Bauteil, gelten für jeden Auftrag)."""
+	doc = _laden(id)
+	if not doc.bauteil:
+		frappe.throw(_("Zu diesem Fertigungsbauteil gibt es kein Bauteil in den Stammdaten."))
+	frappe.db.set_value("Bauteil", doc.bauteil, "fertigungshinweis", (text or "").strip()[:2000])
+	doc._cnc_bauteil = None
+	return _antwort(doc)
+
+
+def _verbrauch_bekannt(d, spez):
+	"""Verbrauch je Stück aus der letzten Fertigung dieses Bauteils, wenn es dasselbe Rohmaterial war, sonst None."""
+	v = als_json(_bauteil(d).get("roh_verbrauch")) if _bauteil(d).get("roh_verbrauch") else None
+	if not v or not v.get("jeStueck"):
+		return None
+	alt = v.get("spez") or {}
+	if alt.get("werkstoff") != spez.get("werkstoff") or alt.get("abmessungId") != spez.get("abmessungId"):
+		return None
+	return v
+
+
+def _verbrauch_merken(doc, entnahmen):
+	"""Nach einer Entnahme: Rohteil und tatsächlichen Verbrauch je Stück am Bauteil merken (für Wiederholaufträge)."""
+	v = rohlager.verbrauch_fuer_bauteil(entnahmen)
+	if not v or not doc.bauteil:
+		return
+	spez = {k: w for k, w in _spez(doc).items() if k != "verbrauchJeStueck"}
+	frappe.db.set_value("Bauteil", doc.bauteil, "roh_verbrauch", frappe.as_json({**v, "spez": spez, "fb": doc.name, "auftrag": doc.auftrag or "", "am": iso(now_datetime())}), update_modified=False)
+	doc._cnc_bauteil = None
 
 
 # ----------------------------------------------------------------- Rohmaterial aus dem Lager
@@ -108,10 +158,37 @@ def _angefragt(d):
 	return bool(angebot and angebot in frappe.local.cnc_material_angefragt)
 
 
+MASS_FELDER = ("durchmesser", "innen", "schluesselweite", "hoehe", "breite")
+
+
+def mass_ergaenzen(spez):
+	"""Fehlen im Rohteil die Maße der Abmessung (ältere Stände), kommen sie aus den Stammdaten (wie rohAusAbmessung)."""
+	if not spez.get("abmessungId") or any(spez.get(k) for k in ("durchmesser", "schluesselweite", "hoehe")):
+		return spez
+	a = frappe.db.get_value("Rohmaterial Abmessung", spez["abmessungId"], ["form", "mass1", "mass2", "bezeichnung"], as_dict=True)
+	if not a:
+		return spez
+	m1, m2 = a.mass1 or 0, a.mass2 or 0
+	s = {**spez, "form": spez.get("form") or a.form, "abmessung": spez.get("abmessung") or a.bezeichnung or ""}
+	if a.form == "Rund":
+		s["durchmesser"] = m1
+	elif a.form == "Rohr":
+		s.update({"durchmesser": m1, "innen": max(m1 - 2 * m2, 0)})
+	elif a.form == "Sechskant":
+		s["schluesselweite"] = m1
+	elif a.form == "Vierkant":
+		s.update({"breite": m1, "hoehe": m1})
+	elif a.form == "Flach":
+		s.update({"breite": m1, "hoehe": m2})
+	elif a.form == "Platte":
+		s["hoehe"] = m1
+	return s
+
+
 def _spez(d):
 	"""Rohteil des Fertigungsbauteils; ältere Bauteile holen es einmal aus der Workbench-Kalkulation des Angebots."""
 	if d.roh_spez:
-		return als_json(d.roh_spez) or {}
+		return mass_ergaenzen(als_json(d.roh_spez) or {})
 	spez = {}
 	if d.auftrag and d.auftragsposition_key and frappe.db.exists("Auftrag", d.auftrag):
 		auf = frappe.get_doc("Auftrag", d.auftrag)
@@ -127,7 +204,7 @@ def _spez(d):
 def spez_aus_teil(teil, material=""):
 	"""Rohteil aus der Workbench (teil.roh) ohne Preise und Gewichte, dazu der Werkstoff."""
 	roh = (teil or {}).get("roh") or {}
-	felder = ("form", "abmessungId", "abmessung", "zustand", "ausfuehrung", "laenge", "breite", "saege", "anforderungen", "zeugnis")
+	felder = ("form", "abmessungId", "abmessung", "zustand", "ausfuehrung", "durchmesser", "innen", "schluesselweite", "hoehe", "laenge", "breite", "saege", "anforderungen", "zeugnis")
 	spez = {k: roh[k] for k in felder if roh.get(k) not in (None, "")}
 	werkstoff = (teil or {}).get("material") or material or ""
 	if werkstoff:
@@ -138,12 +215,15 @@ def spez_aus_teil(teil, material=""):
 def _roh_ui(d):
 	spez = _spez(d)
 	entnahmen = als_json(d.roh_entnahmen) if d.roh_entnahmen else []
-	st = rohlager.stand(spez, d.menge or 0, _chargen(), d.roh_charge or "", entnahmen, _angefragt(d) if spez else False)
+	bekannt = _verbrauch_bekannt(d, spez) if spez else None
+	rechnen = {**spez, "verbrauchJeStueck": bekannt["jeStueck"]} if bekannt and bekannt.get("einheit") == ("mm²" if spez.get("form") == "Platte" else "mm") else spez
+	st = rohlager.stand(rechnen, d.menge or 0, _chargen(), d.roh_charge or "", entnahmen, _angefragt(d) if spez else False)
 	return {
 		"spez": spez, "gewaehlt": d.roh_charge or "", "entnahmen": entnahmen, "ohneLager": d.roh_ohne_lager or "",
+		"verbrauch": {k: bekannt.get(k) for k in ("jeStueck", "einheit", "fb", "auftrag", "am")} if bekannt else None,
 		"status": st["status"], "text": st["text"], "teile": st["teile"],
 		"passend": [
-			{k: c[k] for k in ("id", "chargennr", "lieferant", "form", "laenge", "breite", "stueck", "zeugnis", "pruefungen", "lagerplatz", "eingang", "zustand", "abmessungText", "reicht", "jeEinheit", "ok", "fehlt")}
+			{k: c.get(k) for k in ("id", "interneNr", "chargennr", "lieferant", "lieferantKurz", "rest", "bemerkung", "werkstoff", "ausfuehrung", "zeugnisDatei", "form", "laenge", "breite", "stueck", "zeugnis", "pruefungen", "lagerplatz", "eingang", "zustand", "abmessungText", "reicht", "jeEinheit", "ok", "fehlt")}
 			for c in st["passend"]
 		],
 	}
@@ -199,7 +279,7 @@ def material_entnehmen(id, charge, stueck, rest_laenge=0, rest_breite=0, menge=0
 		rest_id = rest.name
 	entnahmen = als_json(doc.roh_entnahmen) if doc.roh_entnahmen else []
 	entnahmen.append({
-		"id": frappe.generate_hash(length=8), "charge": c.name, "chargennr": c.chargennr or "", "lieferant": c.lieferant or "", "zeugnis": c.zeugnis or "",
+		"id": frappe.generate_hash(length=8), "charge": c.name, "interneNr": c.interne_nr or "", "chargennr": c.chargennr or "", "lieferant": c.lieferant or "", "zeugnis": c.zeugnis or "",
 		"form": c.form, "abmessung": c.abmessung_text or "", "stueck": stueck, "laenge": c.laenge or 0, "breite": c.breite or 0,
 		"restLaenge": rest_l, "restBreite": rest_b, "restCharge": rest_id, "menge": menge, **r,
 		"notiz": (notiz or "").strip()[:200], "von": frappe.utils.get_fullname(frappe.session.user), "am": iso(now_datetime()),
@@ -209,6 +289,7 @@ def material_entnehmen(id, charge, stueck, rest_laenge=0, rest_breite=0, menge=0
 	doc.roh_lagerplatz = c.lagerplatz or ""
 	doc.roh_verbraucht_mm = sum(frappe.utils.flt(e.get("verbraucht")) for e in entnahmen if e.get("einheit") == "mm")
 	doc.save()
+	_verbrauch_merken(doc, entnahmen)
 	_chargen_vergessen()
 	return _antwort(doc)
 
@@ -234,6 +315,7 @@ def entnahme_zurueck(id, entnahme):
 	doc.roh_entnahmen = frappe.as_json(entnahmen)
 	doc.roh_verbraucht_mm = sum(frappe.utils.flt(x.get("verbraucht")) for x in entnahmen if x.get("einheit") == "mm")
 	doc.save()
+	_verbrauch_merken(doc, entnahmen)
 	_chargen_vergessen()
 	return _antwort(doc)
 
@@ -380,6 +462,13 @@ def fb_anlegen(auf, pos):
 	plan = auftrag_api.plan_fuer_position(auf, pos)
 	teil = auftrag_api.teil_fuer_position(auf, pos)
 	roh_info, roh_charge, roh_platz = roh_angaben(teil)
+	spez = spez_aus_teil(teil, pos.material)
+	if not rohlager.spez_vollstaendig(spez) and pos.bauteil:
+		# Wiederholauftrag ohne Kalkulation: Rohteil der letzten Fertigung dieses Bauteils
+		alt = als_json(frappe.db.get_value("Bauteil", pos.bauteil, "roh_verbrauch") or "") or {}
+		if rohlager.spez_vollstaendig(alt.get("spez")):
+			spez = alt["spez"]
+			roh_info = roh_angaben({"roh": spez})[0]
 	fb = frappe.new_doc("Fertigungsbauteil")
 	fb.update({
 		"auftrag": auf.name, "auftragsposition_key": pos.position_key, "bauteil": pos.bauteil or None,
@@ -387,10 +476,16 @@ def fb_anlegen(auf, pos):
 		"bezeichnung": pos.bezeichnung, "zeichnungsnr": pos.zeichnungsnr, "revision": pos.revision or "", "material": pos.material,
 		"menge": pos.menge, "termin": pos.liefertermin, "prioritaet": "Normal", "status": "Offen",
 		"roh_werkstoff": pos.material or "", "roh_info": roh_info, "roh_charge": roh_charge, "roh_lagerplatz": roh_platz,
-		"roh_spez": frappe.as_json(spez_aus_teil(teil, pos.material)),
+		"roh_spez": frappe.as_json(spez),
 		"serien_von": pos.serien_von or None, "serien_bis": pos.serien_bis or None, "serien_stellen": pos.serien_stellen or 4,
 	})
+	# Hinweise je Arbeitsgang gehören zum Bauteil: fehlen sie im Plan (z. B. aus einem älteren Angebot), vom Bauteil
+	am_bauteil = {}
+	if pos.bauteil:
+		am_bauteil = {(r.bezeichnung or "").strip().lower(): r.hinweis for r in frappe.get_doc("Bauteil", pos.bauteil).arbeitsplan if r.get("hinweis")}
 	for a in plan:
+		if not a.get("hinweis"):
+			a = {**a, "hinweis": am_bauteil.get((a.get("name") or "").strip().lower(), "")}
 		zeile = arbeitsgang_zeile({**a, "id": None})
 		fb.append("arbeitsgaenge", {**zeile, "status": "Offen", "gebucht": 0})
 	fb.insert(ignore_permissions=True)
@@ -607,6 +702,7 @@ def felder_speichern(id, felder):
 		doc.pruefmasse = notizen.get("pruefmasse", doc.pruefmasse)
 		doc.bemerkungen = notizen.get("bemerkungen", doc.bemerkungen)
 	serienarten = serienart_namen()
+	hinweise = {}
 	for neu in felder.get("arbeitsgaenge") or []:
 		ag = next((a for a in doc.arbeitsgaenge if a.ag_id == neu.get("id")), None)
 		if not ag:
@@ -637,5 +733,27 @@ def felder_speichern(id, felder):
 			ag.fremd_einmal = neu.get("fremdEinmal") or 0
 		ag.bestellung = neu.get("bestellung") or ""
 		ag.serie = 1 if ist_serienart(ag.bezeichnung, serienarten) else 0
+		if "hinweis" in neu:
+			text = str(neu.get("hinweis") or "").strip()[:1000]
+			if text != (ag.hinweis or ""):
+				hinweise[(ag.bezeichnung or "").strip().lower()] = text
+			ag.hinweis = text
 	doc.save()
+	_hinweise_ans_bauteil(doc, hinweise)
 	return _antwort(doc)
+
+
+def _hinweise_ans_bauteil(doc, hinweise):
+	"""Geänderte Hinweise je Arbeitsgang gelten für das Bauteil: in dessen Arbeitsplan beim gleichnamigen Arbeitsgang
+	übernehmen (künftige Aufträge). Steht der Arbeitsgang dort nicht, bleibt es bei „Am Bauteil speichern“."""
+	if not hinweise or not doc.bauteil:
+		return
+	b = frappe.get_doc("Bauteil", doc.bauteil)
+	geaendert = False
+	for r in b.arbeitsplan:
+		k = (r.bezeichnung or "").strip().lower()
+		if k in hinweise and (r.hinweis or "") != hinweise[k]:
+			r.hinweis = hinweise[k]
+			geaendert = True
+	if geaendert:
+		b.save(ignore_permissions=True)

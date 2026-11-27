@@ -144,7 +144,7 @@ export function reichtFuer(charge, z) {
     const b = n(z?.breite) + s;
     const l = n(z?.laenge) + s;
     if (!b || !l) return 0;
-    return Math.max(Math.floor(n(charge.breite) / b) * Math.floor(n(charge.laenge) / l), Math.floor(n(charge.breite) / l) * Math.floor(n(charge.laenge) / b));
+    return Math.max(Math.floor(n(charge.breite) / b) * Math.floor(n(charge.laenge) / l), Math.floor(n(charge.breite) / l) * Math.floor(n(charge.laenge) / b)) * Math.max(1, n(charge.stueck));
   }
   const l = n(z?.laenge) + s;
   return l ? Math.floor(n(charge.laenge) / l) * Math.max(1, n(charge.stueck)) : 0;
@@ -203,4 +203,62 @@ export function materialBedarf(teile, chargen = []) {
     return { ...g, chargen: gute, ohneNachweis: passend.length - gute.length, vorrat, fehlt: Math.max(0, g.bedarf - vorrat), status };
   });
   return { liste, unvollstaendig };
+}
+
+// ---- Rohmaterial-Lager: interne Chargennummer, Filter und Gruppen je Material
+// Muster wie auf dem Server (api/werkstoff.py interne_nr): {kuerzel} {JJJJ} {JJ} {MM} {TT}; {nr} wird hier als 1 gezeigt
+export function interneChargennr(muster, kuerzel, eingang) {
+  const d = eingang ? new Date(`${eingang}T00:00:00`) : new Date();
+  const p2 = (x) => String(x).padStart(2, '0');
+  return (muster || '{kuerzel}{MM}{JJ}').replaceAll('{kuerzel}', kuerzel || '').replaceAll('{JJJJ}', String(d.getFullYear()))
+    .replaceAll('{JJ}', p2(d.getFullYear() % 100)).replaceAll('{MM}', p2(d.getMonth() + 1)).replaceAll('{TT}', p2(d.getDate())).replaceAll('{nr}', '1');
+}
+// Filter: { suche, werkstoff, form, abmessung, zustand, pruefung }
+export function lagerFiltern(liste, f = {}) {
+  const q = (f.suche ?? '').trim().toLowerCase();
+  return (liste ?? []).filter((c) => (!f.werkstoff || c.werkstoff === f.werkstoff) && (!f.form || c.form === f.form)
+    && (!f.abmessung || c.abmessung === f.abmessung) && (!f.zustand || c.zustand === f.zustand)
+    && (!f.pruefung || (f.pruefung === 'zeugnis31' ? ['3.1', '3.2'].includes(c.zeugnis) : (c.pruefungen ?? []).includes(f.pruefung)))
+    && (!q || [c.id, c.interneNr, c.chargennr, c.werkstoff, c.zustand, c.abmessungText, c.ausfuehrung, c.lieferant, c.lagerplatz, c.bemerkung, ...(c.pruefungen ?? [])].some((x) => (x || '').toLowerCase().includes(q))));
+}
+// Gruppen je Material (Werkstoff, Zustand, Form, Abmessung, Ausführung) mit Summe: Stangen/Platten und Meter bzw. m²
+export function lagerGruppen(liste) {
+  const g = new Map();
+  for (const c of liste ?? []) {
+    const key = [c.werkstoff, c.zustand, c.form, c.abmessung, c.ausfuehrung].join('|');
+    if (!g.has(key)) g.set(key, { key, werkstoff: c.werkstoff, zustand: c.zustand, form: c.form, abmessungText: c.abmessungText, ausfuehrung: c.ausfuehrung, chargen: [], stueck: 0, meter: 0, qm: 0 });
+    const x = g.get(key);
+    x.chargen.push(c);
+    if (c.status !== 'Vorrätig') continue;
+    x.stueck += n(c.stueck) || 0;
+    if (c.form === 'Platte') x.qm += (n(c.laenge) * n(c.breite) * Math.max(1, n(c.stueck))) / 1e6;
+    else x.meter += (n(c.laenge) * Math.max(1, n(c.stueck))) / 1000;
+  }
+  return [...g.values()].map((x) => ({ ...x, chargen: x.chargen.sort((a, b) => (b.laenge * (b.stueck || 1)) - (a.laenge * (a.stueck || 1))) }))
+    .sort((a, b) => a.werkstoff.localeCompare(b.werkstoff) || a.form.localeCompare(b.form) || (a.abmessungText || '').localeCompare(b.abmessungText || '', 'de', { numeric: true }));
+}
+
+// Posten des Lagers je Charge bündeln: eine Charge (interne Nummer, sonst Lieferanten-Charge) kann aus mehreren Posten
+// bestehen, z. B. volle Stangen und Reststücke aus früheren Entnahmen. Reihenfolge der Chargen wie in der Liste,
+// Posten je Charge nach Länge (volle zuerst). Summe: Stück und Meter bzw. m².
+export function chargenBuendeln(liste) {
+  const g = new Map();
+  for (const c of liste ?? []) {
+    const key = c.interneNr || c.chargennr || c.id;
+    if (!g.has(key)) {
+      g.set(key, {
+        key, nr: c.interneNr || c.chargennr || c.id, chargennr: c.interneNr ? c.chargennr || '' : '', lieferant: c.lieferant || '', lieferantKurz: c.lieferantKurz || '',
+        zeugnis: c.zeugnis || '', zeugnisDatei: c.zeugnisDatei || '', pruefungen: [], eingang: c.eingang || '', ok: true, fehlt: [], posten: [], stueck: 0, meter: 0, qm: 0, reicht: 0,
+      });
+    }
+    const x = g.get(key);
+    x.posten.push(c);
+    for (const p of c.pruefungen ?? []) if (!x.pruefungen.includes(p)) x.pruefungen.push(p);
+    if (c.ok === false) { x.ok = false; for (const f of c.fehlt ?? []) if (!x.fehlt.includes(f)) x.fehlt.push(f); }
+    x.stueck += n(c.stueck);
+    if (c.form === 'Platte') x.qm += (n(c.laenge) * n(c.breite) * Math.max(1, n(c.stueck))) / 1e6;
+    else x.meter += (n(c.laenge) * Math.max(1, n(c.stueck))) / 1000;
+    x.reicht += n(c.reicht);
+  }
+  return [...g.values()].map((x) => ({ ...x, posten: x.posten.sort((a, b) => (!!a.rest - !!b.rest) || n(b.laenge) * n(b.breite || 1) - n(a.laenge) * n(a.breite || 1)) }));
 }

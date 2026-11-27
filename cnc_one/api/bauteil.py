@@ -8,6 +8,7 @@ from frappe import _
 from frappe.utils import now_datetime
 
 from cnc_one.api.stamm import arbeitsgang_ui, arbeitsgang_zeile, nur_cnc
+from cnc_one.logic.daten import als_json
 
 
 def bauteil_ui(d):
@@ -33,6 +34,8 @@ def bauteil_ui(d):
 		"teilefamilie": d.get("teilefamilie") or "",
 		"variante": d.get("variante") or "",
 		"hatGeometrie": bool(d.get("fingerabdruck")),
+		"fertigungshinweis": d.get("fertigungshinweis") or "",
+		"rohVerbrauch": als_json(d.get("roh_verbrauch")) if d.get("roh_verbrauch") else None,
 	}
 
 
@@ -340,8 +343,13 @@ def plan_setzen(kunde, teilenummer, arbeitsgaenge, name="", zeichnungsnr="", mat
 	doc = sicherstellen(kunde, teilenummer, name, zeichnungsnr, material)
 	if not doc:
 		return None
+	# Hinweise der Fertigung je Arbeitsgang bleiben, wenn der neue Plan (z. B. aus der Workbench) keine mitbringt
+	alte = {(r.ag_id or ""): r.get("hinweis") or "" for r in doc.arbeitsplan}
+	alte_namen = {(r.bezeichnung or "").strip().lower(): r.get("hinweis") or "" for r in doc.arbeitsplan if r.get("hinweis")}
 	doc.set("arbeitsplan", [])
 	for a in arbeitsgaenge or []:
+		if "hinweis" not in a:
+			a = {**a, "hinweis": alte.get(a.get("id") or "") or alte_namen.get((a.get("name") or "").strip().lower(), "")}
 		doc.append("arbeitsplan", arbeitsgang_zeile(a))
 	doc.save()
 	return doc

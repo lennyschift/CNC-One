@@ -4,6 +4,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "interne_nr",
   "chargennr",
   "material",
   "zustand",
@@ -24,6 +25,13 @@
   "bemerkung"
  ],
  "fields": [
+  {
+   "fieldname": "interne_nr",
+   "fieldtype": "Data",
+   "label": "Interne Charge",
+   "in_list_view": 1,
+   "description": "Eigene Chargenbezeichnung nach dem Muster in den Lager-Einstellungen, z. B. Lieferantenkürzel + Eingangsdatum"
+  },
   {
    "fieldname": "chargennr",
    "fieldtype": "Data",

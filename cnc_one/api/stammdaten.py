@@ -118,7 +118,7 @@ def lieferant_kontakt_ui(k):
 
 def lieferant_ui(d):
 	return {
-		"id": d.name, "name": d.lieferantenname, "leistung": d.leistung or "", "email": d.email or "", "weitereEmails": d.weitere_emails or "",
+		"id": d.name, "name": d.lieferantenname, "leistung": d.leistung or "", "kuerzel": d.kuerzel or "", "email": d.email or "", "weitereEmails": d.weitere_emails or "",
 		"telefon": d.telefon or "", "adresse": d.adresse or "", "ustId": d.ust_id or "", "aktiv": bool(d.aktiv),
 		"kontakte": [lieferant_kontakt_ui(k) for k in d.get("kontakte") or []],
 	}
@@ -128,6 +128,8 @@ def lieferant_setzen(doc, d):
 	if doc.is_new():
 		doc.lieferantenname = _text(d.get("name"))
 	doc.leistung = _text(d.get("leistung"))
+	if "kuerzel" in d:
+		doc.kuerzel = _text(d.get("kuerzel"))[:12]
 	doc.email = _text(d.get("email"))
 	doc.telefon = _text(d.get("telefon"))
 	doc.adresse = _text(d.get("adresse"))
@@ -171,7 +173,7 @@ def maschine_setzen(doc, d):
 		doc.stunden_tag = min(24, max(0, float(d.get("stundenTag") or 0))) or 8
 
 
-ISO_GRUPPEN = ("P", "M", "K", "N", "S", "H")
+ISO_GRUPPEN = ("P", "M", "K", "N", "S", "H", "O")
 
 
 def material_ui(d):

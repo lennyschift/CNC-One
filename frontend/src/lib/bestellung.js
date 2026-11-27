@@ -188,6 +188,40 @@ export function zeichnungAus(text) {
   return m ? { zeichnungsnr: m[1], index: m[2] === '-' ? '' : m[2].toUpperCase() } : { zeichnungsnr: '', index: '' };
 }
 
+// Seriennummern, die der Kunde je Position vorgibt: Zeilen wie „8F8115283G/0081“ (Teilenummer/Nummer) oder Angaben wie
+// „Seriennummer 0081 - 0090“, „SN: 81 bis 90“. → { nummern, von, bis, stellen, praefix, luecken } oder null
+const SN_TOKEN = /([A-Z0-9][\w.\-]{2,})\/(\d{2,8})\b/gi;
+const SN_BEREICH = /\b(?:serien?\s*-?\s*(?:nummern?|nr\.?)|s\/?n\.?|serial\s*(?:no\.?|numbers?)?)\s*[:.]?\s*(\d{1,8})\s*(?:-|–|bis|to)\s*(\d{1,8})/i;
+export const istSerienZeile = (text) => {
+  const t = (text ?? '').trim();
+  return !!t && [...t.matchAll(SN_TOKEN)].length > 0 && t.replace(SN_TOKEN, '').replace(/[\s,;]+/g, '') === '';
+};
+export function seriennummernAus(texte, teilenummer = '') {
+  const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const tn = norm(teilenummer);
+  const nummern = [];
+  let praefix = '', stellen = 0;
+  for (const t of texte ?? []) {
+    for (const m of String(t).matchAll(SN_TOKEN)) {
+      // nur Nummern zur eigenen Teilenummer, wenn sie bekannt ist (Zeichnungsnummer/Index o. Ä. bleibt außen vor)
+      if (tn && norm(m[1]) !== tn && !norm(m[1]).startsWith(tn) && !tn.startsWith(norm(m[1]))) continue;
+      nummern.push(Number(m[2]));
+      praefix ||= m[1];
+      stellen = Math.max(stellen, m[2].length);
+    }
+    const b = SN_BEREICH.exec(String(t));
+    if (b && !nummern.length) {
+      const von = Number(b[1]), bis = Number(b[2]);
+      if (bis >= von && bis - von < 100000) for (let n = von; n <= bis; n++) nummern.push(n);
+      stellen = Math.max(b[1].length, b[2].length);
+    }
+  }
+  if (!nummern.length) return null;
+  const sortiert = [...new Set(nummern)].sort((a, b) => a - b);
+  const von = sortiert[0], bis = sortiert.at(-1);
+  return { nummern: sortiert, von, bis, anzahl: sortiert.length, stellen: Math.max(stellen, 1), praefix, luecken: bis - von + 1 !== sortiert.length };
+}
+
 // Gleicher Text auf mehreren Seiten (Fußzeile mit Bank, Anschrift): gehört zu keiner Position
 function wiederholte(zeilen) {
   const seiten = new Map();
@@ -234,6 +268,8 @@ export function positionenAus(zeilen, vorlage = {}) {
     else if (bloecke.length) {
       const b = bloecke.at(-1);
       b.texte.push(text);
+      // Zeilen nur mit Seriennummern („8F8115283G/0081“) gehören zur Position, aber in keine Spalte
+      if (istSerienZeile(text)) continue;
       for (const [k, v] of Object.entries(roh)) {
         (b.roh[k] ??= []).push(v);
         // zweite Rolle der Spalte: die Zeile darunter („Details / Materialnummer“ → Materialnummer)
@@ -271,6 +307,7 @@ function positionAus({ werte, texte, roh }, spalten = []) {
     einheit: (werte.einheit ?? '').trim(),
     zeichnungsdatum: datumAus(werte.zeichnungsdatum ?? '') || '',
     angaben,
+    serien: seriennummernAus(texte, (werte.teilenummer ?? '').trim().split(/\s+/)[0] ?? ''),
     ...zeichnungAus(text),
   };
 }

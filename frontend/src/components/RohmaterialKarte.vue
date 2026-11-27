@@ -8,6 +8,7 @@ import NumField from './NumField.vue';
 import Toggle from './Toggle.vue';
 import FormSymbol from './FormSymbol.vue';
 import RohmaterialWahl from './RohmaterialWahl.vue';
+import ChargenAuswahl from './ChargenAuswahl.vue';
 import { isoGruppe } from '../lib/iso.js';
 import { leeresRoh, rohGewicht, rohText, vollstaendig } from '../lib/rohmaterial.js';
 import {
@@ -112,7 +113,8 @@ async function anforderungAnlegen() {
 // ---- Chargen im Rohmaterial-Lager, die zu Werkstoff, Zustand und Abmessung passen
 const chargen = computed(() => (ws.chargenListe ?? [])
   .filter((c) => c.werkstoff === props.teil.material && c.abmessung === roh.value.abmessungId && (!roh.value.zustand || c.zustand === roh.value.zustand))
-  .map((c) => ({ ...c, pruefung: chargePruefen(c, anf.value), teile: reichtFuer(c, roh.value) })));
+  .map((c) => { const p = chargePruefen(c, anf.value); return { ...c, pruefung: p, ok: p.ok, fehlt: p.fehlt, teile: reichtFuer(c, roh.value), reicht: reichtFuer(c, roh.value) }; })
+  .sort((a, b) => (b.ok - a.ok) || (b.reicht - a.reicht)));
 function chargeWaehlen(c) {
   if (props.nurAnsicht) return;
   const r = props.teil.roh;
@@ -271,18 +273,9 @@ const proStueck = computed(() => materialProStueck(props.teil));
                   <p v-if="vorgabe.zeugnis || vorgabe.pruefungen.length" class="mt-2 text-[11px] text-mute"><Tag :size="10" class="inline" /> Kunde fordert immer: {{ [vorgabe.zeugnis && `Zeugnis ${vorgabe.zeugnis}`, ...vorgabe.pruefungen].filter(Boolean).join(', ') }}</p>
                 </section>
 
-                <!-- Lager -->
+                <!-- Lager: je Charge die Posten (volle Stangen, Reststücke) -->
                 <section>
-                  <div class="label mb-1.5 flex items-center gap-1.5"><Warehouse :size="12" /> Rohmaterial-Lager</div>
-                  <div v-if="chargen.length" class="space-y-1.5">
-                    <button v-for="c in chargen" :key="c.id" type="button" class="w-full rounded-xl border px-3 py-2 text-left transition" :class="roh.charge === c.id ? 'border-accent bg-accent-soft/50' : c.pruefung.ok ? 'border-ok/40 hover:border-ok' : 'border-line hover:border-mute'" @click="chargeWaehlen(c)">
-                      <div class="flex items-center gap-2 text-sm"><FileBadge :size="14" :class="c.zeugnisDatei ? 'text-accent' : 'text-mute'" /><span class="font-semibold tnum">{{ c.id }}</span><span class="text-[11px] text-mute">{{ c.chargennr }}</span>
-                        <span class="ml-auto text-[11px] text-mute tnum">reicht für {{ c.teile }}</span><Check v-if="roh.charge === c.id" :size="14" class="text-accent" /></div>
-                      <div class="mt-0.5 text-[11px] text-mute">{{ c.lieferant || 'Lieferant ?' }} · {{ c.form === 'Platte' ? `${zahl(c.breite, 0)} × ${zahl(c.laenge, 0)}` : `${c.stueck} × ${zahl(c.laenge, 0)}` }} mm · Zeugnis {{ c.zeugnis || 'keins' }}<template v-if="c.lagerplatz"> · {{ c.lagerplatz }}</template></div>
-                      <div class="mt-1 text-[11px]"><span v-if="c.pruefung.ok" class="text-ok">erfüllt alle Anforderungen</span><span v-else class="text-warn">fehlt: {{ c.pruefung.fehlt.join(', ') }}</span></div>
-                    </button>
-                  </div>
-                  <p v-else class="rounded-xl bg-surface2 px-3 py-2.5 text-xs text-mute">{{ roh.abmessungId ? 'Keine passende Charge im Lager, wird bestellt.' : 'Nach der Wahl der Abmessung erscheinen hier passende Chargen.' }}</p>
+                  <ChargenAuswahl :chargen="chargen" :gewaehlt="roh.charge || ''" :titel="artikel" :deaktiviert="nurAnsicht" :leer="roh.abmessungId ? 'Keine passende Charge im Lager, wird bestellt.' : 'Nach der Wahl der Abmessung erscheinen hier passende Chargen.'" @waehlen="chargeWaehlen" />
                 </section>
               </fieldset>
             </div>

@@ -6,6 +6,7 @@
  "field_order": [
   "lieferantenname",
   "leistung",
+  "kuerzel",
   "email",
   "weitere_emails",
   "telefon",
@@ -30,6 +31,13 @@
    "label": "Leistung",
    "in_list_view": 1,
    "description": "z. B. Eloxieren, Härten"
+  },
+  {
+   "fieldname": "kuerzel",
+   "fieldtype": "Data",
+   "label": "Kürzel",
+   "in_list_view": 1,
+   "description": "z. B. BIK; für die interne Chargennummer im Rohmaterial-Lager"
   },
   {
    "fieldname": "email",

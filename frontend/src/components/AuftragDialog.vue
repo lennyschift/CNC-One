@@ -118,6 +118,8 @@ async function bestellungGewaehlt(f) {
         if (o) s.z.optId = o.id;
       }
       if (x.termin) s.z.termin = x.termin;
+      // Seriennummern laut Bestellung: als Startnummer übernehmen (ohne Kennzeichen am Bauteil schaltet der Server sie ein)
+      if (x.serien) s.z.serienStart = formatNr(x.serien.von, x.serien.stellen);
     });
     const ohne = sicht.value.filter((s) => !zuordnung[s.p.key]).length;
     ui.toast(ohne ? `Bestellung gelesen, ${ohne} Position(en) nicht gefunden` : 'Bestellung gelesen, alle Positionen gefunden', ohne ? 'warn' : 'ok');
@@ -141,7 +143,8 @@ async function anlegen() {
     kostenAus: Object.keys(s.z.kostenAus).filter((label) => s.z.kostenAus[label]),
     arbeitsgaenge: planAus(s.z.plan, uid),
     planSpeichern: s.z.planSpeichern,
-    serienStart: s.serie ? String(s.z.serienStart ?? '') : '',
+    serienStart: s.serie || zuordnung[s.p.key]?.serien ? String(s.z.serienStart ?? '') : '',
+    serienBestellung: zuordnung[s.p.key]?.serien ?? null,
     ...(s.best ? { bestellposition: s.best.position ?? '', bestellpreis: Number(s.best.preis), preisform: 'Bestellung' } : {}),
   }));
   speichert.value = true;
@@ -191,6 +194,7 @@ async function anlegen() {
                       <div class="text-xs text-mute">{{ s.p.teil.teilenummer || 'ohne Teilenummer' }}<template v-if="bestellt[s.p.key]"> · bereits bestellt: {{ bestellt[s.p.key] }} Stk</template></div>
                       <div v-if="zuordnung[s.p.key]" class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ok"><CheckCircle2 :size="13" /> In der Bestellung: Pos. {{ zuordnung[s.p.key].bestellposition || '–' }} · {{ zuordnung[s.p.key].menge }} {{ zuordnung[s.p.key].einheit || 'Stk' }} × {{ eur(zuordnung[s.p.key].preis) }}<template v-if="zuordnung[s.p.key].betrag"> = {{ eur(zuordnung[s.p.key].betrag) }}</template></div>
                       <div v-else-if="gelesen" class="mt-1 text-xs text-warn">Nicht in der Bestellung gefunden</div>
+                      <div v-if="zuordnung[s.p.key]?.serien" class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs" :class="s.serie ? 'text-mute' : 'text-warn'"><Hash :size="12" class="text-accent" /> Seriennummern laut Bestellung {{ formatNr(zuordnung[s.p.key].serien.von, zuordnung[s.p.key].serien.stellen) }} bis {{ formatNr(zuordnung[s.p.key].serien.bis, zuordnung[s.p.key].serien.stellen) }}<template v-if="!s.serie"> · am Bauteil noch nicht eingeschaltet, wird mit dem Auftrag eingeschaltet</template><template v-if="zuordnung[s.p.key].serien.anzahl !== s.z.menge"> · {{ zuordnung[s.p.key].serien.anzahl }} Nummern für {{ s.z.menge }} Stk</template></div>
                     </div>
                     <Toggle v-model="s.z.aktiv" label="Bestellen" />
                   </div>

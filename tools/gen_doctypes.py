@@ -85,6 +85,7 @@ DOCTYPES = [
         Money("fremd_einmal", "Fremdvergabe einmalig"),
         Data("anfrage", "Anfrage, aus der der Preis stammt"),
         Check("serie", "Bringt die Seriennummer an", read_only=1, description="ergibt sich aus der Arbeitsgangart Seriennummern"),
+        Text("hinweis", "Hinweis für die Fertigung", description="Was bei diesem Arbeitsgang an diesem Bauteil zu beachten ist"),
     ]),
     dict(name="Kunde Adresse", istable=1, fields=[
         Select("typ", ["Rechnung und Lieferung", "Rechnung", "Lieferung"], "Art", default="Rechnung und Lieferung", in_list_view=1),
@@ -127,7 +128,7 @@ DOCTYPES = [
         Data("materialname", "Werkstoff", reqd=1, unique=1, in_list_view=1),
         Money("preis_kg", "Preis (€/kg)", in_list_view=1),
         Num("dichte", "Dichte (kg/dm³)"),
-        Select("iso_gruppe", ["", "P", "M", "K", "N", "S", "H"], "ISO-Gruppe (Zerspanung)", description="P Stahl, M rostfreier Stahl, K Guss, N NE-Metalle, S Superlegierungen/Titan, H harte Werkstoffe; leer = aus dem Namen abgeleitet"),
+        Select("iso_gruppe", ["", "P", "M", "K", "N", "S", "H", "O"], "ISO-Gruppe (Zerspanung)", description="P Stahl, M rostfreier Stahl, K Guss, N NE-Metalle, S Superlegierungen/Titan, H harte Werkstoffe, O Kunststoffe; leer = aus dem Namen abgeleitet"),
         Check("aktiv", "Aktiv", default="1", in_list_view=1),
         Text("schreibweisen", "Schreibweisen auf Zeichnungen", description="Eine je Zeile, z. B. X5CrNi18-10 für 1.4301; wird beim Anlernen in der Workbench ergänzt"),
         Data("kurzname", "Kurzname", description="z. B. AlZn5,5MgCu oder X5CrNi18-10"),
@@ -157,6 +158,7 @@ DOCTYPES = [
         Check("aktiv", "Aktiv", default="1", in_list_view=1),
     ]),
     dict(name="Rohmaterialcharge", autoname="RC-.YY.-.####", title="chargennr", rechte=stamm_rechte(("CNC Vertrieb", "CNC Fertigung")), icon="warehouse", extra={"search_fields": "chargennr,material,lieferant"}, fields=[
+        Data("interne_nr", "Interne Charge", in_list_view=1, description="Eigene Chargenbezeichnung nach dem Muster in den Lager-Einstellungen, z. B. Lieferantenkürzel + Eingangsdatum"),
         Data("chargennr", "Charge / Schmelze des Lieferanten", in_list_view=1),
         Link("material", "Material", "Werkstoff", reqd=1, in_list_view=1, in_standard_filter=1),
         Data("zustand", "Zustand", in_list_view=1),
@@ -179,6 +181,7 @@ DOCTYPES = [
     dict(name="Lieferant", autoname="field:lieferantenname", title="lieferantenname", rechte=stamm_rechte(("CNC Vertrieb",)), icon="truck", fields=[
         Data("lieferantenname", "Lieferant", reqd=1, unique=1, in_list_view=1),
         Data("leistung", "Leistung", in_list_view=1, description="z. B. Eloxieren, Härten"),
+        Data("kuerzel", "Kürzel", in_list_view=1, description="z. B. BIK; für die interne Chargennummer im Rohmaterial-Lager"),
         Data("email", "E-Mail", options="Email"),
         Text("weitere_emails", "Weitere E-Mail-Adressen", description="Eine je Zeile, z. B. rechnung@… oder Ansprechpartner; Mails von dort kommen in den Posteingang"),
         Data("telefon", "Telefon"),
@@ -244,6 +247,8 @@ DOCTYPES += [
         Text("notiz_intern", "Interne Notiz", description="Aus der Workbench; steht nicht auf Belegen"),
         Check("frueher_gefertigt", "Schon gefertigt (vor CNC One)", description="Von Hand: wurde schon einmal ohne CNC One gefertigt; Aufträge in CNC One zeigt die Historie"),
         Data("frueher_notiz", "Früher gefertigt: Hinweis", description="z. B. 2022, alter Auftrag 4711"),
+        Text("fertigungshinweis", "Hinweise für die Fertigung", description="Grundsätzlich zu beachten; steht in der Fertigung oben im Kopf"),
+        Json("roh_verbrauch", "Rohmaterial laut letzter Fertigung", read_only=1, description="Rohteil und tatsächlicher Verbrauch je Stück der letzten Entnahme (für Wiederholaufträge)"),
         Section("sb_serie", "Seriennummern"),
         Check("seriennummern", "Seriennummern führen", description="Die Nummern nennt der Kunde je Auftrag, sie sind fortlaufend"),
         Int("serien_stellen", "Stellen der Seriennummer", default="4", description="Seriennummern sind immer so lang, mit führenden Nullen (0001)"),
@@ -425,6 +430,7 @@ DOCTYPES += [
         Data("anfrage", "Anfrage"),
         Data("bestellung", "Bestellung"),
         Check("serie", "Bringt die Seriennummer an", read_only=1),
+        Text("hinweis", "Hinweis für die Fertigung"),
         Date("geplant_am", "Geplant am", description="Tag, an dem der Arbeitsgang laufen soll (Planung)"),
         Num("ist_ruest_min", "Ist-Rüstzeit (min)"),
         Num("ist_bearb_min", "Ist-Bearbeitungszeit (min)", description="Gesamte Bearbeitungszeit für die gebuchte Menge"),
@@ -562,7 +568,7 @@ DOCTYPES += [
     dict(name="Anfragevorlage", autoname="field:bezeichnung", title="bezeichnung", rechte=stamm_rechte(("CNC Vertrieb",)), icon="list-checks", fields=[
         Data("bezeichnung", "Bezeichnung", reqd=1, unique=1, in_list_view=1, description="z. B. Aluminium"),
         Text("stichwoerter", "Stichwörter", description="Komma-getrennt; passt eines zum Werkstoff, zur Bezeichnung oder zum Arbeitsgang, wird die Vorlage vorgeschlagen (z. B. alu, en aw, almg)"),
-        Select("iso_gruppe", ["", "P", "M", "K", "N", "S", "H"], "ISO-Gruppe des Werkstoffs", description="Passt auch, wenn der Werkstoff zu dieser Gruppe gehört (N = NE-Metalle wie Aluminium)"),
+        Select("iso_gruppe", ["", "P", "M", "K", "N", "S", "H", "O"], "ISO-Gruppe des Werkstoffs", description="Passt auch, wenn der Werkstoff zu dieser Gruppe gehört (N = NE-Metalle wie Aluminium)"),
         Select("art", ["", "Material", "Fremdvergabe", "Sonstiges"], "Art der Anfrage", description="Leer = für alle Arten"),
         Json("lieferanten", "Lieferanten"),
         Text("hinweis", "Hinweis an die Lieferanten"),
@@ -872,6 +878,7 @@ DOCTYPES += [
     ]),
     dict(name="Fertigung Einstellungen", rechte=[recht("System Manager", *ALLE), recht("CNC Admin", *ALLE), recht("CNC Fertigung", "read", "write"), recht("CNC Vertrieb", "read"), recht("CNC Buchhaltung", "read")], icon="list-checks", extra={"issingle": 1}, fields=[
         Json("checkliste", "Checkliste vor dem Fertigungsstart", description="Feste Punkte für jedes Fertigungsbauteil: [{ id, text, hinweis, pflicht, aktiv }]"),
+        Data("chargen_muster", "Muster der internen Chargennummer", default="{kuerzel}{MM}{JJ}", description="Platzhalter: {kuerzel} (Lieferant), {JJJJ} {JJ} {MM} {TT} (Wareneingang), {nr} (laufend, falls es die Nummer schon gibt)"),
     ]),
     dict(name="Archiv Einstellungen", rechte=[recht("System Manager", *ALLE), recht("CNC Admin", *ALLE), recht("CNC Buchhaltung", "read", "write"), recht("CNC Vertrieb", "read"), recht("CNC Fertigung", "read")], icon="archive", extra={"issingle": 1}, fields=[
         Table("fristen", "Archiv Frist", "Aufbewahrungsfristen", description="Die Frist beginnt mit dem Schluss des Kalenderjahres, in dem das Dokument entstanden ist (§ 147 Abs. 4 AO)"),

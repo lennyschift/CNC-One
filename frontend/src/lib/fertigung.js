@@ -104,7 +104,8 @@ export function entnahmeVorschlag(charge, spez, menge) {
   const je = Number(charge?.jeEinheit) || 0;
   const stueck = je ? Math.min(Math.max(1, Math.ceil(menge / je)), charge.stueck || 1) : 1;
   if (charge?.form === 'Platte' || !je) return { stueck, restLaenge: 0 };
-  const zuschnitt = num(spez?.laenge) + num(spez?.saege);
+  // Zuschnitt, bzw. der Verbrauch je Stück aus der letzten Fertigung, wenn er größer ist
+  const zuschnitt = Math.max(num(spez?.laenge) + num(spez?.saege), num(spez?.verbrauchJeStueck));
   const rest = stueck * num(charge.laenge) - Math.min(menge, stueck * je) * zuschnitt;
   // ein Rest unter einem Zuschnitt lohnt nicht zurück ins Lager
   return { stueck, restLaenge: rest >= zuschnitt ? Math.floor(rest) : 0 };
@@ -124,7 +125,7 @@ export function felderVon(fb) {
     notizen: { ...fb.notizen },
     arbeitsgaenge: fb.arbeitsgaenge.map((a) => ({
       id: a.id, name: a.name, typ: a.typ, geplantAm: a.geplantAm || '', maschine: a.maschine ?? '', ruestMin: num(a.ruestMin), stueckMin: num(a.stueckMin),
-      lieferant: a.lieferant ?? '', bestellung: a.bestellung ?? '',
+      lieferant: a.lieferant ?? '', bestellung: a.bestellung ?? '', hinweis: a.hinweis ?? '',
     })),
   };
 }

@@ -1,12 +1,13 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { vAutoAnimate } from '@formkit/auto-animate/vue';
-import { ArrowLeft, Hash, Cog, Truck, Timer, AlertTriangle, ChevronUp, ChevronDown, Trash2, Plus, Layers, NotebookPen, History, Send, PackageCheck, Save, Workflow, X } from '@lucide/vue';
+import { ArrowLeft, Hash, Cog, Truck, Timer, AlertTriangle, ChevronUp, ChevronDown, Trash2, Plus, NotebookPen, History, Send, PackageCheck, Save, Workflow, X, MessageSquareWarning, Pencil, Check } from '@lucide/vue';
 import PartImage from '../components/PartImage.vue';
 import BauteilDateienAnsicht from '../components/BauteilDateienAnsicht.vue';
 import FertigungCheckliste from '../components/FertigungCheckliste.vue';
 import FertigungMaterial from '../components/FertigungMaterial.vue';
+import FertigungSerien from '../components/FertigungSerien.vue';
 import NumField from '../components/NumField.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 import { repo } from '../data/repo.js';
@@ -78,11 +79,21 @@ function sendungAnlegen(ag) {
   f.sendungAnlegen(fb.value.id, ag.id, sendMenge.value[ag.id] || undefined);
   sendMenge.value[ag.id] = 0;
 }
+// Hinweise: grundsätzlich zum Bauteil (Kopf) und je Arbeitsgang
+const hinweisEdit = ref(null);
+const hinweisFeld = ref(null);
+watch(hinweisEdit, (neu, alt) => { if (neu !== null && alt === null) nextTick(() => hinweisFeld.value?.focus()); });
+async function hinweisSpeichern() {
+  const res = await f.hinweisSetzen(fb.value.id, hinweisEdit.value ?? '');
+  if (res) hinweisEdit.value = null;
+}
+const agHinweisOffen = ref({});
+const agHinweisZeigen = (ag) => !!ag.hinweis || !!agHinweisOffen.value[ag.id];
 const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Lieferanten' : 'geplant');
 </script>
 
 <template>
-  <div v-if="fb" class="mx-auto max-w-[1300px] space-y-4">
+  <div v-if="fb" class="mx-auto max-w-[1720px] space-y-4">
     <RouterLink to="/fertigung" class="inline-flex items-center gap-1.5 text-sm text-mute hover:text-ink"><ArrowLeft :size="15" /> Fertigung</RouterLink>
 
     <!-- Kopf -->
@@ -124,11 +135,31 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
           </div>
         </div>
       </div>
+
+      <!-- Grundsätzlich zu beachten (steht am Bauteil, gilt für jeden Auftrag) -->
+      <div v-if="hinweisEdit !== null" class="mt-5 rounded-xl border border-warn/50 bg-warn/5 p-3">
+        <div class="label mb-1.5 flex items-center gap-1.5"><MessageSquareWarning :size="13" class="text-warn" /> Zu beachten bei diesem Bauteil</div>
+        <textarea ref="hinweisFeld" v-model="hinweisEdit" rows="3" class="field resize-y" placeholder="z. B. Gewinde M8 mit Lehre prüfen, Teile einzeln verpacken, Kanten nicht brechen …" @keydown.esc="hinweisEdit = null" />
+        <div class="mt-2 flex items-center gap-2"><span class="text-[11px] text-mute">Gilt für jeden Auftrag dieses Bauteils.</span>
+          <button type="button" class="btn ml-auto !py-1 text-xs" @click="hinweisEdit = null">Abbrechen</button>
+          <button type="button" class="btn btn-primary !py-1 text-xs" @click="hinweisSpeichern"><Check :size="13" /> Speichern</button></div>
+      </div>
+      <div v-else-if="fb.hinweis" class="group mt-5 flex items-start gap-3 rounded-xl border border-warn/50 bg-warn/5 px-4 py-3">
+        <MessageSquareWarning :size="20" class="mt-0.5 shrink-0 text-warn" />
+        <div class="min-w-0 flex-1"><div class="label mb-0.5">Zu beachten</div><p class="whitespace-pre-line text-[15px] font-medium">{{ fb.hinweis }}</p></div>
+        <button v-if="fb.teil.bauteilId" type="button" class="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-mute hover:bg-surface2 hover:text-ink" title="Hinweis ändern" @click="hinweisEdit = fb.hinweis"><Pencil :size="14" /></button>
+      </div>
+      <button v-else-if="fb.teil.bauteilId" type="button" class="mt-4 inline-flex items-center gap-1.5 text-xs text-mute hover:text-accent" @click="hinweisEdit = ''"><MessageSquareWarning :size="13" /> Hinweis zum Bauteil hinzufügen (was grundsätzlich zu beachten ist)</button>
     </section>
 
     <BauteilDateienAnsicht v-if="fb.teil.bauteilId" :teil="fb.teil" />
 
-    <div class="grid items-start gap-4 xl:grid-cols-[1fr_380px]">
+    <div class="grid items-start gap-4 xl:grid-cols-[270px_minmax(0,1fr)_390px]">
+      <!-- Linke Spalte: Checkliste vor dem Start -->
+      <aside class="space-y-4 xl:sticky xl:top-4">
+        <FertigungCheckliste :fb="fb" />
+      </aside>
+
       <!-- Arbeitsgänge -->
       <section class="space-y-3">
         <div class="flex flex-wrap items-center gap-2">
@@ -160,9 +191,19 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
               <span v-if="ag.serie" class="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-0.5 text-xs text-accent"><Hash :size="12" /> Seriennummern</span>
               <StatusBadge :status="ag.status" />
               <div class="flex">
+                <button class="grid h-7 w-7 place-items-center rounded-lg hover:bg-surface2" :class="ag.hinweis ? 'text-warn' : 'text-mute hover:text-ink'" title="Hinweis zu diesem Arbeitsgang" @click="agHinweisOffen[ag.id] = !agHinweisZeigen(ag)"><MessageSquareWarning :size="15" /></button>
                 <button class="grid h-7 w-7 place-items-center rounded-lg text-mute hover:bg-surface2 hover:text-ink" title="Nach oben" @click="f.arbeitsgangVerschieben(fb.id, ag.id, -1)"><ChevronUp :size="15" /></button>
                 <button class="grid h-7 w-7 place-items-center rounded-lg text-mute hover:bg-surface2 hover:text-ink" title="Nach unten" @click="f.arbeitsgangVerschieben(fb.id, ag.id, 1)"><ChevronDown :size="15" /></button>
                 <button class="grid h-7 w-7 place-items-center rounded-lg text-mute hover:bg-accent-soft hover:text-accent" title="Arbeitsgang entfernen" @click="f.arbeitsgangWeg(fb.id, ag.id)"><Trash2 :size="15" /></button>
+              </div>
+            </div>
+
+            <!-- Hinweis zu diesem Arbeitsgang an diesem Bauteil -->
+            <div v-if="agHinweisZeigen(ag)" class="mt-3 flex items-start gap-2 rounded-xl border border-warn/40 bg-warn/5 px-3 py-2">
+              <MessageSquareWarning :size="15" class="mt-1.5 shrink-0 text-warn" />
+              <div class="min-w-0 flex-1">
+                <textarea v-model="ag.hinweis" rows="1" class="w-full resize-y bg-transparent text-sm font-medium outline-none" style="field-sizing: content; min-height: 1.6rem" placeholder="Was bei diesem Arbeitsgang an diesem Bauteil zu beachten ist, z. B. Spannung nur an Fläche A, Programm O1234" />
+                <div class="text-[10.5px] text-mute">Wird im Arbeitsplan des Bauteils mitgespeichert und gilt für künftige Aufträge (sonst „Am Bauteil speichern“).</div>
               </div>
             </div>
 
@@ -243,10 +284,10 @@ const sendungStatus = (s) => (s.datumZurueck ? 'zurück' : s.datumWeg ? 'beim Li
         </div>
       </section>
 
-      <!-- Rechte Spalte -->
+      <!-- Rechte Spalte: Rohmaterial oben -->
       <aside class="space-y-4">
-        <FertigungCheckliste :fb="fb" />
         <FertigungMaterial :fb="fb" />
+        <FertigungSerien :fb="fb" />
 
         <section class="card p-5">
           <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold"><NotebookPen :size="16" class="text-accent" /> Prüfung und Notizen</h3>

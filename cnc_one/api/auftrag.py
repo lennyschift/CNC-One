@@ -3,6 +3,7 @@ rechnet Preise und Summen selbst."""
 
 import frappe
 from frappe import _
+from frappe.utils import cint
 
 from cnc_one.api import bauteil as bauteil_api
 from cnc_one.api.stamm import arbeitsgang_ui, kunde_ui, nur_cnc
@@ -136,7 +137,7 @@ def aus_angebot(angebot, kundenbestellnr="", positionen=None):
 		ang.flags.status_wechsel = True
 		ang.status = "Bestellt"
 		ang.save()
-	return auftrag_ui(doc)
+	return {**auftrag_ui(doc), "hinweise": merker.get("hinweise") or []}
 
 
 def neuer_auftrag(kunde, kundenbestellnr="", ang=None):
@@ -170,7 +171,35 @@ def bestellung_bereinigt(b):
 		{"spalte": str(a.get("spalte") or "")[:80], "wert": str(a.get("wert") or "")[:300]}
 		for a in (b.get("angaben") or [])[:20] if isinstance(a, dict) and a.get("wert")
 	]
+	sn = serien_bereinigt(b.get("serien"))
+	if sn:
+		out["serien"] = sn
 	return out
+
+
+def serien_bereinigt(s):
+	"""Seriennummern laut Bestellung: { von, bis, anzahl, stellen, praefix, luecken, nummern } (höchstens 2000 Nummern)."""
+	if not isinstance(s, dict) or not cint(s.get("von")):
+		return None
+	nummern = sorted({cint(n) for n in (s.get("nummern") or []) if cint(n) > 0})[:2000]
+	von, bis = cint(s.get("von")), cint(s.get("bis")) or cint(s.get("von"))
+	if bis < von:
+		return None
+	return {
+		"von": von, "bis": bis, "anzahl": len(nummern) or bis - von + 1, "stellen": min(12, max(1, cint(s.get("stellen")) or STANDARD_STELLEN)),
+		"praefix": str(s.get("praefix") or "")[:60], "luecken": bool(s.get("luecken")), "nummern": nummern,
+	}
+
+
+def serien_aktivieren(bauteil, stellen, hinweise):
+	"""Seriennummern stehen auf der Bestellung, das Bauteil hat aber noch keine: am Bauteil einschalten (Stellen wie in der
+	Bestellung) und das als Hinweis melden."""
+	if not bauteil:
+		return
+	b = frappe.db.get_value("Bauteil", bauteil, ["seriennummern", "teilenummer"], as_dict=True)
+	if b and not b.seriennummern:
+		frappe.db.set_value("Bauteil", bauteil, {"seriennummern": 1, "serien_stellen": stellen or STANDARD_STELLEN})
+		hinweise.append(_("Seriennummern auf der Bestellung gefunden: am Bauteil {0} eingeschaltet ({1} Stellen).").format(b.teilenummer, stellen or STANDARD_STELLEN))
 
 
 def _bestellangaben(p):
@@ -183,10 +212,23 @@ def _bestellangaben(p):
 	}
 
 
+def _serien_laut_bestellung(bauteil, teil, p, merker):
+	"""Seriennummern laut Bestellung (p.serienBestellung): am Bauteil einschalten, falls nötig, und als Startnummer nehmen."""
+	sb = serien_bereinigt(p.get("serienBestellung"))
+	if not sb:
+		return p
+	if bauteil:
+		serien_aktivieren(bauteil, sb["stellen"], merker.setdefault("hinweise", []))
+	else:
+		teil["seriennummern"] = True
+	return {**p, "serienStart": str(p.get("serienStart") or "").strip() or str(sb["von"])}
+
+
 def position_aus_angebot(doc, ang, ap, p, merker):
 	"""Position aus einer Angebotsposition. Preisform „Bestellung“: Stückpreis laut Bestellung, keine eigenen Kostenzeilen
 	(der Kunde hat die Kosten auf den Stückpreis umgelegt)."""
 	teil = als_json(ap.kalkulation)
+	p = _serien_laut_bestellung(ap.bauteil, teil, p, merker)
 	r = position_fuer_auftrag(teil, berechne(teil), p.get("optionId"), p.get("menge"), p.get("kostenAus") or [])
 	bestellung = _bestellangaben(p)
 	preisform = "Bestellung" if p.get("preisform") == "Bestellung" and bestellung["bestellpreis"] else "Angebot"
@@ -230,6 +272,7 @@ def position_aus_bauteil(doc, b, p, merker):
 	bestellung = _bestellangaben(p)
 	if not bestellung["bestellpreis"]:
 		frappe.throw(_("Für {0} gibt es kein Angebot, bitte den Stückpreis der Bestellung angeben.").format(b.teilenummer))
+	p = _serien_laut_bestellung(b.name, {}, p, merker)
 	menge = max(1, int(num(p.get("menge")) or 1))
 	ap = frappe._dict(bauteil=b.name, bezeichnung=b.bezeichnung or b.teilenummer, teilenummer=b.teilenummer)
 	von, bis, stellen = serienbereich(ap, {}, p, menge, merker["vergeben"])

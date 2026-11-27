@@ -13,7 +13,7 @@ from cnc_one.api.stamm import nur_cnc
 from cnc_one.setup.werkstoffbaum import abmessung_text
 
 FORMEN = ("Rund", "Vierkant", "Flach", "Sechskant", "Rohr", "Platte")
-ISO = ("P", "M", "K", "N", "S", "H")
+ISO = ("P", "M", "K", "N", "S", "H", "O")
 ZEUGNISSE = ("", "2.2", "3.1", "3.2")
 
 
@@ -240,11 +240,24 @@ def eintrag_loeschen(art, id):
 # ----------------------------------------------------------------- Chargen im Rohmaterial-Lager
 def charge_ui(d):
 	return {
-		"id": d.name, "chargennr": d.chargennr or "", "werkstoff": d.material, "zustand": d.zustand or "", "form": d.form, "abmessung": d.abmessung,
-		"abmessungText": d.abmessung_text or "", "ausfuehrung": d.ausfuehrung or "", "lieferant": d.lieferant or "", "eingang": str(d.eingang or ""),
+		"id": d.name, "interneNr": d.interne_nr or "", "chargennr": d.chargennr or "", "werkstoff": d.material, "zustand": d.zustand or "", "form": d.form, "abmessung": d.abmessung,
+		"abmessungText": d.abmessung_text or "", "ausfuehrung": d.ausfuehrung or "", "lieferant": d.lieferant or "", "lieferantKurz": _lieferant_kurz(d.lieferant), "eingang": str(d.eingang or ""),
 		"laenge": d.laenge or 0, "breite": d.breite or 0, "stueck": d.stueck or 0, "zeugnis": d.zeugnis or "", "pruefungen": zeilen(d.pruefungen),
 		"zeugnisDatei": d.zeugnis_datei or "", "lagerplatz": d.lagerplatz or "", "status": d.status or "Vorrätig", "bemerkung": d.bemerkung or "",
+		"rest": (d.bemerkung or "").startswith("Reststück"),
 	}
+
+
+def _lieferant_kurz(lieferant):
+	"""Kürzel des Lieferanten (Stammdaten), sonst die ersten Buchstaben seines Namens; einmal je Anfrage."""
+	if not lieferant:
+		return ""
+	if not hasattr(frappe.local, "cnc_lieferant_kurz"):
+		frappe.local.cnc_lieferant_kurz = {}
+	cache = frappe.local.cnc_lieferant_kurz
+	if lieferant not in cache:
+		cache[lieferant] = frappe.db.get_value("Lieferant", lieferant, "kuerzel") or lieferant.split()[0][:12]
+	return cache[lieferant]
 
 
 @frappe.whitelist(methods=["POST"])
@@ -280,6 +293,8 @@ def charge_speichern(daten):
 		doc.lieferant = d.get("lieferant") if d.get("lieferant") and frappe.db.exists("Lieferant", d.get("lieferant")) else None
 	if "chargennr" in d:
 		doc.chargennr = _t(d.get("chargennr"))
+	if "interneNr" in d:
+		doc.interne_nr = _t(d.get("interneNr"), 40)
 	if "eingang" in d or doc.is_new():
 		doc.eingang = getdate(d.get("eingang") or today())
 	for k in ("laenge", "breite"):
@@ -303,8 +318,47 @@ def charge_speichern(daten):
 		frappe.throw(_("Bitte Länge und Breite der Platte angeben."))
 	if doc.form != "Platte" and doc.is_new() and not doc.laenge:
 		frappe.throw(_("Bitte die Länge angeben."))
+	if doc.is_new() and not doc.interne_nr:
+		doc.interne_nr = interne_nr(chargen_muster(), doc.lieferant, doc.eingang)
 	doc.save() if not doc.is_new() else doc.insert()
 	return charge_ui(doc)
+
+
+# ----------------------------------------------------------------- Interne Chargennummer
+STANDARD_MUSTER = "{kuerzel}{MM}{JJ}"
+
+
+def chargen_muster():
+	m = frappe.db.get_single_value("Fertigung Einstellungen", "chargen_muster") if frappe.db.exists("DocType", "Fertigung Einstellungen") else ""
+	return m or STANDARD_MUSTER
+
+
+def interne_nr(muster, lieferant, eingang):
+	"""Interne Chargennummer nach dem Muster, z. B. {kuerzel}{MM}{JJ} → BIK1126; mit {nr} die nächste freie Nummer."""
+	kuerzel = (frappe.db.get_value("Lieferant", lieferant, "kuerzel") if lieferant else "") or (lieferant or "").replace(" ", "")[:3].upper()
+	d = getdate(eingang or today())
+	t = (muster or STANDARD_MUSTER).replace("{kuerzel}", kuerzel).replace("{JJJJ}", f"{d.year}").replace("{JJ}", f"{d.year % 100:02d}") \
+		.replace("{MM}", f"{d.month:02d}").replace("{TT}", f"{d.day:02d}")
+	if "{nr}" in t:
+		n = 1
+		while frappe.db.exists("Rohmaterialcharge", {"interne_nr": t.replace("{nr}", str(n))}):
+			n += 1
+		t = t.replace("{nr}", str(n))
+	return t[:40]
+
+
+@frappe.whitelist(methods=["POST"])
+def chargen_muster_laden():
+	nur_cnc()
+	return {"muster": chargen_muster(), "darf": bool(set(frappe.get_roles()) & {"CNC Admin", "CNC Fertigung", "CNC Vertrieb", "System Manager"})}
+
+
+@frappe.whitelist(methods=["POST"])
+def chargen_muster_speichern(muster):
+	frappe.only_for(("CNC Admin", "CNC Fertigung", "CNC Vertrieb", "System Manager"))
+	muster = (muster or "").strip()[:60] or STANDARD_MUSTER
+	frappe.db.set_single_value("Fertigung Einstellungen", "chargen_muster", muster)
+	return {"muster": muster}
 
 
 # ----------------------------------------------------------------- Für Auftrag und Fertigung
