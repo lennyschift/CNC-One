@@ -70,9 +70,11 @@ function angelegt(auftrag) {
 
 <template>
   <div v-if="angebot" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_340px]">
-    <BilderSchalter :doctype="'Angebot'" :beleg-id="angebot.id" class="mx-auto mb-3 max-w-[820px] justify-end" @geaendert="geladen = Date.now()" />
-    <BelegPdf v-if="angebot.kopf?.kundeId" :url="pdfUrl" :name="`Angebot ${angebot.id}.pdf`" />
-    <div v-else class="card grid min-h-[300px] place-items-center p-10 text-sm text-mute">Ohne Kunden gibt es noch kein PDF. Bitte das Angebot in der Workbench vervollständigen.</div>
+    <div class="min-w-0">
+      <BilderSchalter v-if="angebot.kopf?.kundeId" :doctype="'Angebot'" :beleg-id="angebot.id" class="no-print mx-auto mb-3 max-w-[820px] justify-end" @geaendert="geladen = Date.now()" />
+      <BelegPdf v-if="angebot.kopf?.kundeId" :url="pdfUrl" :name="`Angebot ${angebot.id}.pdf`" />
+      <div v-else class="card grid min-h-[300px] place-items-center p-10 text-sm text-mute">Ohne Kunden gibt es noch kein PDF. Bitte das Angebot in der Workbench vervollständigen.</div>
+    </div>
 
     <aside class="no-print space-y-4 xl:sticky xl:top-0">
       <RouterLink to="/angebote" class="inline-flex items-center gap-1.5 text-sm text-mute hover:text-ink"><ArrowLeft :size="15" /> Alle Angebote</RouterLink>
@@ -158,7 +160,7 @@ function angelegt(auftrag) {
       <AngebotAnfragen :ziel="{ angebotId: angebot.id }" variante="karte" />
     </aside>
 
-    <AngebotMailDialog v-if="mailDialog" :angebot="angebot" @schliessen="mailDialog = false" @gesendet="mailDialog = false" />
+    <AngebotMailDialog v-if="mailDialog" :angebot="angebot" @schliessen="mailDialog = false" @gesendet="mailDialog = false" @bilder="geladen = Date.now()" />
     <AuftragDialog v-if="dialog" :angebot="angebot" @schliessen="dialog = false" @angelegt="angelegt" />
   </div>
 

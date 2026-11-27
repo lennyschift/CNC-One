@@ -32,8 +32,10 @@ async function drucken() {
 
 <template>
   <div v-if="ls" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_340px]">
-    <BilderSchalter :doctype="'Lieferschein'" :beleg-id="ls.id" class="mx-auto mb-3 max-w-[820px] justify-end" @geaendert="geladen = Date.now()" />
-    <BelegPdf :url="pdfUrl" :name="`Lieferschein ${ls.id}.pdf`" />
+    <div class="min-w-0">
+      <BilderSchalter :doctype="'Lieferschein'" :beleg-id="ls.id" class="no-print mx-auto mb-3 max-w-[820px] justify-end" @geaendert="geladen = Date.now()" />
+      <BelegPdf :url="pdfUrl" :name="`Lieferschein ${ls.id}.pdf`" />
+    </div>
 
     <aside class="no-print space-y-4 xl:sticky xl:top-0">
       <RouterLink to="/lieferscheine" class="inline-flex items-center gap-1.5 text-sm text-mute hover:text-ink"><ArrowLeft :size="15" /> Alle Lieferscheine</RouterLink>

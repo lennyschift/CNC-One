@@ -1,11 +1,11 @@
 <script setup>
 // Beleg per Mail schicken. Angebot: bei einer Mail-Anfrage als Antwort im selben Verlauf, sonst an den Kontakt des Kunden.
 // Auftragsbestätigung (mit `auftrag`): an den Ansprechpartner des Auftrags. Empfänger, Betreff und Text sind vorbelegt
-// und änderbar; der Beleg hängt als PDF an.
-import { ref, computed, onMounted } from 'vue';
-import { X, Send, FileText, Reply, AlertTriangle, Loader } from '@lucide/vue';
+// und änderbar; der Beleg hängt als PDF an. Links steht das PDF groß (mit Schalter für die Bauteilbilder), rechts die Mail.
+import { ref, computed, onMounted, defineAsyncComponent } from 'vue';
+import { X, Send, FileText, Reply, AlertTriangle, Loader, Download } from '@lucide/vue';
 import { call } from '../data/api.js';
-import PdfVorschauDialog from './PdfVorschauDialog.vue';
+import BilderSchalter from './BilderSchalter.vue';
 import MailHtml from './MailHtml.vue';
 import Toggle from './Toggle.vue';
 import { benutzer } from '../data/repo.js';
@@ -15,14 +15,15 @@ import { useMail } from '../stores/mail.js';
 import { useUi } from '../stores/ui.js';
 
 const props = defineProps({ angebot: { type: Object, default: null }, auftrag: { type: Object, default: null } });
-const emit = defineEmits(['schliessen', 'gesendet']);
+const emit = defineEmits(['schliessen', 'gesendet', 'bilder']);
+const DrawingViewer = defineAsyncComponent(() => import('./DrawingViewer.vue'));
 const ui = useUi();
 const belege = useBelege();
 const mail = useMail();
 
 const v = ref(null);
 const sendet = ref(false);
-const pdf = ref(null);
+const geladen = ref(Date.now()); // neu laden nach dem Umschalten der Bauteilbilder
 const zitieren = ref(true);
 const istAdmin = (benutzer()?.rollen ?? []).some((x) => ['CNC Admin', 'System Manager'].includes(x));
 
@@ -30,6 +31,9 @@ const ab = computed(() => !!props.auftrag);
 const kopf = computed(() => (ab.value
   ? { titel: 'Auftragsbestätigung per Mail senden', id: props.auftrag.id, kunde: props.auftrag.kundeName }
   : { titel: 'Angebot per Mail senden', id: props.angebot.id, kunde: props.angebot.kopf.kundeName }));
+const beleg = computed(() => (ab.value ? { doctype: 'Auftrag', id: props.auftrag.id } : { doctype: 'Angebot', id: props.angebot.id }));
+const pdfUrl = computed(() => belegPdfUrl(beleg.value.doctype, beleg.value.id, geladen.value));
+function bilderGeaendert() { geladen.value = Date.now(); emit('bilder'); }
 
 onMounted(async () => {
   try {
@@ -38,11 +42,6 @@ onMounted(async () => {
       : await call('cnc_one.api.mail.antwort_vorschlag', { angebot: props.angebot.id });
   } catch (e) { ui.toast(e.message, 'warn'); emit('schliessen'); }
 });
-
-async function pdfAnsehen() {
-  if (ab.value) { pdf.value = { url: belegPdfUrl('Auftrag', props.auftrag.id, Date.now()), name: v.value.anhang }; return; }
-  try { pdf.value = await call('cnc_one.api.angebot.pdf', { id: props.angebot.id }); } catch (e) { ui.toast(e.message, 'warn'); }
-}
 
 async function senden() {
   sendet.value = true;
@@ -74,7 +73,7 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
   <Teleport to="body">
     <div class="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4 backdrop-blur-[2px]" @mousedown.self="emit('schliessen')">
       <Transition name="pop" appear>
-        <div class="card flex max-h-[92vh] w-[min(760px,96vw)] flex-col overflow-hidden shadow-2xl">
+        <div class="card flex h-[94vh] w-[min(1500px,97vw)] flex-col overflow-hidden shadow-2xl">
           <header class="flex items-center justify-between border-b border-line px-6 py-4">
             <div>
               <h2 class="text-base font-semibold">{{ kopf.titel }}</h2>
@@ -83,8 +82,18 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
             <button class="grid h-8 w-8 place-items-center rounded-lg text-mute hover:bg-surface2" @click="emit('schliessen')"><X :size="18" /></button>
           </header>
 
+          <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_440px] lg:grid-rows-1">
+          <!-- das PDF, wie es angehängt wird -->
+          <section class="flex min-h-[40vh] min-w-0 flex-col border-b border-line bg-surface2/50 lg:border-b-0 lg:border-r">
+            <div class="flex flex-wrap items-center gap-3 px-4 py-2">
+              <span class="flex min-w-0 flex-1 items-center gap-1.5 truncate text-xs text-mute"><FileText :size="14" class="shrink-0" /> {{ v?.anhang || 'PDF' }}</span>
+              <BilderSchalter :doctype="beleg.doctype" :beleg-id="beleg.id" @geaendert="bilderGeaendert" />
+              <a :href="pdfUrl" :download="v?.anhang" class="btn !py-1 text-xs"><Download :size="14" /> Herunterladen</a>
+            </div>
+            <div class="min-h-0 flex-1 px-3 pb-3"><DrawingViewer :key="pdfUrl" :url="pdfUrl" :name="v?.anhang || ''" /></div>
+          </section>
           <div v-if="!v" class="flex items-center gap-2 p-6 text-sm text-mute"><Loader :size="15" class="animate-spin" /> Wird vorbereitet …</div>
-          <div v-else class="space-y-3 overflow-auto px-6 py-5">
+          <div v-else class="min-h-0 space-y-3 overflow-auto px-6 py-5">
             <p v-if="v.gesendetAm" class="rounded-xl bg-surface2 px-3 py-2 text-sm">Schon gesendet am {{ zeit(v.gesendetAm) }}. Erneut senden schickt die aktuelle Fassung.</p>
             <p v-if="v.antwortAuf" class="flex items-center gap-2 rounded-xl bg-accent-soft/60 px-3 py-2 text-sm"><Reply :size="15" class="shrink-0 text-accent" /> Antwort auf die Anfrage von <strong>{{ v.antwortAuf.vonName }}</strong> vom {{ zeit(v.antwortAuf.datum) }}, im selben Verlauf</p>
             <p v-if="!v.bereit" class="flex items-start gap-2 rounded-xl bg-warn/10 px-3 py-2 text-sm text-warn">
@@ -94,7 +103,7 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
             <label class="block"><span class="label mb-1 block">An</span><input v-model="v.an" class="field" placeholder="kunde@firma.de" /></label>
             <label class="block"><span class="label mb-1 block">CC</span><input v-model="v.cc" class="field" placeholder="mehrere mit Komma trennen" /></label>
             <label class="block"><span class="label mb-1 block">Betreff</span><input v-model="v.betreff" class="field" /></label>
-            <label class="block"><span class="label mb-1 block">Text</span><textarea v-model="v.text" rows="9" class="field font-[inherit] leading-relaxed" /></label>
+            <label class="block"><span class="label mb-1 block">Text</span><textarea v-model="v.text" rows="12" class="field font-[inherit] leading-relaxed" /></label>
             <div v-if="v.zitat" class="rounded-xl border border-line p-3">
               <Toggle v-model="zitieren" klein label="Anfrage darunter zitieren" />
               <div v-if="zitieren" class="mt-2">
@@ -105,7 +114,8 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
                 </div>
               </div>
             </div>
-            <button class="inline-flex items-center gap-1.5 rounded-lg bg-surface2 px-3 py-1.5 text-sm hover:bg-accent-soft hover:text-accent" title="PDF ansehen" @click="pdfAnsehen"><FileText :size="15" /> {{ v.anhang }}</button>
+            <p class="flex items-center gap-1.5 text-xs text-mute"><FileText :size="14" /> Anhang: {{ v.anhang }}</p>
+          </div>
           </div>
 
           <footer class="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
@@ -118,6 +128,5 @@ const zeit = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-dig
         </div>
       </Transition>
     </div>
-    <PdfVorschauDialog v-if="pdf" :url="pdf.url" :name="pdf.name" @schliessen="pdf = null" />
   </Teleport>
 </template>

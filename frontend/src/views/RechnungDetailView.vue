@@ -81,8 +81,10 @@ async function drucken() {
 
 <template>
   <div v-if="r" class="mx-auto grid max-w-[1300px] items-start gap-6 xl:grid-cols-[1fr_360px]">
-    <BilderSchalter :doctype="'Rechnung'" :beleg-id="r.id" class="mx-auto mb-3 max-w-[820px] justify-end" @geaendert="geladen = Date.now()" />
-    <BelegPdf :url="pdfUrl" :name="`${r.nummer ? `Rechnung ${r.nummer}` : 'Rechnung Entwurf'}.pdf`" />
+    <div class="min-w-0">
+      <BilderSchalter :doctype="'Rechnung'" :beleg-id="r.id" class="no-print mx-auto mb-3 max-w-[820px] justify-end" @geaendert="geladen = Date.now()" />
+      <BelegPdf :url="pdfUrl" :name="`${r.nummer ? `Rechnung ${r.nummer}` : 'Rechnung Entwurf'}.pdf`" />
+    </div>
 
     <aside class="no-print space-y-4 xl:sticky xl:top-0">
       <RouterLink to="/rechnungen" class="inline-flex items-center gap-1.5 text-sm text-mute hover:text-ink"><ArrowLeft :size="15" /> Alle Rechnungen</RouterLink>
