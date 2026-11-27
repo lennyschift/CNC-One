@@ -362,6 +362,7 @@ DOCTYPES += [
         Int("serien_stellen", "Stellen der Seriennummer"),
         Data("bestellposition", "Position in der Bestellung des Kunden"),
         Money("bestellpreis", "Stückpreis laut Bestellung"),
+        Json("bestellangaben", "Angaben laut Bestellung", description="Alles, was in der Bestellung des Kunden zur Position steht (aus dem PDF gelesen)"),
         Select("preisform", ["Angebot", "Bestellung"], "Preisform", default="Angebot", description="Angebot: Stückpreis und Kosten wie angeboten; Bestellung: alles im Stückpreis der Bestellung"),
         Check("entfallen", "Entfallen", read_only=1, description="Durch eine Auftragsänderung gestrichen (Menge 0)"),
         Int("menge_urspruenglich", "Ursprünglich bestellte Menge", read_only=1),

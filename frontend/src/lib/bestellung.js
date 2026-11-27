@@ -4,6 +4,9 @@
 // Stichwörter. Eine Position beginnt mit einer Zeile, die eine Menge hat; weitere Zeilen (Text, Liefertermin,
 // Zeichnung …) gehören dazu, bis die nächste Position beginnt. Den Text der ganzen Position bekommt der Server, er sucht
 // darin auch die Teilenummern der Bauteile des Kunden.
+// Zweizeilige Spalten: eine Überschrift wie „Details / Materialnummer“ oder „Lief.dat. / MOD Dat.“ hat zwei Rollen, die
+// erste gilt für die Zeile der Position, die zweite für die Zeile darunter. Jede Spalte des PDFs landet außerdem in
+// `angaben` der Position (Überschrift und Wert), damit nichts aus der Bestellung verloren geht.
 import { datumAus } from './mailtabelle.js';
 
 export const ROLLEN = [
@@ -15,6 +18,8 @@ export const ROLLEN = [
   { id: 'preiseinheit', label: 'Preiseinheit' },
   { id: 'betrag', label: 'Betrag' },
   { id: 'liefertermin', label: 'Liefertermin' },
+  { id: 'einheit', label: 'Einheit' },
+  { id: 'zeichnungsdatum', label: 'Zeichnungsdatum / -stand' },
 ];
 
 // Reihenfolge zählt: Betrag und Preiseinheit vor Preis ("Gesamtpreis", "Preiseinheit")
@@ -24,9 +29,12 @@ const STICHWORT = [
   ['preiseinheit', /preiseinheit|^pe$|^p\.?e\.?$|price\s*unit|^per$/i],
   ['preis', /preis|price|^e-?p$/i],
   ['menge', /^(bestell)?menge|anzahl|^qty|quantity|stückzahl|^stk\.?$|^anz\.?$/i],
-  ['liefertermin', /liefer\s*-?\s*(termin|datum|date)|delivery|^termin|^lt$|wunschtermin|due/i],
+  // Zeichnungsdatum vor Liefertermin und Bezeichnung („Zeichnungsdatum“, „MOD Dat.“, „Änderungsstand“)
+  ['zeichnungsdatum', /zeichnungs?\s*-?\s*(datum|stand)|^mod\.?\s*-?\s*dat|änderungs\s*-?\s*(datum|stand)|ausgabe\s*-?\s*(datum|stand)|revision\s*-?\s*date|drawing\s*date/i],
+  ['liefertermin', /lief(er)?\.?\s*-?\s*(termin|datum|dat\.?|date)|delivery|^termin|^lt$|wunschtermin|due/i],
+  ['einheit', /^(me|einh\.?|einheit|mengeneinheit|unit|uom|bme)$/i],
   // Bezeichnung vor Teilenummer: "Bezeichnung" enthält "zeichnung"
-  ['bezeichnung', /bezeichnung|beschreibung|kurztext|^text$|description|benennung/i],
+  ['bezeichnung', /bezeichnung|beschreibung|kurztext|^text$|description|benennung|^details?$/i],
   ['teilenummer', /(material|artikel|teile|teil|sach|ident|part|kunden)\s*-?\s*(nr|nummer|no|number)?\.?$|^zeichnung|zeichnungs\s*-?\s*(nr|nummer)|drawing/i],
 ];
 
@@ -80,24 +88,58 @@ export function zeilenAus(seiten) {
 
 const zeilenText = (z) => z.zellen.map((c) => c.text).join(' ');
 
+const stichwort = (t) => STICHWORT.find(([, re]) => re.test(t))?.[0] ?? '';
+// Rolle(n) einer Überschrift; „A / B“ ergibt zwei Rollen (oben und darunter). In der Vorlage steht dann „a|b“.
 function rolleFuer(text, vorlage) {
   const k = kopfText(text);
-  if (vorlage?.spalten?.[k]) return { rolle: vorlage.spalten[k], quelle: 'vorlage' };
+  if (vorlage?.spalten?.[k]) {
+    const [rolle, rolle2 = ''] = String(vorlage.spalten[k]).split('|');
+    return { rolle, rolle2, quelle: 'vorlage' };
+  }
   const t = (text ?? '').trim();
   if (t.length > 40) return null;
-  const s = STICHWORT.find(([, re]) => re.test(t));
-  return s ? { rolle: s[0], quelle: 'stichwort' } : null;
+  const teile = t.split(/\s+\/\s+|\s*\/\s*(?=[A-ZÄÖÜa-zäöü]{2})/).map((x) => x.trim()).filter(Boolean);
+  if (teile.length === 2) {
+    const [a, b] = teile.map(stichwort);
+    if (a || b) return { rolle: a || b, rolle2: a && b && a !== b ? b : '', quelle: 'stichwort' };
+  }
+  const s = stichwort(t);
+  return s ? { rolle: s, rolle2: '', quelle: 'stichwort' } : null;
 }
 
 // Kopfzeile der Positionstabelle: die Zeile mit den meisten erkannten Spalten (mindestens Menge und eine weitere)
+// Umgebrochene Überschrift („Preis pro“ / „Einheit in EUR“, auch vertikal zentriert über drei Zeilen): die Zeilen
+// i … i+anzahl-1 ohne Ziffern, dicht untereinander, werden nach ihrer Lage zu Spalten zusammengefasst
+function kopfMitUmbruch(zeilen, i, anzahl) {
+  const teil = zeilen.slice(i, i + anzahl);
+  if (teil.length < anzahl || teil.some((z, k) => z.seite !== teil[0].seite || (k && z.y - teil[k - 1].y > 0.025) || z.zellen.some((c) => /\d/.test(c.text)))) return null;
+  const zellen = [];
+  for (const u of teil.flatMap((z) => z.zellen)) {
+    const k = zellen.find((c) => Math.min(c.x2, u.x2) - Math.max(c.x, u.x) > 0);
+    if (k) { k.text = `${k.text} ${u.text}`; k.x = Math.min(k.x, u.x); k.x2 = Math.max(k.x2, u.x2); } else zellen.push({ ...u });
+  }
+  return zellen.sort((a, b) => a.x - b.x);
+}
+
 export function kopfzeileFinden(zeilen, vorlage = {}) {
   let beste = null;
-  zeilen.forEach((z, i) => {
-    const spalten = z.zellen.map((c) => ({ ...c, ...(rolleFuer(c.text, vorlage) ?? { rolle: '', quelle: '' }) }));
-    const rollen = new Set(spalten.map((s) => s.rolle).filter(Boolean));
+  const pruefen = (zellen, i) => {
+    const spalten = zellen.map((c) => ({ ...c, ...(rolleFuer(c.text, vorlage) ?? { rolle: '', rolle2: '', quelle: '' }) }));
+    const rollen = new Set(spalten.flatMap((s) => [s.rolle, s.rolle2]).filter(Boolean));
     if (!rollen.has('menge') || rollen.size < 2) return;
     const wert = spalten.reduce((n, s) => n + (s.quelle === 'vorlage' ? 10 : s.quelle ? 1 : 0), 0);
     if (!beste || wert > beste.wert) beste = { index: i, wert, spalten };
+  };
+  zeilen.forEach((z, i) => {
+    pruefen(z.zellen, i);
+    for (const anzahl of [2, 3]) {
+      const mit = kopfMitUmbruch(zeilen, i, anzahl);
+      if (!mit) break;
+      const vorher = beste;
+      pruefen(mit, i + anzahl - 1);
+      // die Einzelteile der umgebrochenen Überschrift erkennen die wiederholte Kopfzeile auf Folgeseiten
+      if (beste !== vorher) beste.teile = zeilen.slice(i, i + anzahl).flatMap((x) => x.zellen).map((c) => c.text);
+    }
   });
   return beste;
 }
@@ -163,7 +205,7 @@ export function positionenAus(zeilen, vorlage = {}) {
   const kopf = kopfzeileFinden(zeilen, vorlage);
   if (!kopf) return { spalten: [], positionen: [] };
   const spalten = kopf.spalten;
-  const kopfTexte = new Set(spalten.map((s) => kopfText(s.text)));
+  const kopfTexte = new Set([...spalten.map((s) => s.text), ...(kopf.teile ?? [])].map(kopfText));
   const istKopf = (z) => z.zellen.filter((c) => kopfTexte.has(kopfText(c.text))).length >= 2;
   const rand = wiederholte(zeilen);
   // Folgeseiten: was über der wiederholten Kopfzeile steht (Bestellnummer, „Seite 2 von 2“), gehört nicht dazu
@@ -179,24 +221,33 @@ export function positionenAus(zeilen, vorlage = {}) {
     // wiederholte Kopfzeile auf Folgeseiten überspringen
     if (istKopf(z)) continue;
     const werte = {};
+    const roh = {}; // Spalte → Text dieser Zeile
     for (const c of z.zellen) {
       const i = spalteVon(c, spalten);
+      roh[i] = roh[i] ? `${roh[i]} ${c.text}` : c.text;
       const r = spalten[i]?.rolle;
       if (r) werte[r] = werte[r] ? `${werte[r]} ${c.text}` : c.text;
     }
     const menge = zahlAus(werte.menge);
     const start = menge != null && menge > 0 && /\d/.test(werte.menge ?? '') && (zahlAus(werte.preis) != null || zahlAus(werte.betrag) != null || /^\d+$/.test((werte.bestellposition ?? '').trim()));
-    if (start) bloecke.push({ werte, texte: [text] });
+    if (start) bloecke.push({ werte, texte: [text], roh: Object.fromEntries(Object.entries(roh).map(([k, v]) => [k, [v]])) });
     else if (bloecke.length) {
       const b = bloecke.at(-1);
       b.texte.push(text);
-      for (const [r, w] of Object.entries(werte)) if (['teilenummer', 'bezeichnung', 'liefertermin'].includes(r) && !b.werte[r]) b.werte[r] = w;
+      for (const [k, v] of Object.entries(roh)) {
+        (b.roh[k] ??= []).push(v);
+        // zweite Rolle der Spalte: die Zeile darunter („Details / Materialnummer“ → Materialnummer)
+        const r2 = spalten[k]?.rolle2;
+        if (r2 && !b.werte[r2]) b.werte[r2] = v;
+      }
+      for (const [r, w] of Object.entries(werte)) if (['teilenummer', 'bezeichnung', 'liefertermin', 'zeichnungsdatum', 'einheit'].includes(r) && !b.werte[r] && !spalten.some((s) => s.rolle === r && s.rolle2)) b.werte[r] = w;
     }
   }
-  return { spalten: spalten.map(({ text, rolle }) => ({ text, rolle })), positionen: bloecke.map(positionAus) };
+  const alle = spalten.map((s) => ({ text: s.text, rolle: s.rolle, rolle2: s.rolle2 ?? '' }));
+  return { spalten: alle, positionen: bloecke.map((b) => positionAus(b, alle)) };
 }
 
-function positionAus({ werte, texte }) {
+function positionAus({ werte, texte, roh }, spalten = []) {
   const text = texte.join('\n');
   const menge = Math.round(zahlAus(werte.menge) ?? 0);
   let pe = werte.preiseinheit ? (zahlAus(werte.preiseinheit) || 1) : preiseinheitAus(werte.preis ?? '');
@@ -210,11 +261,16 @@ function positionAus({ werte, texte }) {
   if (preis != null) preis = Math.round((preis / (pe || 1)) * 10000) / 10000;
   else if (betrag && menge) preis = Math.round((betrag / menge) * 10000) / 10000;
   const termin = datumAus(werte.liefertermin ?? '') || texte.map((t) => datumAus(t)).find(Boolean) || '';
+  // alle Spalten wie im PDF (mehrzeilig mit „ / “), auch die ohne Rolle
+  const angaben = spalten.map((s, i) => ({ spalte: s.text, wert: (roh?.[i] ?? []).join(' / ').trim() })).filter((x) => x.wert);
   return {
     bestellposition: (werte.bestellposition ?? '').trim(),
     teilenummer: (werte.teilenummer ?? '').trim().split(/\s+/)[0] ?? '',
     bezeichnung: (werte.bezeichnung ?? '').trim(),
     menge, preis, preiseinheit: pe, betrag, termin, text,
+    einheit: (werte.einheit ?? '').trim(),
+    zeichnungsdatum: datumAus(werte.zeichnungsdatum ?? '') || '',
+    angaben,
     ...zeichnungAus(text),
   };
 }
@@ -269,4 +325,4 @@ export function bestellungLesen(seiten, vorlage = {}) {
 }
 
 // Zum Anlernen: Überschriften der Spalten mit der gewählten Rolle
-export const vorlageAus = (spalten) => Object.fromEntries((spalten ?? []).filter((s) => s.rolle && kopfText(s.text)).map((s) => [kopfText(s.text), s.rolle]));
+export const vorlageAus = (spalten) => Object.fromEntries((spalten ?? []).filter((s) => s.rolle && kopfText(s.text)).map((s) => [kopfText(s.text), s.rolle2 ? `${s.rolle}|${s.rolle2}` : s.rolle]));

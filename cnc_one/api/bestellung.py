@@ -266,6 +266,9 @@ def koppeln(auftrag, positionen=None, kundenbestellnr="", bestelldatum=""):
 			z.bestellpreis = r2(num(p["bestellpreis"]))
 		if p.get("termin"):
 			z.liefertermin = p["termin"]
+		angaben = auftrag_api.bestellung_bereinigt(p.get("bestellung"))
+		if angaben:
+			z.bestellangaben = frappe.as_json(angaben)
 	doc.save()
 	return auftrag_api.auftrag_ui(doc)
 

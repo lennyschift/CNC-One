@@ -155,6 +155,18 @@ const bestellungDialog = ref(false);
             <span v-if="p.serienVon" class="inline-flex items-center gap-1 text-ink"><Hash :size="12" /> Seriennummern {{ bereichText(p.serienVon, p.serienBis, p.serienStellen) }}</span>
             <span class="inline-flex items-center gap-1"><CalendarDays :size="12" /> Liefertermin {{ p.termin ? new Date(p.termin).toLocaleDateString('de-DE') : 'offen' }}</span>
           </div>
+          <!-- was in der Bestellung des Kunden zu dieser Position steht -->
+          <div v-if="p.bestellung" class="mt-2 rounded-xl border border-line px-3 py-2 text-xs">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-0.5">
+              <span class="font-medium">Laut Bestellung</span>
+              <span v-if="p.bestellung.zeichnungsdatum" :title="'Datum bzw. Stand der Zeichnung laut Bestellung'">Zeichnung vom {{ de(p.bestellung.zeichnungsdatum) }}</span>
+              <span v-if="p.bestellung.betrag != null" class="tnum">{{ p.bestellung.menge }} {{ p.bestellung.einheit || 'Stk' }} × {{ eur(p.bestellung.preis) }} = {{ eur(p.bestellung.betrag) }}</span>
+              <span v-if="p.bestellung.betrag != null && Math.abs(p.bestellung.betrag - p.einzelpreis * p.menge - p.kosten.reduce((s, k) => s + k.betrag, 0)) > 0.05" class="text-warn tnum">Auftrag: {{ eur(p.einzelpreis * p.menge + p.kosten.reduce((s, k) => s + k.betrag, 0)) }}</span>
+            </div>
+            <dl v-if="p.bestellung.angaben?.length" class="mt-1 grid gap-x-4 gap-y-0.5 text-mute sm:grid-cols-[auto_1fr]">
+              <template v-for="a in p.bestellung.angaben" :key="a.spalte"><dt>{{ a.spalte }}</dt><dd class="text-ink tnum">{{ a.wert }}</dd></template>
+            </dl>
+          </div>
           <div v-for="k in p.kosten" :key="k.label" class="mt-1 flex justify-between pl-4 text-xs text-mute"><span>↳ {{ k.label }}<template v-if="p.kostenAbgerechnet[k.label]"> · abgerechnet in <RouterLink :to="`/rechnungen/${p.kostenAbgerechnet[k.label]}`" class="text-accent hover:underline">{{ re.rechnung(p.kostenAbgerechnet[k.label])?.nummer || 'Entwurf' }}</RouterLink></template></span><span class="tnum">{{ eur(k.betrag) }}</span></div>
 
           <RouterLink v-if="fbZu(p.key)" :to="`/fertigung/${fbZu(p.key).id}`" class="mt-3 flex items-center gap-3 rounded-xl bg-surface2 px-3.5 py-2.5 text-sm transition hover:bg-accent-soft">

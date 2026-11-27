@@ -206,6 +206,17 @@ class TestBestellung(IntegrationTestCase):
 		self.assertEqual(r["positionen"][0]["bestellposition"], "20")
 		self.assertEqual(r["positionen"][0]["termin"], "2027-01-15")
 		self.assertEqual(r["positionen"][0]["einzelpreis"], pos["einzelpreis"])  # Preise bleiben
+		self.assertIsNone(r["positionen"][0]["bestellung"])
+
+		# alle Angaben aus dem PDF bleiben an der Position
+		angaben = {"bezeichnung": "ZZ RING", "teilenummer": "ZZ-600", "einheit": "ST", "betrag": 130.5, "zeichnungsdatum": "2026-03-24", "x": "weg",
+			"angaben": [{"spalte": "Details / Materialnummer", "wert": "ZZ RING / ZZ-600"}, {"spalte": "leer", "wert": ""}]}
+		r = bestellung.koppeln(auf["id"], [{"auftragKey": pos["key"], "bestellung": angaben}])
+		b = r["positionen"][0]["bestellung"]
+		self.assertEqual(b["zeichnungsdatum"], "2026-03-24")
+		self.assertEqual(b["betrag"], 130.5)
+		self.assertNotIn("x", b)
+		self.assertEqual(b["angaben"], [{"spalte": "Details / Materialnummer", "wert": "ZZ RING / ZZ-600"}])
 
 	def test_vorlage_lernen(self):
 		bestellung.vorlage_lernen(self.kunde, {"spalten": {"material": "teilenummer", "menge": "menge"}, "kopf": {"bestellnr": "Bestellung Nr."}})

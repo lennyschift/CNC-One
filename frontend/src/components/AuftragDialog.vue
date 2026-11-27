@@ -1,6 +1,10 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
-import { X, AlertTriangle, ShoppingCart, ChevronDown, Workflow, Truck, Hash } from '@lucide/vue';
+import { X, AlertTriangle, ShoppingCart, ChevronDown, Workflow, Truck, Hash, FileUp, Loader, CheckCircle2 } from '@lucide/vue';
+import BestellungDialog from './BestellungDialog.vue';
+import { pdfjs } from '../lib/pdf.js';
+import { textAusSeite } from '../lib/zeichnungText.js';
+import { bestellungLesen } from '../lib/bestellung.js';
 import PartImage from './PartImage.vue';
 import NumField from './NumField.vue';
 import Toggle from './Toggle.vue';
@@ -13,9 +17,11 @@ import { eur, uid } from '../lib/format.js';
 import { bereich, bereichText, formatNr, hoechste } from '../lib/serien.js';
 import SerienFeld from './SerienFeld.vue';
 import { call } from '../data/api.js';
+import { useUi } from '../stores/ui.js';
 
 const props = defineProps({ angebot: { type: Object, required: true } });
 const emit = defineEmits(['schliessen', 'angelegt']);
+const ui = useUi();
 const b = useBelege();
 const stamm = useStamm();
 const kundeId = props.angebot.kopf.kundeId;
@@ -73,6 +79,55 @@ const serieFehlt = computed(() => sicht.value.some((s) => s.z.aktiv && s.serie &
 
 function waehle(s, o) { s.z.optId = o.id; s.z.menge = o.menge; }
 
+// Bestellung des Kunden (PDF): Nummer, Mengen und Termine vorbelegen; nach dem Anlegen wird sie mit dem Auftrag
+// abgeglichen (PDF links, Werte rechts) und an den Auftrag gekoppelt
+const bestellPdf = ref(null);
+const liest = ref(false);
+const gelesen = ref(null); // { kopf, positionen }
+const zuordnung = reactive({}); // Angebotsposition → Position der Bestellung
+const norm = (t) => String(t ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+function passendeBestellposition(p, positionen) {
+  const tn = norm(p.teil.teilenummer), zn = norm(p.teil.zeichnungsnr);
+  return positionen.find((x) => tn && (norm(x.teilenummer) === tn || norm(x.text).includes(tn)))
+    ?? positionen.find((x) => zn && zn.length > 4 && norm(x.text).includes(zn)) ?? null;
+}
+async function bestellungGewaehlt(f) {
+  if (!f) return;
+  if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') { ui.toast('Bitte eine PDF-Datei wählen.', 'warn'); return; }
+  bestellPdf.value = f;
+  liest.value = true;
+  try {
+    const aufgabe = pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) });
+    const doc = await aufgabe.promise;
+    const seiten = [];
+    for (let i = 1; i <= Math.min(doc.numPages, 10); i++) seiten.push(await textAusSeite(await doc.getPage(i)));
+    aufgabe.destroy();
+    const vorlage = (await call('cnc_one.api.bestellung.erkennen', { kunde: kundeId }).catch(() => ({}))).vorlage ?? {};
+    const r = bestellungLesen(seiten, vorlage);
+    gelesen.value = r;
+    if (r.kopf.bestellnr && !bestellnr.wert) bestellnr.wert = r.kopf.bestellnr;
+    sicht.value.forEach((s) => {
+      const x = passendeBestellposition(s.p, r.positionen);
+      zuordnung[s.p.key] = x;
+      if (!x) return;
+      s.z.aktiv = true;
+      if (x.menge) {
+        s.z.menge = x.menge;
+        // die Staffel, die zur bestellten Menge passt
+        const o = [...s.opts].filter((o) => o.menge <= x.menge).sort((a, b) => b.menge - a.menge)[0];
+        if (o) s.z.optId = o.id;
+      }
+      if (x.termin) s.z.termin = x.termin;
+    });
+    const ohne = sicht.value.filter((s) => !zuordnung[s.p.key]).length;
+    ui.toast(ohne ? `Bestellung gelesen, ${ohne} Position(en) nicht gefunden` : 'Bestellung gelesen, alle Positionen gefunden', ohne ? 'warn' : 'ok');
+  } catch (e) {
+    ui.toast(`Das PDF ließ sich nicht lesen: ${e.message}`, 'warn');
+    bestellPdf.value = null;
+  } finally { liest.value = false; }
+}
+const neuerAuftrag = ref(null);
+
 const speichert = ref(false);
 async function anlegen() {
   if (speichert.value) return;
@@ -96,6 +151,8 @@ async function anlegen() {
   for (const s of aktive) {
     if (s.z.planSpeichern && s.z.plan.length) stamm.planEintragen(kundeId, s.p.teil.teilenummer, planAus(s.z.plan, uid));
   }
+  // mit Bestellung: gleich mit dem Auftrag abgleichen und koppeln
+  if (bestellPdf.value) { neuerAuftrag.value = neu; return; }
   emit('angelegt', neu);
 }
 </script>
@@ -114,7 +171,15 @@ async function anlegen() {
           </header>
 
           <div class="min-h-0 flex-1 space-y-3 overflow-auto px-6 py-5">
-            <label class="block max-w-sm"><span class="label mb-1 block">Bestellnummer des Kunden</span><input v-model="bestellnr.wert" class="field" placeholder="z. B. PO-48211" /></label>
+            <div class="flex flex-wrap items-end gap-3">
+              <label class="block w-full max-w-sm"><span class="label mb-1 block">Bestellnummer des Kunden</span><input v-model="bestellnr.wert" class="field" placeholder="z. B. PO-48211" /></label>
+              <label class="btn cursor-pointer" title="Mengen, Termine und Bestellnummer aus dem PDF übernehmen; nach dem Anlegen wird die Bestellung mit dem Auftrag abgeglichen"
+                @dragover.prevent @drop.prevent.stop="bestellungGewaehlt($event.dataTransfer?.files?.[0])">
+                <Loader v-if="liest" :size="15" class="animate-spin" /><FileUp v-else :size="15" /> {{ bestellPdf ? bestellPdf.name : 'Bestellung des Kunden (PDF)' }}
+                <input type="file" accept="application/pdf,.pdf" class="hidden" @change="bestellungGewaehlt($event.target.files[0]); $event.target.value = ''" />
+              </label>
+            </div>
+            <p v-if="bestellPdf && !liest" class="text-xs text-mute">Nach „Auftrag anlegen“ öffnet sich der Abgleich: links die Bestellung, rechts die erkannten Werte gegen den Auftrag.</p>
 
             <div v-for="s in sicht" :key="s.p.key" class="rounded-2xl border p-4 transition" :class="s.z.aktiv ? 'border-line bg-surface' : 'border-line/60 bg-surface2 opacity-70'">
               <div class="flex items-start gap-4">
@@ -124,6 +189,8 @@ async function anlegen() {
                     <div>
                       <div class="font-medium"><span v-if="s.best?.position" class="mr-1.5 text-mute" title="Position in der Bestellung des Kunden">Pos. {{ s.best.position }}</span>{{ s.p.teil.name }}</div>
                       <div class="text-xs text-mute">{{ s.p.teil.teilenummer || 'ohne Teilenummer' }}<template v-if="bestellt[s.p.key]"> · bereits bestellt: {{ bestellt[s.p.key] }} Stk</template></div>
+                      <div v-if="zuordnung[s.p.key]" class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ok"><CheckCircle2 :size="13" /> In der Bestellung: Pos. {{ zuordnung[s.p.key].bestellposition || '–' }} · {{ zuordnung[s.p.key].menge }} {{ zuordnung[s.p.key].einheit || 'Stk' }} × {{ eur(zuordnung[s.p.key].preis) }}<template v-if="zuordnung[s.p.key].betrag"> = {{ eur(zuordnung[s.p.key].betrag) }}</template></div>
+                      <div v-else-if="gelesen" class="mt-1 text-xs text-warn">Nicht in der Bestellung gefunden</div>
                     </div>
                     <Toggle v-model="s.z.aktiv" label="Bestellen" />
                   </div>
@@ -192,5 +259,6 @@ async function anlegen() {
         </div>
       </Transition>
     </div>
+    <BestellungDialog v-if="neuerAuftrag" :auftrag="neuerAuftrag" :datei="bestellPdf" @schliessen="emit('angelegt', neuerAuftrag)" @fertig="emit('angelegt', $event)" />
   </Teleport>
 </template>

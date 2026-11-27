@@ -55,6 +55,7 @@ def auftrag_ui(d):
 				"angebotId": p.angebot or d.angebot or "",
 				"bestellposition": p.bestellposition or "",
 				"bestellpreis": p.bestellpreis or 0,
+				"bestellung": als_json(p.bestellangaben) if p.bestellangaben else None,
 				"preisform": p.preisform or "Angebot",
 				"teil": {
 					"name": p.bezeichnung or "", "teilenummer": p.teilenummer or "", "zeichnungsnr": p.zeichnungsnr or "",
@@ -154,11 +155,31 @@ def neuer_auftrag(kunde, kundenbestellnr="", ang=None):
 	return doc
 
 
+BESTELL_FELDER = ("bestellposition", "teilenummer", "bezeichnung", "menge", "einheit", "preis", "preiseinheit", "betrag", "termin", "zeichnungsdatum", "zeichnungsnr", "index")
+
+
+def bestellung_bereinigt(b):
+	"""Was in der Bestellung des Kunden zur Position steht (gelesen aus dem PDF): die erkannten Werte und alle Spalten
+	wie im PDF ({ spalte, wert }). Nur Text und Zahlen, gekürzt."""
+	if isinstance(b, str):
+		b = als_json(b) if b.strip() else {}
+	if not isinstance(b, dict) or not b:
+		return {}
+	out = {k: (str(b[k])[:200] if not isinstance(b[k], (int, float)) else b[k]) for k in BESTELL_FELDER if b.get(k) not in (None, "")}
+	out["angaben"] = [
+		{"spalte": str(a.get("spalte") or "")[:80], "wert": str(a.get("wert") or "")[:300]}
+		for a in (b.get("angaben") or [])[:20] if isinstance(a, dict) and a.get("wert")
+	]
+	return out
+
+
 def _bestellangaben(p):
 	"""Angaben aus der Bestellung des Kunden an einer Position (leer, wenn der Auftrag nicht aus einer Bestellung kommt)."""
+	bestellung = bestellung_bereinigt(p.get("bestellung"))
 	return {
 		"bestellposition": str(p.get("bestellposition") or "").strip()[:40],
 		"bestellpreis": r2(num(p.get("bestellpreis"))) if num(p.get("bestellpreis")) > 0 else 0,
+		"bestellangaben": frappe.as_json(bestellung) if bestellung else None,
 	}
 
 

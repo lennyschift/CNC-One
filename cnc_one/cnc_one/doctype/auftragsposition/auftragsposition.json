@@ -24,6 +24,7 @@
   "serien_stellen",
   "bestellposition",
   "bestellpreis",
+  "bestellangaben",
   "preisform",
   "entfallen",
   "menge_urspruenglich"
@@ -150,6 +151,12 @@
    "fieldtype": "Currency",
    "label": "Stückpreis laut Bestellung",
    "precision": "2"
+  },
+  {
+   "fieldname": "bestellangaben",
+   "fieldtype": "JSON",
+   "label": "Angaben laut Bestellung",
+   "description": "Alles, was in der Bestellung des Kunden zur Position steht (aus dem PDF gelesen)"
   },
   {
    "fieldname": "preisform",

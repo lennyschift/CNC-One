@@ -41,7 +41,7 @@ describe('Zahlen und Preiseinheit', () => {
 describe('Bestellung lesen', () => {
   it('Positionen mit Folgezeilen, Preiseinheit und Ende bei der Summe', () => {
     const { positionen, spalten } = positionenAus(zeilenAus([sap]));
-    expect(spalten.map((s) => s.rolle)).toEqual(['bestellposition', 'teilenummer', 'bezeichnung', 'menge', '', 'preis', 'preiseinheit', 'betrag']);
+    expect(spalten.map((s) => s.rolle)).toEqual(['bestellposition', 'teilenummer', 'bezeichnung', 'menge', 'einheit', 'preis', 'preiseinheit', 'betrag']);
     expect(positionen.length).toBe(2);
     expect(positionen[0]).toMatchObject({ bestellposition: '00010', teilenummer: 'ZZ-4711-01', bezeichnung: 'Flansch DN50', menge: 25, preis: 28.4, preiseinheit: 1, betrag: 710, termin: '2027-01-15' });
     expect(positionen[0].text).toContain('Z-4711 Rev. B');
@@ -101,5 +101,43 @@ describe('Bestellung über zwei Seiten mit Kästchen im Kopf (echtes PDF)', () =
     expect(kwDatum('KW2', '2026-11-05')).toBe('2027-01-15'); // Woche schon vorbei: nächstes Jahr
     expect(kwDatum('ohne')).toBe('');
     expect(zeichnungAus('Zeichnung Z-4711 Rev. B')).toEqual({ zeichnungsnr: 'Z-4711', index: 'B' });
+  });
+});
+
+describe('Zweizeilige Spalten', () => {
+  // Aufbau wie bei manchen Kunden: Bezeichnung und Materialnummer untereinander, unter dem Liefertermin das Zeichnungsdatum
+  const zwei = seite([
+    [0.2, [[0.05, 'Pos.'], [0.12, 'Details / Materialnummer', 0.14], [0.42, 'Lief.dat. / MOD Dat.', 0.1], [0.56, 'Menge'], [0.62, 'ME'], [0.7, 'Preis pro Einheit in EUR', 0.12], [0.88, 'Betrag in EUR', 0.08]]],
+    [0.23, [[0.05, '00010'], [0.12, 'ZZ RING_1.5 MM', 0.1], [0.42, '09.12.2026', 0.06], [0.56, '300,00'], [0.62, 'ST'], [0.77, '13,13'], [0.9, '3.940,00']]],
+    [0.25, [[0.12, 'ZZ31175378AB', 0.08], [0.42, '24.03.26', 0.05]]],
+    [0.29, [[0.05, '00020'], [0.12, 'ZZ WASHER_5X11X1,5', 0.12], [0.42, '09.12.2026', 0.06], [0.56, '200,00'], [0.62, 'ST'], [0.78, '5,83'], [0.9, '1.165,00']]],
+    [0.31, [[0.12, 'ZZ31608023', 0.07], [0.42, '11.03.24', 0.05]]],
+  ]);
+  it('obere Zeile Bezeichnung und Liefertermin, untere Teilenummer und Zeichnungsdatum', () => {
+    const { spalten, positionen } = positionenAus(zeilenAus([zwei]));
+    expect(spalten[1]).toMatchObject({ rolle: 'bezeichnung', rolle2: 'teilenummer' });
+    expect(spalten[2]).toMatchObject({ rolle: 'liefertermin', rolle2: 'zeichnungsdatum' });
+    expect(positionen.length).toBe(2);
+    expect(positionen[0]).toMatchObject({ bestellposition: '00010', bezeichnung: 'ZZ RING_1.5 MM', teilenummer: 'ZZ31175378AB', termin: '2026-12-09', zeichnungsdatum: '2026-03-24', menge: 300, einheit: 'ST', preis: 13.13, betrag: 3940 });
+    expect(positionen[1]).toMatchObject({ teilenummer: 'ZZ31608023', zeichnungsdatum: '2024-03-11', betrag: 1165 });
+    // alles aus dem PDF bleibt sichtbar
+    expect(positionen[0].angaben).toContainEqual({ spalte: 'Details / Materialnummer', wert: 'ZZ RING_1.5 MM / ZZ31175378AB' });
+  });
+  it('umgebrochene Überschrift über zwei Zeilen', () => {
+    const s = seite([
+      [0.2, [[0.05, 'Pos.'], [0.12, 'Details /', 0.06], [0.42, 'Lief.dat. / MOD', 0.09], [0.56, 'Menge'], [0.62, 'ME'], [0.74, 'Preis pro', 0.06], [0.88, 'Betrag in', 0.06]]],
+      [0.212, [[0.12, 'Materialnummer', 0.09], [0.42, 'Dat.', 0.03], [0.74, 'Einheit in EUR', 0.08], [0.9, 'EUR', 0.03]]],
+      [0.24, [[0.05, '00010'], [0.12, 'ZZ RING', 0.06], [0.42, '09.12.2026', 0.06], [0.56, '300,00'], [0.62, 'ST'], [0.77, '13,13'], [0.9, '3.940,00']]],
+      [0.252, [[0.12, 'ZZ311753', 0.06], [0.42, '24.03.26', 0.05]]],
+    ]);
+    const { spalten, positionen } = positionenAus(zeilenAus([s]));
+    expect(spalten.map((x) => x.rolle)).toEqual(['bestellposition', 'bezeichnung', 'liefertermin', 'menge', 'einheit', 'preis', 'betrag']);
+    expect(positionen[0]).toMatchObject({ bezeichnung: 'ZZ RING', teilenummer: 'ZZ311753', zeichnungsdatum: '2026-03-24', preis: 13.13, betrag: 3940 });
+  });
+  it('angelernt: zwei Rollen in der Vorlage', () => {
+    const v = vorlageAus([{ text: 'Details / Materialnummer', rolle: 'bezeichnung', rolle2: 'teilenummer' }]);
+    expect(v).toEqual({ 'details / materialnummer': 'bezeichnung|teilenummer' });
+    const { spalten } = positionenAus(zeilenAus([zwei]), { spalten: v });
+    expect(spalten[1]).toMatchObject({ rolle: 'bezeichnung', rolle2: 'teilenummer' });
   });
 });
